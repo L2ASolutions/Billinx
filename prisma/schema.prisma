@@ -1,0 +1,279 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                  String            @id @default(uuid())
+  name                String
+  tin                 String            @unique
+  registeredAddress   Json
+  appAdapterKey       String            @default("mock")
+  encryptedCredential Bytes?
+  credentialIv        Bytes?
+  environment         TenantEnvironment @default(SANDBOX)
+  rateLimitTier       RateLimitTier     @default(STANDARD)
+  batchEnabled        Boolean           @default(false)
+  batchSize           Int               @default(100)
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  apiKeys              ApiKey[]
+  refreshTokens        RefreshToken[]
+  webhookSubscriptions WebhookSubscription[]
+  auditLogs            AuditLog[]
+  invoices             Invoice[]
+
+  @@map("tenants")
+}
+
+model ApiKey {
+  id          String            @id @default(uuid())
+  tenantId    String
+  keyHash     String            @unique
+  keyPrefix   String
+  environment TenantEnvironment
+  name        String
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isRevoked   Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([keyPrefix])
+  @@map("api_keys")
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  tenantId   String
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  isRevoked  Boolean  @default(false)
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model AdminKey {
+  id         String   @id @default(uuid())
+  keyHash    String   @unique
+  keyPrefix  String
+  name       String
+  isRevoked  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([keyPrefix])
+  @@map("admin_keys")
+}
+
+model IdempotencyRecord {
+  id              String   @id @default(uuid())
+  tenantId        String
+  idempotencyKey  String
+  requestHash     String
+  responseBody    Json
+  responseStatus  Int
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+model Invoice {
+  id                 String            @id @default(uuid())
+  tenantId           String
+  environment        TenantEnvironment
+  schemaVersion      String            @default("1.0")
+  invoiceTypeCode    InvoiceTypeCode
+  platformIrn        String            @unique
+  firsConfirmedIrn   String?
+  sellerTin          String
+  sellerName         String
+  buyerTin           String?
+  buyerName          String
+  invoiceDate        DateTime
+  currency           String            @default("NGN")
+  exchangeRate       Decimal?
+  exchangeRateSource String?
+  subtotal           Decimal
+  vatAmount          Decimal
+  totalAmount        Decimal
+  lineItems          Json
+  metadata           Json?
+  originalIrn        String?
+  qrCodeBase64       String?
+  status             InvoiceStatus     @default(DRAFT)
+  submittedAt        DateTime?
+  acceptedAt         DateTime?
+  rejectedAt         DateTime?
+  cancelledAt        DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  tenant             Tenant            @relation(fields: [tenantId], references: [id])
+  stateHistory       InvoiceStateHistory[]
+  submissionAttempts SubmissionAttempt[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, environment])
+  @@index([sellerTin])
+  @@index([platformIrn])
+  @@map("invoices")
+}
+
+model InvoiceStateHistory {
+  id         String        @id @default(uuid())
+  invoiceId  String
+  tenantId   String
+  fromStatus InvoiceStatus?
+  toStatus   InvoiceStatus
+  actor      String
+  reason     String?
+  metadata   Json?
+  createdAt  DateTime      @default(now())
+
+  invoice    Invoice       @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@index([tenantId, createdAt])
+  @@map("invoice_state_history")
+}
+
+model SubmissionAttempt {
+  id              String   @id @default(uuid())
+  invoiceId       String
+  tenantId        String
+  adapterKey      String
+  attemptNumber   Int
+  requestPayload  Json
+  responsePayload Json?
+  responseCode    String?
+  errorCode       String?
+  errorMessage    String?
+  durationMs      Int?
+  succeededAt     DateTime?
+  failedAt        DateTime?
+  createdAt       DateTime @default(now())
+
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@map("submission_attempts")
+}
+
+model WebhookSubscription {
+  id          String    @id @default(uuid())
+  tenantId    String
+  url         String
+  signingKey  Bytes
+  signingIv   Bytes
+  eventTypes  String[]
+  isActive    Boolean   @default(true)
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  deliveries  WebhookDelivery[]
+
+  @@index([tenantId])
+  @@map("webhook_subscriptions")
+}
+
+model WebhookDelivery {
+  id               String                @id @default(uuid())
+  subscriptionId   String
+  tenantId         String
+  eventType        String
+  eventId          String
+  payload          Json
+  attemptCount     Int                   @default(0)
+  lastAttemptAt    DateTime?
+  nextRetryAt      DateTime?
+  status           WebhookDeliveryStatus @default(PENDING)
+  lastResponseCode Int?
+  lastResponseBody String?
+  deliveredAt      DateTime?
+  createdAt        DateTime              @default(now())
+
+  subscription     WebhookSubscription   @relation(fields: [subscriptionId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([nextRetryAt])
+  @@map("webhook_deliveries")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String?
+  eventType  String
+  entityType String
+  entityId   String
+  actor      String
+  ipAddress  String?
+  userAgent  String?
+  payload    Json
+  createdAt  DateTime @default(now())
+
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+enum TenantEnvironment {
+  SANDBOX
+  PRODUCTION
+}
+
+enum RateLimitTier {
+  STANDARD
+  PREMIUM
+  ENTERPRISE
+}
+
+enum InvoiceTypeCode {
+  STANDARD
+  CREDIT_NOTE
+  DEBIT_NOTE
+  PROFORMA
+}
+
+enum InvoiceStatus {
+  DRAFT
+  VALIDATING
+  VALIDATION_FAILED
+  QUEUED
+  SUBMITTING
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+  SUBMISSION_FAILED
+  DEAD_LETTERED
+  CANCELLATION_REQUESTED
+  CANCELLED
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  DEAD_LETTERED
+}
