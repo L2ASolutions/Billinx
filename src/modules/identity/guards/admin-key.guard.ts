@@ -30,12 +30,12 @@ export class AdminKeyGuard implements CanActivate {
 
     const keyPrefix = adminKey.substring(0, ADMIN_KEY_PREFIX_LENGTH);
 
-    type AdminKeyRow = { id: string; key_hash: string };
+    type AdminKeyRow = { id: string; keyHash: string };
 
     const candidates = await this.prisma.$queryRaw<AdminKeyRow[]>`
-      SELECT id, key_hash FROM admin_keys
-      WHERE key_prefix = ${keyPrefix}
-      AND is_revoked = FALSE
+      SELECT id, "keyHash" FROM admin_keys
+      WHERE "keyPrefix" = ${keyPrefix}
+      AND "isRevoked" = FALSE
       LIMIT 1
     `;
 
@@ -43,7 +43,7 @@ export class AdminKeyGuard implements CanActivate {
       throw new UnauthorizedException("Invalid admin key");
     }
 
-    const valid = await bcrypt.compare(adminKey, candidates[0].key_hash);
+    const valid = await bcrypt.compare(adminKey, candidates[0].keyHash);
     if (!valid) {
       throw new UnauthorizedException("Invalid admin key");
     }

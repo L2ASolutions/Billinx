@@ -3,6 +3,7 @@ import { ValidationPipe, Logger } from "@nestjs/common";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
 import helmet from "helmet";
+import * as express from "express";
 
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
@@ -11,12 +12,14 @@ async function bootstrap() {
   });
 
   app.use(helmet());
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
+      whitelist: false,
+      forbidNonWhitelisted: false,
+      transform: false,
     }),
   );
 
