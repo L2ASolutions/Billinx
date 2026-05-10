@@ -28,6 +28,8 @@ model Tenant {
   webhookSubscriptions WebhookSubscription[]
   auditLogs            AuditLog[]
   invoices             Invoice[]
+  activityEvents ActivityEvent[]
+systemErrors   SystemError[]
 
   @@map("tenants")
 }
@@ -276,4 +278,84 @@ enum WebhookDeliveryStatus {
   DELIVERED
   FAILED
   DEAD_LETTERED
+}
+// ── ACTIVITY EVENTS ───────────────────────────────────────────────────────────
+model ActivityEvent {
+  id          String            @id @default(uuid())
+  tenantId    String?
+  eventType   ActivityEventType
+  actor       String
+  actorEmail  String?
+  ipAddress   String?
+  userAgent   String?
+  entityType  String?
+  entityId    String?
+  payload     Json
+  occurredAt  DateTime          @default(now())
+
+  tenant      Tenant?           @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, occurredAt])
+  @@index([tenantId, eventType])
+  @@index([entityId])
+  @@map("activity_events")
+}
+
+// ── SYSTEM ERRORS ─────────────────────────────────────────────────────────────
+model SystemError {
+  id             String        @id @default(uuid())
+  tenantId       String?
+  errorCode      String
+  errorMessage   String
+  stackTrace     String?
+  endpoint       String?
+  method         String?
+  actor          String?
+  requestId      String?
+  severity       ErrorSeverity @default(LOW)
+  isResolved     Boolean       @default(false)
+  resolvedAt     DateTime?
+  resolvedBy     String?
+  resolutionNote String?
+  occurredAt     DateTime      @default(now())
+
+  tenant         Tenant?       @relation(fields: [tenantId], references: [id])
+
+  @@index([isResolved, severity])
+  @@index([tenantId, occurredAt])
+  @@map("system_errors")
+}
+
+enum ActivityEventType {
+  USER_LOGIN
+  USER_LOGOUT
+  USER_LOGIN_FAILED
+  API_KEY_CREATED
+  API_KEY_REVOKED
+  INVOICE_CREATED
+  INVOICE_VALIDATED
+  INVOICE_SUBMITTED
+  INVOICE_ACCEPTED
+  INVOICE_REJECTED
+  INVOICE_CANCELLED
+  INVOICE_VIEWED
+  TENANT_CREATED
+  TENANT_UPDATED
+  TENANT_DEACTIVATED
+  WEBHOOK_DELIVERED
+  WEBHOOK_FAILED
+  EXPORT_GENERATED
+  PRODUCT_CREATED
+  PRODUCT_UPDATED
+  USER_CREATED
+  USER_DEACTIVATED
+  PASSWORD_RESET
+  SYSTEM_ERROR
+}
+
+enum ErrorSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }

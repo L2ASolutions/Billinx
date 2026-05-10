@@ -49,6 +49,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         `Unhandled exception: ${exception.message}`,
         exception.stack,
       );
+
+      // Log to system errors table asynchronously
+      this.trackSystemError(exception, request, requestCtx);
     }
 
     const errorResponse: ErrorResponse = {
@@ -61,5 +64,38 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     };
 
     response.status(statusCode).json(errorResponse);
+  }
+
+  private trackSystemError(
+    error: Error,
+    request: Request,
+    requestCtx: any,
+  ): void {
+    // Dynamically import to avoid circular dependencies
+    import("../../infrastructure/database/prisma.service")
+      .then(({ PrismaService }) => {
+        const prisma = new PrismaService();
+        return prisma.asAdmin(async (tx) => {
+          return tx.systemError.create({
+            data: {
+              tenantId: requestCtx?.tenantId !== "ADMIN"
+                ? requestCtx?.tenantId ?? null
+                : null,
+              errorCode: error.name ?? "UNKNOWN_ERROR",
+              errorMessage: error.message,
+              stackTrace: error.stack ?? null,
+              endpoint: request.path,
+              method: request.method,
+              actor: requestCtx?.actor ?? null,
+              requestId: requestCtx?.requestId ?? null,
+              severity: "HIGH",
+              isResolved: false,
+            },
+          });
+        });
+      })
+      .catch((err) =>
+        this.logger.error(`Failed to track system error: ${err.message}`),
+      );
   }
 }
