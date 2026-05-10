@@ -30,6 +30,7 @@ model Tenant {
   invoices             Invoice[]
   activityEvents ActivityEvent[]
 systemErrors   SystemError[]
+users         User[]
 
   @@map("tenants")
 }
@@ -326,6 +327,77 @@ model SystemError {
   @@map("system_errors")
 }
 
+// ── USERS ─────────────────────────────────────────────────────────────────────
+model User {
+  id                String      @id @default(uuid())
+  tenantId          String
+  email             String
+  passwordHash      String
+  firstName         String
+  lastName          String
+  isActive          Boolean     @default(true)
+  isVerified        Boolean     @default(false)
+  lastLoginAt       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  tenant            Tenant      @relation(fields: [tenantId], references: [id])
+  roles             UserRole[]
+  invitations       UserInvitation[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
+}
+
+// ── USER ROLES ────────────────────────────────────────────────────────────────
+model UserRole {
+  id        String       @id @default(uuid())
+  userId    String
+  tenantId  String
+  role      UserRoleType
+  createdAt DateTime     @default(now())
+
+  user      User         @relation(fields: [userId], references: [id])
+
+  @@unique([userId, role])
+  @@index([tenantId])
+  @@map("user_roles")
+}
+
+// ── USER INVITATIONS ──────────────────────────────────────────────────────────
+model UserInvitation {
+  id          String       @id @default(uuid())
+  tenantId    String
+  email       String
+  role        UserRoleType
+  token       String       @unique
+  invitedBy   String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  isRevoked   Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+
+  invitedByUser User?      @relation(fields: [invitedBy], references: [id])
+
+  @@index([tenantId])
+  @@index([token])
+  @@map("user_invitations")
+}
+
+// ── PASSWORD RESET TOKENS ─────────────────────────────────────────────────────
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@map("password_reset_tokens")
+}
+
 enum ActivityEventType {
   USER_LOGIN
   USER_LOGOUT
@@ -358,4 +430,12 @@ enum ErrorSeverity {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+enum UserRoleType {
+  OWNER
+  ADMIN
+  ACCOUNTANT
+  VIEWER
+  API_MANAGER
 }

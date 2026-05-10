@@ -1,0 +1,461 @@
+import {
+  Injectable,
+  Logger,
+  ConflictException,
+  NotFoundException,
+  UnauthorizedException,
+  BadRequestException,
+} from "@nestjs/common";
+import { UserRepository } from "../repositories/user.repository";
+import { PrismaService } from "../../../infrastructure/database/prisma.service";
+import { SecretsService } from "../../../infrastructure/secrets/secrets.service";
+import { ActivityService } from "../../activity/services/activity.service";
+import {
+  UserRoleType,
+  ROLE_PERMISSIONS,
+  RegisterTenantRequest,
+  InviteUserRequest,
+  AcceptInvitationRequest,
+  LoginRequest,
+  ForgotPasswordRequest,
+  ResetPasswordRequest,
+  ChangePasswordRequest,
+  UpdateUserRequest,
+  UserResponse,
+  UserListResponse,
+  RegisterResponse,
+  LoginResponse,
+} from "../../../../packages/types/user";
+import * as bcrypt from "bcrypt";
+import * as crypto from "crypto";
+import * as jwt from "jsonwebtoken";
+
+const BCRYPT_ROUNDS = 12;
+const ACCESS_TOKEN_TTL = 15 * 60;
+const INVITATION_TTL_DAYS = 7;
+const PASSWORD_RESET_TTL_HOURS = 2;
+
+@Injectable()
+export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
+  constructor(
+    private readonly userRepository: UserRepository,
+    private readonly prisma: PrismaService,
+    private readonly secrets: SecretsService,
+    private readonly activityService: ActivityService,
+  ) {}
+
+  // ── Self-serve registration (Route 2 — small businesses) ──────────────────
+  async registerTenant(request: RegisterTenantRequest): Promise<RegisterResponse> {
+    // Check if tenant TIN already exists
+    const existingTenant = await this.prisma.asAdmin(async (tx) => {
+      return tx.tenant.findUnique({ where: { tin: request.tin } });
+    });
+
+    if (existingTenant) {
+      throw new ConflictException(`A business with TIN ${request.tin} is already registered`);
+    }
+
+    // Create tenant
+    const tenant = await this.prisma.asAdmin(async (tx) => {
+      return tx.tenant.create({
+        data: {
+          name: request.tenantName,
+          tin: request.tin,
+          registeredAddress: request.registeredAddress as any,
+          appAdapterKey: "mock",
+          environment: "SANDBOX",
+          rateLimitTier: "STANDARD",
+        },
+      });
+    });
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(request.password, BCRYPT_ROUNDS);
+
+    // Create owner user
+    const user = await this.userRepository.create({
+      tenantId: tenant.id,
+      email: request.email,
+      passwordHash,
+      firstName: request.firstName,
+      lastName: request.lastName,
+      isVerified: true,
+      role: "OWNER",
+    });
+
+    // Issue access token
+    const accessToken = await this.issueAccessToken(user, tenant.id);
+
+    // Track activity
+    this.activityService.track({
+      tenantId: tenant.id,
+      eventType: "TENANT_CREATED",
+      actor: `user:${user.id}`,
+      actorEmail: user.email,
+      entityType: "Tenant",
+      entityId: tenant.id,
+      payload: {
+        tenantName: tenant.name,
+        tin: tenant.tin,
+        registeredBy: user.email,
+      },
+    });
+
+    this.activityService.track({
+      tenantId: tenant.id,
+      eventType: "USER_CREATED",
+      actor: `user:${user.id}`,
+      actorEmail: user.email,
+      entityType: "User",
+      entityId: user.id,
+      payload: {
+        email: user.email,
+        role: "OWNER",
+        registrationType: "self-serve",
+      },
+    });
+
+    this.logger.log(`New tenant registered: ${tenant.name} [${tenant.tin}]`);
+
+    return {
+      tenant: { id: tenant.id, name: tenant.name, tin: tenant.tin },
+      user: this.mapToResponse(user),
+      accessToken,
+      expiresIn: ACCESS_TOKEN_TTL,
+    };
+  }
+
+  // ── Login ──────────────────────────────────────────────────────────────────
+  async login(
+    tenantId: string,
+    request: LoginRequest,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<LoginResponse> {
+    const user = await this.userRepository.findByEmail(tenantId, request.email);
+
+    if (!user || !user.isActive) {
+      // Track failed login
+      this.activityService.track({
+        tenantId,
+        eventType: "USER_LOGIN_FAILED",
+        actor: `email:${request.email}`,
+        actorEmail: request.email,
+        ipAddress,
+        userAgent,
+        payload: {
+          email: request.email,
+          reason: user ? "account_inactive" : "user_not_found",
+        },
+      });
+      throw new UnauthorizedException("Invalid email or password");
+    }
+
+    const passwordValid = await bcrypt.compare(request.password, user.passwordHash);
+
+    if (!passwordValid) {
+      this.activityService.track({
+        tenantId,
+        eventType: "USER_LOGIN_FAILED",
+        actor: `user:${user.id}`,
+        actorEmail: user.email,
+        ipAddress,
+        userAgent,
+        payload: {
+          email: request.email,
+          reason: "invalid_password",
+        },
+      });
+      throw new UnauthorizedException("Invalid email or password");
+    }
+
+    // Update last login
+    await this.userRepository.update(user.id, { lastLoginAt: new Date() });
+
+    const accessToken = await this.issueAccessToken(user, tenantId);
+
+    // Track successful login
+    this.activityService.track({
+      tenantId,
+      eventType: "USER_LOGIN",
+      actor: `user:${user.id}`,
+      actorEmail: user.email,
+      ipAddress,
+      userAgent,
+      entityType: "User",
+      entityId: user.id,
+      payload: { email: user.email },
+    });
+
+    return {
+      accessToken,
+      expiresIn: ACCESS_TOKEN_TTL,
+      tokenType: "Bearer",
+      user: this.mapToResponse(user),
+    };
+  }
+
+  // ── Invite user ────────────────────────────────────────────────────────────
+  async inviteUser(
+    tenantId: string,
+    invitedBy: string,
+    request: InviteUserRequest,
+  ): Promise<{ message: string; invitationToken: string }> {
+    // Check if user already exists
+    const existing = await this.userRepository.findByEmail(tenantId, request.email);
+    if (existing) {
+      throw new ConflictException(`User ${request.email} already exists in this organisation`);
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000);
+
+    await this.userRepository.createInvitation({
+      tenantId,
+      email: request.email,
+      role: request.role,
+      token,
+      invitedBy,
+      expiresAt,
+    });
+
+    this.activityService.track({
+      tenantId,
+      eventType: "USER_CREATED",
+      actor: invitedBy,
+      entityType: "UserInvitation",
+      payload: {
+        email: request.email,
+        role: request.role,
+        invitedBy,
+      },
+    });
+
+    this.logger.log(`Invitation sent to ${request.email} for tenant ${tenantId}`);
+
+    // In production this token would be emailed
+    // For now return it directly for testing
+    return {
+      message: `Invitation created for ${request.email}`,
+      invitationToken: token,
+    };
+  }
+
+  // ── Accept invitation ──────────────────────────────────────────────────────
+  async acceptInvitation(request: AcceptInvitationRequest): Promise<LoginResponse> {
+    const invitation = await this.userRepository.findInvitationByToken(request.token);
+
+    if (!invitation) {
+      throw new BadRequestException("Invalid or expired invitation token");
+    }
+
+    if (invitation.isRevoked || invitation.acceptedAt) {
+      throw new BadRequestException("This invitation has already been used or revoked");
+    }
+
+    if (new Date() > invitation.expiresAt) {
+      throw new BadRequestException("This invitation has expired");
+    }
+
+    const passwordHash = await bcrypt.hash(request.password, BCRYPT_ROUNDS);
+
+    const user = await this.userRepository.create({
+      tenantId: invitation.tenantId,
+      email: invitation.email,
+      passwordHash,
+      firstName: request.firstName ?? invitation.email.split("@")[0],
+      lastName: request.lastName ?? "",
+      isVerified: true,
+      role: invitation.role,
+    });
+
+    await this.userRepository.acceptInvitation(request.token);
+
+    const accessToken = await this.issueAccessToken(user, invitation.tenantId);
+
+    this.activityService.track({
+      tenantId: invitation.tenantId,
+      eventType: "USER_CREATED",
+      actor: `user:${user.id}`,
+      actorEmail: user.email,
+      entityType: "User",
+      entityId: user.id,
+      payload: {
+        email: user.email,
+        role: invitation.role,
+        registrationType: "invitation",
+      },
+    });
+
+    return {
+      accessToken,
+      expiresIn: ACCESS_TOKEN_TTL,
+      tokenType: "Bearer",
+      user: this.mapToResponse(user),
+    };
+  }
+
+  // ── Forgot password ────────────────────────────────────────────────────────
+  async forgotPassword(
+    tenantId: string,
+    request: ForgotPasswordRequest,
+  ): Promise<{ message: string; resetToken?: string }> {
+    const user = await this.userRepository.findByEmail(tenantId, request.email);
+
+    // Always return success to prevent email enumeration
+    if (!user) {
+      return { message: "If that email exists, a reset link has been sent" };
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_HOURS * 60 * 60 * 1000);
+
+    await this.userRepository.createPasswordResetToken({
+      userId: user.id,
+      token,
+      expiresAt,
+    });
+
+    this.activityService.track({
+      tenantId,
+      eventType: "PASSWORD_RESET",
+      actor: `user:${user.id}`,
+      actorEmail: user.email,
+      entityType: "User",
+      entityId: user.id,
+      payload: { email: user.email, action: "requested" },
+    });
+
+    // In production this would be emailed
+    return {
+      message: "If that email exists, a reset link has been sent",
+      resetToken: token,
+    };
+  }
+
+  // ── Reset password ─────────────────────────────────────────────────────────
+  async resetPassword(request: ResetPasswordRequest): Promise<{ message: string }> {
+    const resetToken = await this.userRepository.findPasswordResetToken(request.token);
+
+    if (!resetToken || resetToken.usedAt || new Date() > resetToken.expiresAt) {
+      throw new BadRequestException("Invalid or expired reset token");
+    }
+
+    const passwordHash = await bcrypt.hash(request.newPassword, BCRYPT_ROUNDS);
+    await this.userRepository.update(resetToken.userId, { passwordHash });
+    await this.userRepository.markPasswordResetTokenUsed(request.token);
+
+    return { message: "Password reset successfully" };
+  }
+
+  // ── Change password ────────────────────────────────────────────────────────
+  async changePassword(
+    userId: string,
+    request: ChangePasswordRequest,
+  ): Promise<{ message: string }> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) throw new NotFoundException("User not found");
+
+    const valid = await bcrypt.compare(request.currentPassword, user.passwordHash);
+    if (!valid) throw new UnauthorizedException("Current password is incorrect");
+
+    const passwordHash = await bcrypt.hash(request.newPassword, BCRYPT_ROUNDS);
+    await this.userRepository.update(userId, { passwordHash });
+
+    return { message: "Password changed successfully" };
+  }
+
+  // ── List users ─────────────────────────────────────────────────────────────
+  async listUsers(tenantId: string): Promise<UserListResponse> {
+    const users = await this.userRepository.findByTenantId(tenantId);
+    return {
+      data: users.map((u: any) => this.mapToResponse(u)),
+      total: users.length,
+    };
+  }
+
+  // ── Get user ───────────────────────────────────────────────────────────────
+  async getUser(id: string): Promise<UserResponse> {
+    const user = await this.userRepository.findById(id);
+    if (!user) throw new NotFoundException("User not found");
+    return this.mapToResponse(user);
+  }
+
+  // ── Update user ────────────────────────────────────────────────────────────
+  async updateUser(id: string, request: UpdateUserRequest): Promise<UserResponse> {
+    const user = await this.userRepository.findById(id);
+    if (!user) throw new NotFoundException("User not found");
+
+    const updated = await this.userRepository.update(id, request);
+    return this.mapToResponse(updated);
+  }
+
+  // ── Assign role ────────────────────────────────────────────────────────────
+  async assignRole(
+    userId: string,
+    tenantId: string,
+    role: UserRoleType,
+  ): Promise<UserResponse> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) throw new NotFoundException("User not found");
+
+    await this.userRepository.addRole(userId, tenantId, role);
+    const updated = await this.userRepository.findById(userId);
+    return this.mapToResponse(updated!);
+  }
+
+  // ── Remove role ────────────────────────────────────────────────────────────
+  async removeRole(userId: string, role: UserRoleType): Promise<UserResponse> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) throw new NotFoundException("User not found");
+
+    await this.userRepository.removeRole(userId, role);
+    const updated = await this.userRepository.findById(userId);
+    return this.mapToResponse(updated!);
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  private async issueAccessToken(user: any, tenantId: string): Promise<string> {
+    const secret = process.env.JWT_SECRET ?? "billinx-dev-secret-key-change-in-production";
+    const roles = user.roles?.map((r: any) => r.role) ?? [];
+    const primaryRole = roles[0] ?? "VIEWER";
+
+    return jwt.sign(
+      {
+        sub: user.id,
+        tenantId,
+        email: user.email,
+        roles,
+        role: primaryRole,
+        environment: "PRODUCTION",
+        tier: "STANDARD",
+      },
+      secret,
+      { expiresIn: ACCESS_TOKEN_TTL },
+    );
+  }
+
+  private mapToResponse(user: any): UserResponse {
+    const roles: UserRoleType[] = user.roles?.map((r: any) => r.role as UserRoleType) ?? [];
+    const permissions = [
+      ...new Set(roles.flatMap((r) => ROLE_PERMISSIONS[r] ?? [])),
+    ];
+
+    return {
+      id: user.id,
+      tenantId: user.tenantId,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      fullName: `${user.firstName} ${user.lastName}`.trim(),
+      isActive: user.isActive,
+      isVerified: user.isVerified,
+      roles,
+      permissions,
+      lastLoginAt: user.lastLoginAt?.toISOString(),
+      createdAt: user.createdAt.toISOString(),
+    };
+  }
+}
