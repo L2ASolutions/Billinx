@@ -1,0 +1,191 @@
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Body,
+  Param,
+  Query,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  Logger,
+  Req,
+} from "@nestjs/common";
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+} from "@nestjs/swagger";
+import { Request } from "express";
+import { InvoiceService } from "./services/invoice.service";
+import { ApiKeyGuard } from "../identity/guards/api-key.guard";
+import { JwtGuard } from "../identity/guards/jwt.guard";
+import {
+  InvoiceFilterParams,
+  InvoiceStatus,
+  InvoiceTypeCode,
+} from "../../../packages/types/invoice";
+
+@ApiTags("Invoices")
+@Controller("v1/invoices")
+export class InvoiceController {
+  private readonly logger = new Logger(InvoiceController.name);
+
+  constructor(private readonly invoiceService: InvoiceService) {}
+
+  private getCtx(req: Request): any {
+    return (req as any)._billinxContext;
+  }
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(ApiKeyGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Submit invoice for FIRS compliance" })
+  async createInvoice(
+    @Body() body: Record<string, any>,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.createInvoice(
+      ctx.tenantId,
+      ctx.environment,
+      ctx.actor,
+      body as any,
+    );
+  }
+
+  @Post("validate")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ApiKeyGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Validate invoice without submitting to FIRS" })
+  async validateInvoice(@Body() body: Record<string, any>) {
+    return this.invoiceService.validateInvoice(body);
+  }
+
+  @Get()
+  @UseGuards(ApiKeyGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "List invoices for authenticated tenant" })
+  @ApiQuery({ name: "status", required: false })
+  @ApiQuery({ name: "invoiceTypeCode", required: false })
+  @ApiQuery({ name: "sellerTin", required: false })
+  @ApiQuery({ name: "buyerTin", required: false })
+  @ApiQuery({ name: "from", required: false })
+  @ApiQuery({ name: "to", required: false })
+  @ApiQuery({ name: "page", required: false, type: Number })
+  @ApiQuery({ name: "limit", required: false, type: Number })
+  async listInvoices(
+    @Req() req: Request,
+    @Query("status") status?: InvoiceStatus,
+    @Query("invoiceTypeCode") invoiceTypeCode?: InvoiceTypeCode,
+    @Query("sellerTin") sellerTin?: string,
+    @Query("buyerTin") buyerTin?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("page") page?: number,
+    @Query("limit") limit?: number,
+  ) {
+    const ctx = this.getCtx(req);
+    const filters: InvoiceFilterParams = {
+      status,
+      invoiceTypeCode,
+      sellerTin,
+      buyerTin,
+      from,
+      to,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 20,
+    };
+    return this.invoiceService.listInvoices(ctx.tenantId, filters);
+  }
+
+  @Get("stats")
+  @UseGuards(ApiKeyGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get invoice statistics for tenant" })
+  async getInvoiceStats(@Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.getInvoiceStats(ctx.tenantId);
+  }
+
+  @Get(":id")
+  @UseGuards(ApiKeyGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get invoice by ID" })
+  async getInvoice(@Param("id") id: string, @Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.getInvoice(id, ctx.tenantId);
+  }
+
+  @Get(":id/status")
+  @UseGuards(ApiKeyGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get invoice lifecycle status and history" })
+  async getInvoiceStatus(@Param("id") id: string, @Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.getInvoiceStatus(id, ctx.tenantId);
+  }
+
+  @Patch(":id/cancel")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ApiKeyGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Cancel an accepted invoice" })
+  async cancelInvoice(
+    @Param("id") id: string,
+    @Body() body: Record<string, any>,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.cancelInvoice(
+      id,
+      ctx.tenantId,
+      ctx.actor,
+      body as any,
+    );
+  }
+
+  @Post("dashboard")
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Create invoice from dashboard (JWT auth)" })
+  async createInvoiceDashboard(
+    @Body() body: Record<string, any>,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.createInvoice(
+      ctx.tenantId,
+      ctx.environment,
+      ctx.actor,
+      body as any,
+    );
+  }
+
+  @Get("dashboard/list")
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "List invoices from dashboard (JWT auth)" })
+  async listInvoicesDashboard(
+    @Req() req: Request,
+    @Query("status") status?: InvoiceStatus,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("page") page?: number,
+    @Query("limit") limit?: number,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.listInvoices(ctx.tenantId, {
+      status,
+      from,
+      to,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 20,
+    });
+  }
+}
