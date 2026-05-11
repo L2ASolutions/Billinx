@@ -439,7 +439,27 @@ model AccessRequest {
   @@index([email])
   @@map("access_requests")
 }
+// ── ADMIN USERS (L2A Solutions staff) ─────────────────────────────────────────
+model AdminUser {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  role          AdminRole @default(STAFF)
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
+  @@index([email])
+  @@map("admin_users")
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  STAFF
+}
 enum AccessRequestStatus {
   PENDING
   APPROVED
