@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -16,11 +17,13 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiHeader,
+  ApiQuery,
 } from "@nestjs/swagger";
 import { Request } from "express";
 import { UserService } from "./services/user.service";
 import { ApiKeyGuard } from "../identity/guards/api-key.guard";
 import { JwtGuard } from "../identity/guards/jwt.guard";
+import { AdminKeyGuard } from "../identity/guards/admin-key.guard";
 import { getRequestContext } from "../../shared/context/request-context";
 import {
   RegisterTenantRequest,
@@ -191,5 +194,54 @@ export class UserController {
     @Param("role") role: string,
   ) {
     return this.userService.removeRole(id, role as UserRoleType);
+  }
+// ── Public: request access ────────────────────────────────────────────────
+  @Post("request-access")
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: "Request access to Billinx platform" })
+  async requestAccess(@Body() body: Record<string, any>) {
+    return this.userService.requestAccess(body as any);
+  }
+
+  // ── Admin: list access requests ───────────────────────────────────────────
+  @Get("admin/access-requests")
+  @UseGuards(AdminKeyGuard)
+  @ApiOperation({ summary: "Admin: list all access requests" })
+  @ApiHeader({ name: "X-Admin-Key", required: true })
+  @ApiQuery({ name: "status", required: false })
+  async listAccessRequests(@Query("status") status?: string) {
+    return this.userService.listAccessRequests(status);
+  }
+
+  @Patch("admin/access-requests/:id/approve")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AdminKeyGuard)
+  @ApiOperation({ summary: "Admin: approve an access request" })
+  @ApiHeader({ name: "X-Admin-Key", required: true })
+  async approveAccessRequest(
+    @Param("id") id: string,
+    @Body() body: Record<string, any>,
+  ) {
+    return this.userService.approveAccessRequest(
+      id,
+      body.reviewedBy ?? "admin",
+      body.reviewNote,
+    );
+  }
+
+  @Patch("admin/access-requests/:id/reject")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AdminKeyGuard)
+  @ApiOperation({ summary: "Admin: reject an access request" })
+  @ApiHeader({ name: "X-Admin-Key", required: true })
+  async rejectAccessRequest(
+    @Param("id") id: string,
+    @Body() body: Record<string, any>,
+  ) {
+    return this.userService.rejectAccessRequest(
+      id,
+      body.reviewedBy ?? "admin",
+      body.reviewNote,
+    );
   }
 }

@@ -418,6 +418,33 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
+// ── ACCESS REQUESTS ───────────────────────────────────────────────────────────
+model AccessRequest {
+  id              String              @id @default(uuid())
+  companyName     String
+  tin             String
+  contactName     String
+  email           String
+  phone           String?
+  estimatedVolume String?
+  useCase         String?
+  status          AccessRequestStatus @default(PENDING)
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  reviewNote      String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([status])
+  @@index([email])
+  @@map("access_requests")
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
 enum ActivityEventType {
   USER_LOGIN
   USER_LOGOUT

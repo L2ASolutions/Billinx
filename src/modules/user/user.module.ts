@@ -8,6 +8,7 @@ import { ActivityService } from "../activity/services/activity.service";
 import { ApiKeyService } from "../identity/services/api-key.service";
 import { TokenService } from "../identity/services/token.service";
 import { JwtGuard } from "../identity/guards/jwt.guard";
+import { AdminKeyGuard } from "../identity/guards/admin-key.guard";
 
 @Module({
   controllers: [UserController],
@@ -20,6 +21,7 @@ import { JwtGuard } from "../identity/guards/jwt.guard";
     ApiKeyService,
     TokenService,
     JwtGuard,
+    AdminKeyGuard,
   ],
   exports: [UserService, UserRepository],
 })
