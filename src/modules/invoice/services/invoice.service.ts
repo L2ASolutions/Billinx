@@ -18,6 +18,8 @@ import {
   ValidationResponse,
 } from "../../../../packages/types/invoice";
 
+import { SubmissionService } from "../../submission/services/submission.service";
+
 @Injectable()
 export class InvoiceService {
   private readonly logger = new Logger(InvoiceService.name);
@@ -28,6 +30,7 @@ export class InvoiceService {
     private readonly stateMachine: StateMachineService,
     private readonly activityService: ActivityService,
     private readonly prisma: PrismaService,
+    private readonly submissionService: SubmissionService,
   ) {}
 
   async createInvoice(
@@ -152,6 +155,22 @@ export class InvoiceService {
     });
 
     this.logger.log(`Invoice created: ${platformIrn} for tenant ${tenantId}`);
+     // Queue invoice for FIRS submission
+    const tenantData = await this.prisma.asAdmin(async (tx) => {
+      return tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { appAdapterKey: true },
+      });
+    });
+
+    this.submissionService.queueInvoice(
+      invoice.id,
+      tenantId,
+      platformIrn,
+      (tenantData?.appAdapterKey ?? "mock") as any,
+    ).catch((err) =>
+      this.logger.error(`Failed to queue invoice: ${err.message}`),
+    );
     return this.mapToResponse(invoice);
   }
 
