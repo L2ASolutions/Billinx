@@ -11,6 +11,8 @@ import { ApiKeyService } from "../identity/services/api-key.service";
 import { TokenService } from "../identity/services/token.service";
 import { ApiKeyGuard } from "../identity/guards/api-key.guard";
 import { JwtGuard } from "../identity/guards/jwt.guard";
+import { SubmissionService } from "../submission/services/submission.service";
+import { MockAdapter } from "../submission/adapters/mock/mock.adapter";
 
 @Module({
   controllers: [InvoiceController],
@@ -26,6 +28,8 @@ import { JwtGuard } from "../identity/guards/jwt.guard";
     TokenService,
     ApiKeyGuard,
     JwtGuard,
+    SubmissionService,
+    MockAdapter,
   ],
   exports: [InvoiceService, InvoiceRepository],
 })
