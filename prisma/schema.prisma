@@ -98,45 +98,65 @@ model IdempotencyRecord {
   @@map("idempotency_records")
 }
 
-model Invoice {
-  id                 String            @id @default(uuid())
-  tenantId           String
-  environment        TenantEnvironment
-  schemaVersion      String            @default("1.0")
-  invoiceTypeCode    InvoiceTypeCode
-  platformIrn        String            @unique
-  firsConfirmedIrn   String?
-  sellerTin          String
-  sellerName         String
-  buyerTin           String?
-  buyerName          String
-  invoiceDate        DateTime
-  currency           String            @default("NGN")
-  exchangeRate       Decimal?
-  exchangeRateSource String?
-  subtotal           Decimal
-  vatAmount          Decimal
-  totalAmount        Decimal
-  lineItems          Json
-  metadata           Json?
-  originalIrn        String?
-  qrCodeBase64       String?
-  status             InvoiceStatus     @default(DRAFT)
-  submittedAt        DateTime?
-  acceptedAt         DateTime?
-  rejectedAt         DateTime?
-  cancelledAt        DateTime?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  model Invoice {
+  id                    String            @id @default(uuid())
+  tenantId              String
+  userId                String?
+  environment           TenantEnvironment
+  schemaVersion         String            @default("2.0")
+  invoiceTypeCode       InvoiceTypeCode
+  platformIrn           String            @unique
+  firsConfirmedIrn      String?
+  sourceReference       String?
+  buyerReference        String?
+  orderReference        String?
+  accountingCost        String?
+  sellerTin             String
+  sellerName            String
+  buyerTin              String?
+  buyerName             String
+  issueDate             DateTime
+  dueDate               DateTime?
+  taxPointDate          DateTime?
+  actualDeliveryDate    DateTime?
+  currency              String            @default("NGN")
+  taxCurrencyCode       String?
+  exchangeRate          Decimal?
+  exchangeRateSource    String?
+  subtotal              Decimal
+  vatAmount             Decimal
+  totalAmount           Decimal
+  lineItems             Json
+  taxTotal              Json
+  legalMonetaryTotal    Json
+  paymentMeans          Json?
+  allowanceCharges      Json?
+  billingReference      Json?
+  documentReferences    Json?
+  invoiceDeliveryPeriod Json?
+  paymentTermsNote      String?
+  note                  String?
+  metadata              Json?
+  originalIrn           String?
+  qrCodeBase64          String?
+  status                InvoiceStatus     @default(DRAFT)
+  submittedAt           DateTime?
+  acceptedAt            DateTime?
+  rejectedAt            DateTime?
+  cancelledAt           DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
 
-  tenant             Tenant            @relation(fields: [tenantId], references: [id])
-  stateHistory       InvoiceStateHistory[]
-  submissionAttempts SubmissionAttempt[]
+  tenant                Tenant            @relation(fields: [tenantId], references: [id])
+  stateHistory          InvoiceStateHistory[]
+  submissionAttempts    SubmissionAttempt[]
 
   @@index([tenantId, status])
   @@index([tenantId, environment])
   @@index([sellerTin])
   @@index([platformIrn])
+  @@index([issueDate])
+  @@index([userId])
   @@map("invoices")
 }
 

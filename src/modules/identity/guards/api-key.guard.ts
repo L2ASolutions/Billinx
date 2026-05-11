@@ -57,11 +57,8 @@ export class ApiKeyGuard implements CanActivate {
       isAdmin: false,
     };
 
-    return new Promise((resolve) => {
-      runWithContext(requestContext, () => {
-        (request as any)._billinxContext = requestContext;
-        resolve(true);
-      });
-    });
+    (request as any)._billinxContext = requestContext;
+    runWithContext(requestContext, () => {});
+    return true;
   }
 }
