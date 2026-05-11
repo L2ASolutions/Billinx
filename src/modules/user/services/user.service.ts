@@ -46,7 +46,7 @@ export class UserService {
     private readonly activityService: ActivityService,
   ) {}
 
-  // ── Self-serve registration (Route 2 — small businesses) ──────────────────
+  // â”€â”€ Self-serve registration (Route 2 â€” small businesses) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async registerTenant(request: RegisterTenantRequest): Promise<RegisterResponse> {
     // Check if tenant TIN already exists
     const existingTenant = await this.prisma.asAdmin(async (tx) => {
@@ -127,7 +127,7 @@ export class UserService {
     };
   }
 
-  // ── Login ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async login(
     tenantId: string,
     request: LoginRequest,
@@ -197,7 +197,7 @@ export class UserService {
     };
   }
 
-  // ── Invite user ────────────────────────────────────────────────────────────
+  // â”€â”€ Invite user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async inviteUser(
     tenantId: string,
     invitedBy: string,
@@ -243,7 +243,7 @@ export class UserService {
     };
   }
 
-  // ── Accept invitation ──────────────────────────────────────────────────────
+  // â”€â”€ Accept invitation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async acceptInvitation(request: AcceptInvitationRequest): Promise<LoginResponse> {
     const invitation = await this.userRepository.findInvitationByToken(request.token);
 
@@ -297,7 +297,7 @@ export class UserService {
     };
   }
 
-  // ── Forgot password ────────────────────────────────────────────────────────
+  // â”€â”€ Forgot password â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async forgotPassword(
     tenantId: string,
     request: ForgotPasswordRequest,
@@ -335,7 +335,7 @@ export class UserService {
     };
   }
 
-  // ── Reset password ─────────────────────────────────────────────────────────
+  // â”€â”€ Reset password â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async resetPassword(request: ResetPasswordRequest): Promise<{ message: string }> {
     const resetToken = await this.userRepository.findPasswordResetToken(request.token);
 
@@ -350,7 +350,7 @@ export class UserService {
     return { message: "Password reset successfully" };
   }
 
-  // ── Change password ────────────────────────────────────────────────────────
+  // â”€â”€ Change password â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async changePassword(
     userId: string,
     request: ChangePasswordRequest,
@@ -367,7 +367,7 @@ export class UserService {
     return { message: "Password changed successfully" };
   }
 
-  // ── List users ─────────────────────────────────────────────────────────────
+  // â”€â”€ List users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async listUsers(tenantId: string): Promise<UserListResponse> {
     const users = await this.userRepository.findByTenantId(tenantId);
     return {
@@ -376,14 +376,14 @@ export class UserService {
     };
   }
 
-  // ── Get user ───────────────────────────────────────────────────────────────
+  // â”€â”€ Get user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async getUser(id: string): Promise<UserResponse> {
     const user = await this.userRepository.findById(id);
     if (!user) throw new NotFoundException("User not found");
     return this.mapToResponse(user);
   }
 
-  // ── Update user ────────────────────────────────────────────────────────────
+  // â”€â”€ Update user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async updateUser(id: string, request: UpdateUserRequest): Promise<UserResponse> {
     const user = await this.userRepository.findById(id);
     if (!user) throw new NotFoundException("User not found");
@@ -392,7 +392,7 @@ export class UserService {
     return this.mapToResponse(updated);
   }
 
-  // ── Assign role ────────────────────────────────────────────────────────────
+  // â”€â”€ Assign role â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async assignRole(
     userId: string,
     tenantId: string,
@@ -406,7 +406,7 @@ export class UserService {
     return this.mapToResponse(updated!);
   }
 
-  // ── Remove role ────────────────────────────────────────────────────────────
+  // â”€â”€ Remove role â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async removeRole(userId: string, role: UserRoleType): Promise<UserResponse> {
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundException("User not found");
@@ -416,7 +416,7 @@ export class UserService {
     return this.mapToResponse(updated!);
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private async issueAccessToken(user: any, tenantId: string): Promise<string> {
     const secret = process.env.JWT_SECRET ?? "billinx-dev-secret-key-change-in-production";
     const roles = user.roles?.map((r: any) => r.role) ?? [];
@@ -457,5 +457,83 @@ export class UserService {
       lastLoginAt: user.lastLoginAt?.toISOString(),
       createdAt: user.createdAt.toISOString(),
     };
+  }
+  async requestAccess(request: {
+    companyName: string;
+    tin: string;
+    contactName: string;
+    email: string;
+    phone?: string;
+    estimatedVolume?: string;
+    useCase?: string;
+  }): Promise<{ message: string; referenceId: string }> {
+    const existing = await this.prisma.asAdmin(async (tx) => {
+      return tx.accessRequest.findFirst({
+        where: { email: request.email, status: "PENDING" },
+      });
+    });
+    if (existing) {
+      return {
+        message: "Your request is already under review. We will contact you shortly.",
+        referenceId: existing.id,
+      };
+    }
+    const accessRequest = await this.prisma.asAdmin(async (tx) => {
+      return tx.accessRequest.create({
+        data: {
+          companyName: request.companyName,
+          tin: request.tin,
+          contactName: request.contactName,
+          email: request.email,
+          phone: request.phone ?? null,
+          estimatedVolume: request.estimatedVolume ?? null,
+          useCase: request.useCase ?? null,
+          status: "PENDING",
+        },
+      });
+    });
+    this.logger.log(`Access request received from ${request.companyName} (${request.email})`);
+    return {
+      message: "Thank you for your interest in Billinx. We will review your request and contact you within 24 hours.",
+      referenceId: accessRequest.id,
+    };
+  }
+
+  async listAccessRequests(status?: string): Promise<any[]> {
+    return this.prisma.asAdmin(async (tx) => {
+      return tx.accessRequest.findMany({
+        where: status ? { status: status as any } : undefined,
+        orderBy: { createdAt: "desc" },
+      });
+    });
+  }
+
+  async approveAccessRequest(id: string, reviewedBy: string, reviewNote?: string): Promise<{ message: string }> {
+    const request = await this.prisma.asAdmin(async (tx) => {
+      return tx.accessRequest.findUnique({ where: { id } });
+    });
+    if (!request) throw new NotFoundException(`Access request ${id} not found`);
+    await this.prisma.asAdmin(async (tx) => {
+      return tx.accessRequest.update({
+        where: { id },
+        data: { status: "APPROVED", reviewedBy, reviewedAt: new Date(), reviewNote: reviewNote ?? null },
+      });
+    });
+    this.logger.log(`Access request ${id} approved for ${request.companyName}`);
+    return { message: `Access request for ${request.companyName} approved. Create their tenant and send invitation to ${request.email}.` };
+  }
+
+  async rejectAccessRequest(id: string, reviewedBy: string, reviewNote?: string): Promise<{ message: string }> {
+    const request = await this.prisma.asAdmin(async (tx) => {
+      return tx.accessRequest.findUnique({ where: { id } });
+    });
+    if (!request) throw new NotFoundException(`Access request ${id} not found`);
+    await this.prisma.asAdmin(async (tx) => {
+      return tx.accessRequest.update({
+        where: { id },
+        data: { status: "REJECTED", reviewedBy, reviewedAt: new Date(), reviewNote: reviewNote ?? null },
+      });
+    });
+    return { message: `Access request for ${request.companyName} rejected.` };
   }
 }
