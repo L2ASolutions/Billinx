@@ -6,6 +6,7 @@ import { ActivityModule } from "./modules/activity/activity.module";
 import { UserModule } from "./modules/user/user.module";
 import { InvoiceModule } from "./modules/invoice/invoice.module";
 import { SubmissionModule } from "./modules/submission/submission.module";
+import { AdminModule } from "./modules/admin/admin.module";
 import { PrismaService } from "./infrastructure/database/prisma.service";
 import { SecretsService } from "./infrastructure/secrets/secrets.service";
 import { IdempotencyInterceptor } from "./shared/interceptors/idempotency.interceptor";
@@ -20,6 +21,7 @@ import { GlobalExceptionFilter } from "./shared/filters/global-exception.filter"
     UserModule,
     InvoiceModule,
     SubmissionModule,
+    AdminModule,
   ],
   providers: [
     PrismaService,
