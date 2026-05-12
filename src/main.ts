@@ -23,6 +23,7 @@ async function bootstrap() {
     }),
   );
 
+  if (process.env.NODE_ENV !== 'production') {
   const config = new DocumentBuilder()
     .setTitle("Billinx Compliance API")
     .setDescription(
@@ -38,7 +39,7 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup("docs", app, document);
-
+}
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
   logger.log(`Billinx API running on port ${port}`);
