@@ -13,6 +13,7 @@ import { AdminModule } from "./modules/admin/admin.module";
 import { WebhookModule } from "./modules/webhook/webhook.module";
 import { EmailModule } from "./shared/email/email.module";
 import { HealthModule } from "./health/health.module";
+import { KybModule } from "./modules/kyb/kyb.module";
 import { PrismaService } from "./infrastructure/database/prisma.service";
 import { SecretsService } from "./infrastructure/secrets/secrets.service";
 import { IdempotencyInterceptor } from "./shared/interceptors/idempotency.interceptor";
@@ -32,6 +33,7 @@ import { GlobalExceptionFilter } from "./shared/filters/global-exception.filter"
     WebhookModule,
     EmailModule,
     HealthModule,
+    KybModule,
   ],
   providers: [
     PrismaService,
