@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { APP_INTERCEPTOR, APP_FILTER } from "@nestjs/core";
+import { EventEmitterModule } from "@nestjs/event-emitter";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { TenantModule } from "./modules/tenant/tenant.module";
 import { ActivityModule } from "./modules/activity/activity.module";
@@ -7,6 +8,7 @@ import { UserModule } from "./modules/user/user.module";
 import { InvoiceModule } from "./modules/invoice/invoice.module";
 import { SubmissionModule } from "./modules/submission/submission.module";
 import { AdminModule } from "./modules/admin/admin.module";
+import { WebhookModule } from "./modules/webhook/webhook.module";
 import { PrismaService } from "./infrastructure/database/prisma.service";
 import { SecretsService } from "./infrastructure/secrets/secrets.service";
 import { IdempotencyInterceptor } from "./shared/interceptors/idempotency.interceptor";
@@ -15,6 +17,7 @@ import { GlobalExceptionFilter } from "./shared/filters/global-exception.filter"
 
 @Module({
   imports: [
+    EventEmitterModule.forRoot({ wildcard: false, delimiter: '.' }),
     IdentityModule,
     TenantModule,
     ActivityModule,
@@ -22,6 +25,7 @@ import { GlobalExceptionFilter } from "./shared/filters/global-exception.filter"
     InvoiceModule,
     SubmissionModule,
     AdminModule,
+    WebhookModule,
   ],
   providers: [
     PrismaService,

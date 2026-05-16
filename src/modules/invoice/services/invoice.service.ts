@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from "@nestjs/common";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 import { InvoiceRepository } from "../repositories/invoice.repository";
 import { IrnService } from "./irn.service";
 import { StateMachineService } from "./state-machine.service";
@@ -31,6 +32,7 @@ export class InvoiceService {
     private readonly activityService: ActivityService,
     private readonly prisma: PrismaService,
     private readonly submissionService: SubmissionService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async createInvoice(
@@ -151,6 +153,22 @@ export class InvoiceService {
         totalAmount: request.legalMonetaryTotal?.payableAmount,
         currency: request.currency,
         lineItemCount: (request.lineItems ?? []).length,
+      },
+    });
+
+    this.eventEmitter.emit("invoice.created", {
+      tenantId,
+      eventType: "invoice.created",
+      invoiceId: invoice.id,
+      platformIrn,
+      data: {
+        invoiceId: invoice.id,
+        platformIrn,
+        invoiceTypeCode: request.invoiceTypeCode,
+        sellerTin: request.seller?.tin,
+        buyerTin: request.buyer?.tin,
+        totalAmount: request.legalMonetaryTotal?.payableAmount,
+        currency: request.currency ?? "NGN",
       },
     });
 
@@ -341,6 +359,18 @@ export class InvoiceService {
       entityType: "Invoice",
       entityId: id,
       payload: {
+        invoiceId: id,
+        platformIrn: invoice.platformIrn,
+        reason: request.reason,
+      },
+    });
+
+    this.eventEmitter.emit("invoice.cancelled", {
+      tenantId,
+      eventType: "invoice.cancelled",
+      invoiceId: id,
+      platformIrn: invoice.platformIrn,
+      data: {
         invoiceId: id,
         platformIrn: invoice.platformIrn,
         reason: request.reason,

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 import { PrismaService } from "../../../infrastructure/database/prisma.service";
 import { ActivityService } from "../../activity/services/activity.service";
 import { MockAdapter } from "../adapters/mock/mock.adapter";
@@ -20,6 +21,7 @@ export class SubmissionService {
     private readonly prisma: PrismaService,
     private readonly activityService: ActivityService,
     private readonly mockAdapter: MockAdapter,
+    private readonly eventEmitter: EventEmitter2,
   ) {
     this.adapters.set("mock", mockAdapter);
   }
@@ -182,6 +184,19 @@ export class SubmissionService {
       },
     });
 
+    this.eventEmitter.emit("invoice.accepted", {
+      tenantId,
+      eventType: "invoice.accepted",
+      invoiceId,
+      platformIrn: result.firsConfirmedIrn ?? invoiceId,
+      data: {
+        invoiceId,
+        firsConfirmedIrn: result.firsConfirmedIrn,
+        csid: result.csid,
+        qrCodeBase64: result.qrCodeBase64,
+      },
+    });
+
     this.logger.log(`Invoice ${invoiceId} accepted by FIRS. IRN: ${result.firsConfirmedIrn}`);
   }
 
@@ -240,6 +255,20 @@ export class SubmissionService {
         isFinal,
       },
     });
+
+    if (isFinal) {
+      this.eventEmitter.emit("invoice.rejected", {
+        tenantId,
+        eventType: "invoice.rejected",
+        invoiceId,
+        platformIrn: invoiceId,
+        data: {
+          invoiceId,
+          errorCode: result.errorCode,
+          errorMessage: result.errorMessage,
+        },
+      });
+    }
 
     this.logger.warn(
       `Invoice ${invoiceId} ${isFinal ? "rejected" : "failed (will retry)"}. Error: ${result.errorMessage}`,
