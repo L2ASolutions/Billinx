@@ -11,6 +11,7 @@ import { JwtGuard } from "../identity/guards/jwt.guard";
 import { AdminKeyGuard } from "../identity/guards/admin-key.guard";
 import { RedisService } from "../../shared/redis/redis.service";
 import { AuthRateLimitGuard } from "../../shared/guards/auth-rate-limit.guard";
+import { EmailService } from "../../shared/email/email.service";
 
 @Module({
   controllers: [UserController],
@@ -26,6 +27,7 @@ import { AuthRateLimitGuard } from "../../shared/guards/auth-rate-limit.guard";
     AdminKeyGuard,
     RedisService,
     AuthRateLimitGuard,
+    EmailService,
   ],
   exports: [UserService, UserRepository],
 })
