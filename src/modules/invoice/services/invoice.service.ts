@@ -123,9 +123,14 @@ export class InvoiceService {
         : null,
       paymentTermsNote: request.paymentTermsNote ?? null,
       note: request.note ?? null,
-      metadata: request.metadata
-        ? JSON.parse(JSON.stringify(request.metadata))
-        : null,
+      metadata: JSON.parse(JSON.stringify({
+        ...(request.metadata ?? {}),
+        sellerParty: request.seller ?? null,
+        buyerParty: request.buyer ?? null,
+      })),
+      invoiceKind: request.invoiceKind ?? null,
+      issueTime: request.issueTime ?? null,
+      paymentStatus: request.paymentStatus ?? null,
       originalIrn: request.originalIrn ?? null,
       status: "DRAFT",
     });
@@ -177,15 +182,19 @@ export class InvoiceService {
     const tenantData = await this.prisma.asAdmin(async (tx) => {
       return tx.tenant.findUnique({
         where: { id: tenantId },
-        select: { appAdapterKey: true },
+        select: { appAdapterKey: true, interswitchClientId: true },
       });
     });
+
+    const adapterKey = tenantData?.interswitchClientId
+      ? "interswitch"
+      : (tenantData?.appAdapterKey ?? "mock");
 
     this.submissionService.queueInvoice(
       invoice.id,
       tenantId,
       platformIrn,
-      (tenantData?.appAdapterKey ?? "mock") as any,
+      adapterKey as any,
     ).catch((err) =>
       this.logger.error(`Failed to queue invoice: ${err.message}`),
     );

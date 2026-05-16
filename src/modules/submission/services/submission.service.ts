@@ -3,6 +3,7 @@ import { EventEmitter2 } from "@nestjs/event-emitter";
 import { PrismaService } from "../../../infrastructure/database/prisma.service";
 import { ActivityService } from "../../activity/services/activity.service";
 import { MockAdapter } from "../adapters/mock/mock.adapter";
+import { InterswitchAdapter } from "../adapters/interswitch/interswitch.adapter";
 import { AppAdapter } from "../adapters/app-adapter.interface";
 import { addToSubmissionQueue } from "../queues/submission.queue";
 import {
@@ -21,9 +22,11 @@ export class SubmissionService {
     private readonly prisma: PrismaService,
     private readonly activityService: ActivityService,
     private readonly mockAdapter: MockAdapter,
+    private readonly interswitchAdapter: InterswitchAdapter,
     private readonly eventEmitter: EventEmitter2,
   ) {
     this.adapters.set("mock", mockAdapter);
+    this.adapters.set("interswitch", interswitchAdapter);
   }
 
   async queueInvoice(
