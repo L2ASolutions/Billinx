@@ -28,6 +28,8 @@ services:
       EMAIL_FROM: ${EMAIL_FROM:-Billinx <noreply@billinx.ng>}
       APP_BASE_URL: ${APP_BASE_URL:-https://app.billinx.ng}
       MFA_ISSUER: ${MFA_ISSUER:-Billinx}
+      CAC_API_BASE_URL: ${CAC_API_BASE_URL:-}
+      CAC_API_KEY: ${CAC_API_KEY:-}
       INTERSWITCH_SANDBOX_URL: ${INTERSWITCH_SANDBOX_URL:-https://qa.interswitchgroup.com}
       INTERSWITCH_PROD_URL: ${INTERSWITCH_PROD_URL:-https://api.interswitchgroup.com}
       # AWS Secrets Manager IDs
