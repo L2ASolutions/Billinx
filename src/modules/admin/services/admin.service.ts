@@ -251,6 +251,7 @@ export class AdminService {
         lastName: u.lastName,
         roles: u.roles.map((r: any) => r.role),
         isActive: u.isActive,
+        mfaEnabled: u.mfaEnabled ?? false,
         lastLoginAt: u.lastLoginAt?.toISOString(),
       })),
       stats: { total, accepted, rejected, acceptanceRate },
