@@ -12,12 +12,7 @@ const INVOICE_TYPE_CODES: Record<string, string> = {
   PROFORMA: '325',
 };
 
-interface TokenEntry {
-  token: string;
-  expiresAt: number;
-}
-
-interface InterswitchSuccessResponse {
+interface NrsSuccessResponse {
   code: number;
   message: string;
   data: {
@@ -27,19 +22,12 @@ interface InterswitchSuccessResponse {
   };
 }
 
-interface InterswitchErrorResponse {
+interface NrsErrorResponse {
   code?: number | string;
   message?: string;
-  error?: {
-    id?: string;
-    handler?: string;
-    details?: string;
-    public_message?: string;
-  };
   errorCode?: string;
   errorMessage?: string;
   details?: string;
-  error_description?: string;
 }
 
 @Injectable()
@@ -48,7 +36,6 @@ export class InterswitchAdapter implements AppAdapter {
   readonly adapterName = 'Interswitch NRS E-Invoicing Adapter';
 
   private readonly logger = new Logger(InterswitchAdapter.name);
-  private readonly tokenCache = new Map<string, TokenEntry>();
 
   private readonly sandboxBaseUrl =
     process.env.INTERSWITCH_SANDBOX_URL ?? 'https://qa.interswitchgroup.com';
@@ -63,38 +50,38 @@ export class InterswitchAdapter implements AppAdapter {
 
   async submit(request: SubmissionRequest): Promise<SubmissionResult> {
     const tenant = await this.loadTenant(request.tenantId);
-    if (!tenant.interswitchClientId || !tenant.interswitchClientSecret || !tenant.interswitchSecretIv) {
+
+    if (!tenant.nrsApiKey || !tenant.nrsApiKeyIv || !tenant.nrsApiSecret || !tenant.nrsApiSecretIv) {
       return {
         success: false,
         errorCode: 'MISSING_CREDENTIALS',
-        errorMessage: 'Interswitch credentials not configured for this tenant',
+        errorMessage: 'NRS API credentials not configured for this tenant',
         retryable: false,
       };
     }
 
+    const masterKey = await this.secretsService.getMasterEncryptionKey();
+    const apiKey = this.credentialService.decrypt(
+      Buffer.from(tenant.nrsApiKey),
+      Buffer.from(tenant.nrsApiKeyIv),
+      masterKey,
+      request.tenantId,
+    );
+    const apiSecret = this.credentialService.decrypt(
+      Buffer.from(tenant.nrsApiSecret),
+      Buffer.from(tenant.nrsApiSecretIv),
+      masterKey,
+      request.tenantId,
+    );
+
     const baseUrl = tenant.environment === 'PRODUCTION' ? this.productionBaseUrl : this.sandboxBaseUrl;
     const invoice = (request.payload as any).invoice;
-
-    let token: string;
-    try {
-      token = await this.getAccessToken(request.tenantId, tenant, baseUrl);
-    } catch (err: any) {
-      return {
-        success: false,
-        errorCode: 'AUTH_ERROR',
-        errorMessage: `Failed to obtain Interswitch token: ${err.message}`,
-        retryable: true,
-      };
-    }
-
     const payload = this.buildPayload(invoice, tenant);
     const startMs = Date.now();
 
     try {
-      const result = await this.postInvoice(baseUrl, token, payload);
-      this.logger.log(
-        `Invoice ${request.platformIrn} accepted by Interswitch. IRN: ${result.data.IRN}`,
-      );
+      const result = await this.postInvoice(baseUrl, apiKey, apiSecret, payload);
+      this.logger.log(`Invoice ${request.platformIrn} accepted by NRS. IRN: ${result.data.IRN}`);
       return {
         success: true,
         firsConfirmedIrn: result.data.IRN,
@@ -107,100 +94,43 @@ export class InterswitchAdapter implements AppAdapter {
         },
       };
     } catch (err: any) {
-      // Token expired: clear cache and make one retry
-      if (err.statusCode === 401) {
-        this.tokenCache.delete(request.tenantId);
-        try {
-          token = await this.getAccessToken(request.tenantId, tenant, baseUrl);
-          const result = await this.postInvoice(baseUrl, token, payload);
-          return {
-            success: true,
-            firsConfirmedIrn: result.data.IRN,
-            qrCodeBase64: result.data.QRCodeData,
-            rawResponse: { irn: result.data.IRN, postingDateTime: result.data.PostingDateTime },
-          };
-        } catch (retryErr: any) {
-          return this.mapError(retryErr);
-        }
-      }
       return this.mapError(err);
     }
   }
 
   async checkStatus(
-    platformIrn: string,
+    _platformIrn: string,
     _tenantCredential: Record<string, unknown>,
   ): Promise<SubmissionResult> {
     return {
       success: false,
       errorCode: 'NOT_IMPLEMENTED',
-      errorMessage: 'Status check not supported by Interswitch adapter',
+      errorMessage: 'Status check not supported by this adapter',
       retryable: false,
     };
   }
 
   async ping(): Promise<boolean> {
     try {
-      const resp = await fetch(
-        `${this.sandboxBaseUrl}/Api/SwitchTax/Token`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
-      );
+      const resp = await fetch(`${this.sandboxBaseUrl}/Api/SwitchTax/postInvoice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
       return resp.status < 500;
     } catch {
       return false;
     }
   }
 
-  // ─── Token management ─────────────────────────────────────────────────────
-
-  private async getAccessToken(tenantId: string, tenant: any, baseUrl: string): Promise<string> {
-    const cached = this.tokenCache.get(tenantId);
-    if (cached && cached.expiresAt > Date.now() + 60_000) {
-      return cached.token;
-    }
-
-    const masterKey = await this.secretsService.getMasterEncryptionKey();
-    const clientSecret = this.credentialService.decrypt(
-      Buffer.from(tenant.interswitchClientSecret),
-      Buffer.from(tenant.interswitchSecretIv),
-      masterKey,
-      tenantId,
-    );
-
-    const response = await fetch(`${baseUrl}/Api/SwitchTax/Token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ClientId: tenant.interswitchClientId,
-        ClientSecret: clientSecret,
-      }),
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw Object.assign(
-        new Error(`Token request failed (${response.status}): ${body}`),
-        { statusCode: response.status },
-      );
-    }
-
-    const data = await response.json() as { Token: string; expires_in: number };
-    const token = data.Token;
-    // Cache with 60-second buffer before actual expiry
-    const expiresAt = Date.now() + (data.expires_in - 60) * 1000;
-    this.tokenCache.set(tenantId, { token, expiresAt });
-
-    this.logger.log(`Obtained Interswitch token for tenant ${tenantId}`);
-    return token;
-  }
-
   // ─── Invoice submission ───────────────────────────────────────────────────
 
   private async postInvoice(
     baseUrl: string,
-    token: string,
+    apiKey: string,
+    apiSecret: string,
     payload: Record<string, unknown>,
-  ): Promise<InterswitchSuccessResponse> {
+  ): Promise<NrsSuccessResponse> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
 
@@ -210,7 +140,8 @@ export class InterswitchAdapter implements AppAdapter {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'x-api-key': apiKey,
+          'x-api-secret': apiSecret,
         },
         body: JSON.stringify(payload),
         signal: controller.signal,
@@ -222,17 +153,16 @@ export class InterswitchAdapter implements AppAdapter {
     const body = await response.text();
 
     if (response.status === 201 || response.status === 200) {
-      return JSON.parse(body) as InterswitchSuccessResponse;
+      return JSON.parse(body) as NrsSuccessResponse;
     }
 
-    let parsed: InterswitchErrorResponse = {};
+    let parsed: NrsErrorResponse = {};
     try { parsed = JSON.parse(body); } catch { /* raw body */ }
 
-    const err = Object.assign(
+    throw Object.assign(
       new Error(this.extractErrorMessage(parsed, body)),
       { statusCode: response.status, body: parsed },
     );
-    throw err;
   }
 
   // ─── Payload builder ──────────────────────────────────────────────────────
@@ -241,7 +171,8 @@ export class InterswitchAdapter implements AppAdapter {
     const serviceId = tenant.interswitchServiceId ?? 'BILLINX';
     const invoiceNo = invoice.sourceReference ?? invoice.id.substring(0, 8).toUpperCase();
     const dateStr = this.toYYYYMMDD(invoice.issueDate);
-    const irn = `${invoiceNo}-${serviceId}-${dateStr}`;
+    const unixTimestamp = Math.floor(Date.now() / 1000);
+    const irn = `${invoiceNo}-${serviceId}-${dateStr}.${unixTimestamp}`;
 
     const sellerParty = (invoice.metadata as any)?.sellerParty ?? {};
     const tenantAddress = (tenant.registeredAddress as any) ?? {};
@@ -253,8 +184,8 @@ export class InterswitchAdapter implements AppAdapter {
       issue_date: this.toISODate(invoice.issueDate),
       due_date: invoice.dueDate ? this.toISODate(invoice.dueDate) : this.toISODate(invoice.issueDate),
       issue_time: invoice.issueTime ?? this.currentTime(),
-      invoice_type_code: INVOICE_TYPE_CODES[invoice.invoiceTypeCode] ?? '381',
-      payment_status: invoice.paymentStatus ?? 'UNPAID',
+      invoice_type_code: INVOICE_TYPE_CODES[invoice.invoiceTypeCode] ?? invoice.invoiceTypeCode ?? '381',
+      payment_status: invoice.paymentStatus ?? 'PENDING',
       tax_point_date: invoice.taxPointDate
         ? this.toISODate(invoice.taxPointDate)
         : this.toISODate(invoice.issueDate),
@@ -269,15 +200,32 @@ export class InterswitchAdapter implements AppAdapter {
         postal_address: {
           street_name: sellerParty.postalAddress?.streetName ?? tenantAddress.streetName ?? '',
           city_name: sellerParty.postalAddress?.cityName ?? tenantAddress.cityName ?? 'Lagos',
-          postal_zone: sellerParty.postalAddress?.postalZone ?? tenantAddress.postalZone ?? '',
+          postal_zone: sellerParty.postalAddress?.postalZone ?? tenantAddress.postalZone ?? undefined,
+          lga: sellerParty.postalAddress?.lga ?? tenantAddress.lga ?? undefined,
+          state: sellerParty.postalAddress?.state ?? tenantAddress.state ?? undefined,
           country: sellerParty.postalAddress?.country ?? tenantAddress.countryCode ?? 'NG',
         },
       },
       invoice_line: this.mapLineItems(invoice.lineItems ?? []),
       tax_total: this.mapTaxTotal(invoice.taxTotal ?? []),
-      legal_monetary_total: invoice.legalMonetaryTotal,
+      legal_monetary_total: this.mapLegalMonetaryTotal(invoice.legalMonetaryTotal),
     };
 
+    // Optional scalar fields
+    if (invoice.note) (payload as any).note = invoice.note;
+    if (invoice.accountingCost) (payload as any).accounting_cost = invoice.accountingCost;
+    if (invoice.buyerReference) (payload as any).buyer_reference = invoice.buyerReference;
+    if (invoice.orderReference) (payload as any).order_reference = invoice.orderReference;
+    if (invoice.actualDeliveryDate) (payload as any).actual_delivery_date = this.toISODate(invoice.actualDeliveryDate);
+    if (invoice.paymentTermsNote) (payload as any).payment_terms_note = invoice.paymentTermsNote;
+
+    // Optional JSON fields
+    if (invoice.paymentMeans) (payload as any).payment_means = invoice.paymentMeans;
+    if (invoice.allowanceCharges) (payload as any).allowance_charge = invoice.allowanceCharges;
+    if (invoice.invoiceDeliveryPeriod) (payload as any).invoice_delivery_period = invoice.invoiceDeliveryPeriod;
+    if (invoice.billingReference) (payload as any).billing_reference = invoice.billingReference;
+
+    // Buyer (accounting_customer_party)
     if (invoice.buyerTin) {
       const buyerParty = (invoice.metadata as any)?.buyerParty ?? {};
       (payload as any).accounting_customer_party = {
@@ -289,14 +237,12 @@ export class InterswitchAdapter implements AppAdapter {
         postal_address: {
           street_name: buyerParty.postalAddress?.streetName ?? '',
           city_name: buyerParty.postalAddress?.cityName ?? 'Lagos',
-          postal_zone: buyerParty.postalAddress?.postalZone ?? '',
+          postal_zone: buyerParty.postalAddress?.postalZone ?? undefined,
+          lga: buyerParty.postalAddress?.lga ?? undefined,
+          state: buyerParty.postalAddress?.state ?? undefined,
           country: buyerParty.postalAddress?.country ?? 'NG',
         },
       };
-    }
-
-    if (invoice.billingReference) {
-      (payload as any).billing_reference = invoice.billingReference;
     }
 
     return payload;
@@ -324,7 +270,7 @@ export class InterswitchAdapter implements AppAdapter {
       price: {
         price_amount: item.price?.priceAmount ?? item.price?.price_amount,
         base_quantity: item.price?.baseQuantity ?? item.price?.base_quantity ?? 1,
-        price_unit: item.price?.priceUnit ?? item.price?.price_unit ?? 'NGN',
+        price_unit: item.price?.priceUnit ?? item.price?.price_unit ?? 'NGN per 1',
       },
     }));
   }
@@ -336,7 +282,6 @@ export class InterswitchAdapter implements AppAdapter {
         taxable_amount: sub.taxableAmount ?? sub.taxable_amount,
         tax_amount: sub.taxAmount ?? sub.tax_amount,
         tax_category: {
-          // Normalise legacy "VAT" to the Interswitch-required value
           id: this.normaliseTaxCategoryId(sub.taxCategory?.id ?? sub.tax_category?.id),
           percent: sub.taxCategory?.percent ?? sub.tax_category?.percent,
         },
@@ -344,11 +289,24 @@ export class InterswitchAdapter implements AppAdapter {
     }));
   }
 
+  private mapLegalMonetaryTotal(lmt: any): Record<string, unknown> {
+    if (!lmt) return {};
+    return {
+      line_extension_amount: lmt.lineExtensionAmount ?? lmt.line_extension_amount,
+      tax_exclusive_amount: lmt.taxExclusiveAmount ?? lmt.tax_exclusive_amount,
+      tax_inclusive_amount: lmt.taxInclusiveAmount ?? lmt.tax_inclusive_amount,
+      payable_amount: lmt.payableAmount ?? lmt.payable_amount,
+    };
+  }
+
   private normaliseTaxCategoryId(id: string): string {
     if (!id) return 'STANDARD_VAT';
     const upper = id.toUpperCase();
+    // Legacy aliases
     if (upper === 'VAT' || upper === 'S') return 'STANDARD_VAT';
     if (upper === 'Z' || upper === 'ZERO' || upper === 'ZERO_RATED') return 'ZERO_VAT';
+    if (upper === 'WHT') return 'WITHHOLDING_TAX';
+    if (upper === 'EXEMPT' || upper === 'NOT_APPLICABLE') return 'EXEMPTED';
     return upper;
   }
 
@@ -356,13 +314,18 @@ export class InterswitchAdapter implements AppAdapter {
 
   private mapError(err: any): SubmissionResult {
     const status: number = err.statusCode ?? 0;
-    const body: InterswitchErrorResponse = err.body ?? {};
+    const body: NrsErrorResponse = err.body ?? {};
     const message = err.message ?? 'Unknown error';
-    const details = body.error?.details ?? body.details ?? '';
+    const details = (body.details ?? '').toLowerCase();
 
-    // 401 — token invalid/expired
+    // Abort/timeout
+    if (err.name === 'AbortError') {
+      return { success: false, errorCode: 'TIMEOUT', errorMessage: 'Request timed out', retryable: true };
+    }
+
+    // 401 — invalid static credentials (not retryable — credentials don't expire)
     if (status === 401) {
-      return { success: false, errorCode: 'AUTH_EXPIRED', errorMessage: message, retryable: true };
+      return { success: false, errorCode: 'INVALID_CREDENTIALS', errorMessage: message, retryable: false };
     }
 
     // 429 — rate limited
@@ -370,14 +333,9 @@ export class InterswitchAdapter implements AppAdapter {
       return { success: false, errorCode: 'RATE_LIMITED', errorMessage: message, retryable: true };
     }
 
-    // 500 / 503 — server/NRS offline
+    // 500 / 503 — server / NRS offline
     if (status >= 500) {
       return { success: false, errorCode: 'SERVER_ERROR', errorMessage: message, retryable: true };
-    }
-
-    // Timeout
-    if (err.name === 'AbortError') {
-      return { success: false, errorCode: 'TIMEOUT', errorMessage: 'Request timed out', retryable: true };
     }
 
     // 422 — schema validation failure
@@ -387,23 +345,22 @@ export class InterswitchAdapter implements AppAdapter {
 
     // 400 — classify by error details
     if (status === 400) {
-      const dl = details.toLowerCase();
-      if (dl.includes('duplicate') || dl.includes('not a duplicate')) {
+      if (details.includes('duplicate') || details.includes('irn')) {
         return { success: false, errorCode: 'IRN_DUPLICATE', errorMessage: message, retryable: false };
       }
-      if (dl.includes('invalid uuid') || dl.includes('business')) {
+      if (details.includes('invalid uuid') || details.includes('business')) {
         return { success: false, errorCode: 'INVALID_BUSINESS_ID', errorMessage: message, retryable: false };
       }
-      if (dl.includes('taxcategory') || dl.includes('tax category')) {
+      if (details.includes('taxcategory') || details.includes('tax category')) {
         return { success: false, errorCode: 'INVALID_TAX_CATEGORY', errorMessage: message, retryable: false };
       }
-      if (dl.includes('taxpointdate') || dl.includes('tax point')) {
+      if (details.includes('taxpointdate') || details.includes('tax point')) {
         return { success: false, errorCode: 'INVALID_TAX_POINT_DATE', errorMessage: message, retryable: false };
       }
-      if (dl.includes('country')) {
+      if (details.includes('country')) {
         return { success: false, errorCode: 'INVALID_COUNTRY_CODE', errorMessage: message, retryable: false };
       }
-      if (dl.includes('.tin')) {
+      if (details.includes('.tin') || details.includes('tin is required')) {
         return { success: false, errorCode: 'INVALID_TIN', errorMessage: message, retryable: false };
       }
       return { success: false, errorCode: 'VALIDATION_ERROR', errorMessage: message, retryable: false };
@@ -412,12 +369,11 @@ export class InterswitchAdapter implements AppAdapter {
     return { success: false, errorCode: 'UNKNOWN_ERROR', errorMessage: message, retryable: false };
   }
 
-  private extractErrorMessage(parsed: InterswitchErrorResponse, raw: string): string {
+  private extractErrorMessage(parsed: NrsErrorResponse, raw: string): string {
     return (
-      parsed.error?.public_message ??
-      parsed.error_description ??
       parsed.errorMessage ??
       parsed.message ??
+      parsed.details ??
       raw.slice(0, 300)
     );
   }

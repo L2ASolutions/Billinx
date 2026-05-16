@@ -4,7 +4,18 @@ export type InvoiceTypeCode = "380" | "381" | "383" | "325" | "386" | "388" | "3
 
 export type InvoiceStatus = "DRAFT" | "VALIDATING" | "VALIDATION_FAILED" | "QUEUED" | "SUBMITTING" | "SUBMITTED" | "ACCEPTED" | "REJECTED" | "SUBMISSION_FAILED" | "DEAD_LETTERED" | "CANCELLATION_REQUESTED" | "CANCELLED";
 
-export type TaxCategoryId = "VAT" | "LOCAL_SALES_TAX" | "WHT" | "EXEMPT" | "ZERO_RATED" | "NOT_APPLICABLE";
+export type TaxCategoryId =
+  | "STANDARD_VAT" | "ZERO_VAT" | "REDUCED_VAT"
+  | "STANDARD_GST" | "ZERO_GST" | "REDUCED_GST"
+  | "WITHHOLDING_TAX" | "STAMP_DUTY" | "LOCAL_SALES_TAX" | "STATE_SALES_TAX"
+  | "SERVICE_TAX" | "LUXURY_TAX" | "TOURISM_TAX"
+  | "ALCOHOL_EXCISE_TAX" | "TOBACCO_EXCISE_TAX" | "FUEL_EXCISE_TAX"
+  | "CORPORATE_INCOME_TAX" | "PERSONAL_INCOME_TAX" | "SOCIAL_SECURITY_TAX"
+  | "REAL_ESTATE_TAX" | "CARBON_TAX" | "PLASTIC_TAX"
+  | "IMPORT_DUTY" | "EXPORT_DUTY" | "MEDICARE_TAX" | "PERSONAL_PROPERTY_TAX"
+  | "EXEMPTED"
+  // legacy aliases (still accepted, normalised on submission)
+  | "VAT" | "WHT" | "EXEMPT" | "ZERO_RATED" | "NOT_APPLICABLE";
 
 export type PaymentMeansCode = "10" | "20" | "30" | "42" | "43" | "48" | "49" | "57" | "58" | "97" | string;
 
@@ -12,6 +23,8 @@ export interface CanonicalAddress {
   streetName: string;
   cityName: string;
   postalZone?: string;
+  lga?: string;
+  state?: string;
   countryCode: string;
 }
 
