@@ -1,0 +1,253 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false  # Never cancel a running deploy mid-flight
+
+env:
+  AWS_REGION: af-south-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.af-south-1.amazonaws.com
+
+jobs:
+  # ── Job 1: Type check and tests ─────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npm test --if-present
+
+  # ── Job 2: Build Docker image and push to ECR ────────────────────────────────
+  build-and-push:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      image_uri: ${{ steps.build.outputs.image_uri }}
+      image_tag: ${{ steps.build.outputs.image_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push Docker image
+        id: build
+        env:
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: |
+          IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}"
+
+          docker build \
+            --tag "${IMAGE_URI}:${IMAGE_TAG}" \
+            --tag "${IMAGE_URI}:latest" \
+            --label "git.sha=${{ github.sha }}" \
+            --label "git.ref=${{ github.ref }}" \
+            --label "build.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            .
+
+          docker push "${IMAGE_URI}:${IMAGE_TAG}"
+          docker push "${IMAGE_URI}:latest"
+
+          echo "image_uri=${IMAGE_URI}:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+
+  # ── Job 3: Run Prisma migrations ─────────────────────────────────────────────
+  migrate:
+    name: Migrate Database
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get task definition
+        id: get-task-def
+        run: |
+          TASK_DEF_ARN=$(aws ecs describe-services \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --services "${{ secrets.ECS_SERVICE }}" \
+            --query "services[0].taskDefinition" \
+            --output text)
+          echo "task_def_arn=${TASK_DEF_ARN}" >> "$GITHUB_OUTPUT"
+
+      - name: Run Prisma migrate deploy
+        id: migrate
+        run: |
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --task-definition "${{ steps.get-task-def.outputs.task_def_arn }}" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.ECS_PRIVATE_SUBNETS }}],securityGroups=[${{ secrets.ECS_SECURITY_GROUP }}],assignPublicIp=DISABLED}" \
+            --overrides '{
+              "containerOverrides": [{
+                "name": "billinx-api",
+                "command": ["node", "node_modules/.bin/prisma", "migrate", "deploy"],
+                "environment": []
+              }]
+            }' \
+            --query "tasks[0].taskArn" \
+            --output text)
+
+          echo "task_arn=${TASK_ARN}" >> "$GITHUB_OUTPUT"
+          echo "Migration task started: ${TASK_ARN}"
+
+      - name: Wait for migration to complete
+        run: |
+          TASK_ARN="${{ steps.migrate.outputs.task_arn }}"
+          echo "Waiting for migration task to complete..."
+
+          aws ecs wait tasks-stopped \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --tasks "${TASK_ARN}"
+
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --tasks "${TASK_ARN}" \
+            --query "tasks[0].containers[0].exitCode" \
+            --output text)
+
+          echo "Migration task exit code: ${EXIT_CODE}"
+
+          if [ "${EXIT_CODE}" != "0" ]; then
+            echo "::error::Migration failed with exit code ${EXIT_CODE}"
+            exit 1
+          fi
+
+          echo "Migrations completed successfully."
+
+  # ── Job 4: Deploy to ECS ──────────────────────────────────────────────────────
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [build-and-push, migrate]
+    environment: production
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "${{ secrets.ECS_TASK_DEFINITION }}" \
+            --query "taskDefinition" \
+            > task-definition.json
+
+      - name: Update image in task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: billinx-api
+          image: ${{ needs.build-and-push.outputs.image_uri }}
+
+      - name: Register new task definition revision
+        id: register
+        run: |
+          # Strip read-only fields before registering
+          NEW_TASK_DEF=$(cat "${{ steps.task-def.outputs.task-definition }}" | \
+            python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          for key in ['taskDefinitionArn','revision','status','requiresAttributes',
+                      'compatibilities','registeredAt','registeredBy']:
+              d.pop(key, None)
+          print(json.dumps(d))
+          ")
+
+          NEW_ARN=$(echo "${NEW_TASK_DEF}" | aws ecs register-task-definition \
+            --cli-input-json /dev/stdin \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)
+
+          echo "new_task_def_arn=${NEW_ARN}" >> "$GITHUB_OUTPUT"
+          echo "Registered task definition: ${NEW_ARN}"
+
+      - name: Update ECS service
+        run: |
+          aws ecs update-service \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --service "${{ secrets.ECS_SERVICE }}" \
+            --task-definition "${{ steps.register.outputs.new_task_def_arn }}" \
+            --force-new-deployment
+
+      - name: Wait for service stability
+        timeout-minutes: 10
+        run: |
+          echo "Waiting for ECS service to stabilise..."
+          aws ecs wait services-stable \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --services "${{ secrets.ECS_SERVICE }}"
+          echo "Service is stable."
+
+      - name: Verify /health endpoint
+        run: |
+          ALB_DNS="${{ secrets.ALB_DNS_NAME }}"
+          MAX_RETRIES=10
+          RETRY_INTERVAL=15
+
+          for i in $(seq 1 $MAX_RETRIES); do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://${ALB_DNS}/health" --max-time 10 || echo "000")
+
+            if [ "${HTTP_CODE}" = "200" ]; then
+              echo "Health check passed (attempt ${i})"
+              exit 0
+            fi
+
+            echo "Attempt ${i}/${MAX_RETRIES}: got HTTP ${HTTP_CODE}, retrying in ${RETRY_INTERVAL}s..."
+            sleep $RETRY_INTERVAL
+          done
+
+          echo "::error::/health returned non-200 after ${MAX_RETRIES} attempts"
+          exit 1
+
+      - name: Deployment summary
+        run: |
+          echo "## Deployment successful" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | \`${{ needs.build-and-push.outputs.image_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Commit | \`${{ github.sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Cluster | \`${{ secrets.ECS_CLUSTER }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Service | \`${{ secrets.ECS_SERVICE }}\` |" >> "$GITHUB_STEP_SUMMARY"
