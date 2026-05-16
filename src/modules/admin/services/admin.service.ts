@@ -14,6 +14,7 @@ import {
   AdminDashboardStats,
 } from "../../../../packages/types/admin";
 import { RedisService } from "../../../shared/redis/redis.service";
+import { EmailService } from "../../../shared/email/email.service";
 import * as bcrypt from "bcrypt";
 import * as jwt from "jsonwebtoken";
 
@@ -27,6 +28,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
+    private readonly emailService: EmailService,
   ) {}
 
   // ── Bootstrap first admin user ────────────────────────────────────────────
@@ -303,6 +305,12 @@ export class AdminService {
     this.logger.log(
       `Access request ${requestId} approved. Tenant created: ${tenant.id}`,
     );
+
+    this.emailService.sendAccessRequestApproved({
+      to: request.email,
+      contactName: request.contactName,
+      companyName: request.companyName,
+    });
 
     return {
       message: `Tenant created for ${request.companyName}. Now invite ${request.email} as OWNER.`,
