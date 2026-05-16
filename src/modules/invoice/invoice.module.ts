@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { EventEmitterModule } from "@nestjs/event-emitter";
 import { InvoiceController } from "./invoice.controller";
 import { InvoiceService } from "./services/invoice.service";
 import { InvoiceRepository } from "./repositories/invoice.repository";
@@ -15,6 +16,7 @@ import { SubmissionService } from "../submission/services/submission.service";
 import { MockAdapter } from "../submission/adapters/mock/mock.adapter";
 
 @Module({
+  imports: [EventEmitterModule],
   controllers: [InvoiceController],
   providers: [
     InvoiceService,
