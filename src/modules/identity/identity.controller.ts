@@ -22,6 +22,7 @@ import { ApiKeyService } from "./services/api-key.service";
 import { TokenService } from "./services/token.service";
 import { ApiKeyGuard } from "./guards/api-key.guard";
 import { JwtGuard } from "./guards/jwt.guard";
+import { AuthRateLimitGuard } from "../../shared/guards/auth-rate-limit.guard";
 import { getRequestContext } from "../../shared/context/request-context";
 import {
   CreateApiKeyRequest,
@@ -47,6 +48,7 @@ export class IdentityController {
 
   @Post("auth/token")
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: "Issue access token and refresh token" })
   async issueToken(
     @Body() body: TokenRequest,
@@ -68,6 +70,7 @@ export class IdentityController {
 
   @Post("auth/refresh")
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: "Rotate refresh token and issue new access token" })
   async refreshToken(
     @Req() req: Request,

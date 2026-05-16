@@ -1,15 +1,18 @@
-import {
+﻿import {
   Injectable,
   Logger,
   ConflictException,
   NotFoundException,
   UnauthorizedException,
   BadRequestException,
+  HttpException,
+  HttpStatus,
 } from "@nestjs/common";
 import { UserRepository } from "../repositories/user.repository";
 import { PrismaService } from "../../../infrastructure/database/prisma.service";
 import { SecretsService } from "../../../infrastructure/secrets/secrets.service";
 import { ActivityService } from "../../activity/services/activity.service";
+import { RedisService } from "../../../shared/redis/redis.service";
 import {
   UserRoleType,
   ROLE_PERMISSIONS,
@@ -44,9 +47,10 @@ export class UserService {
     private readonly prisma: PrismaService,
     private readonly secrets: SecretsService,
     private readonly activityService: ActivityService,
+    private readonly redisService: RedisService,
   ) {}
 
-  // â”€â”€ Self-serve registration (Route 2 â€” small businesses) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ Self-serve registration (Route 2 â€" small businesses) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async registerTenant(request: RegisterTenantRequest): Promise<RegisterResponse> {
     // Check if tenant TIN already exists
     const existingTenant = await this.prisma.asAdmin(async (tx) => {
@@ -127,17 +131,32 @@ export class UserService {
     };
   }
 
-  // â”€â”€ Login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Login ─────────────────────────────────────────────────────────────────
   async login(
     tenantId: string,
     request: LoginRequest,
     ipAddress?: string,
     userAgent?: string,
   ): Promise<LoginResponse> {
+    // ── 1. Check lockout before any DB work ──────────────────────────────────
+    const lockout = await this.redisService.getLockoutStatus(tenantId, request.email);
+    if (lockout.locked) {
+      const minutes = Math.ceil(lockout.retryAfterSecs / 60);
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          error: "ACCOUNT_LOCKED",
+          message: `Account temporarily locked. Try again in ${minutes} minute(s).`,
+          retryAfter: lockout.retryAfterSecs,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    // ── 2. User lookup ───────────────────────────────────────────────────────
     const user = await this.userRepository.findByEmail(tenantId, request.email);
 
     if (!user || !user.isActive) {
-      // Track failed login
       this.activityService.track({
         tenantId,
         eventType: "USER_LOGIN_FAILED",
@@ -145,17 +164,22 @@ export class UserService {
         actorEmail: request.email,
         ipAddress,
         userAgent,
-        payload: {
-          email: request.email,
-          reason: user ? "account_inactive" : "user_not_found",
-        },
+        payload: { email: request.email, reason: user ? "account_inactive" : "user_not_found" },
       });
+      // Increment failures even for unknown emails to prevent enumeration via timing
+      await this.redisService.recordLoginFailure(tenantId, request.email);
       throw new UnauthorizedException("Invalid email or password");
     }
 
+    // ── 3. Password check ────────────────────────────────────────────────────
     const passwordValid = await bcrypt.compare(request.password, user.passwordHash);
 
     if (!passwordValid) {
+      const { count, locked, retryAfterSecs } = await this.redisService.recordLoginFailure(
+        tenantId,
+        request.email,
+      );
+
       this.activityService.track({
         tenantId,
         eventType: "USER_LOGIN_FAILED",
@@ -163,20 +187,31 @@ export class UserService {
         actorEmail: user.email,
         ipAddress,
         userAgent,
-        payload: {
-          email: request.email,
-          reason: "invalid_password",
-        },
+        payload: { email: request.email, reason: "invalid_password", failedAttempts: count },
       });
+
+      if (locked) {
+        const minutes = Math.ceil(retryAfterSecs / 60);
+        throw new HttpException(
+          {
+            statusCode: HttpStatus.TOO_MANY_REQUESTS,
+            error: "ACCOUNT_LOCKED",
+            message: `Account temporarily locked after too many failed attempts. Try again in ${minutes} minute(s).`,
+            retryAfter: retryAfterSecs,
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+
       throw new UnauthorizedException("Invalid email or password");
     }
 
-    // Update last login
+    // ── 4. Success: clear failure counter, issue token ────────────────────────
+    await this.redisService.clearLoginFailures(tenantId, request.email);
     await this.userRepository.update(user.id, { lastLoginAt: new Date() });
 
     const accessToken = await this.issueAccessToken(user, tenantId);
 
-    // Track successful login
     this.activityService.track({
       tenantId,
       eventType: "USER_LOGIN",
@@ -197,7 +232,7 @@ export class UserService {
     };
   }
 
-  // â”€â”€ Invite user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ Invite user â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async inviteUser(
     tenantId: string,
     invitedBy: string,
@@ -243,7 +278,7 @@ export class UserService {
     };
   }
 
-  // â”€â”€ Accept invitation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ Accept invitation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async acceptInvitation(request: AcceptInvitationRequest): Promise<LoginResponse> {
     const invitation = await this.userRepository.findInvitationByToken(request.token);
 
@@ -297,7 +332,7 @@ export class UserService {
     };
   }
 
-  // â”€â”€ Forgot password â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ Forgot password â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async forgotPassword(
     tenantId: string,
     request: ForgotPasswordRequest,
@@ -335,7 +370,7 @@ export class UserService {
     };
   }
 
-  // â”€â”€ Reset password â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ Reset password â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async resetPassword(request: ResetPasswordRequest): Promise<{ message: string }> {
     const resetToken = await this.userRepository.findPasswordResetToken(request.token);
 
@@ -350,7 +385,7 @@ export class UserService {
     return { message: "Password reset successfully" };
   }
 
-  // â”€â”€ Change password â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ Change password â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async changePassword(
     userId: string,
     request: ChangePasswordRequest,
@@ -367,7 +402,7 @@ export class UserService {
     return { message: "Password changed successfully" };
   }
 
-  // â”€â”€ List users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ List users â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async listUsers(tenantId: string): Promise<UserListResponse> {
     const users = await this.userRepository.findByTenantId(tenantId);
     return {
@@ -376,14 +411,14 @@ export class UserService {
     };
   }
 
-  // â”€â”€ Get user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ Get user â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async getUser(id: string): Promise<UserResponse> {
     const user = await this.userRepository.findById(id);
     if (!user) throw new NotFoundException("User not found");
     return this.mapToResponse(user);
   }
 
-  // â”€â”€ Update user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ Update user â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async updateUser(id: string, request: UpdateUserRequest): Promise<UserResponse> {
     const user = await this.userRepository.findById(id);
     if (!user) throw new NotFoundException("User not found");
@@ -392,7 +427,7 @@ export class UserService {
     return this.mapToResponse(updated);
   }
 
-  // â”€â”€ Assign role â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ Assign role â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async assignRole(
     userId: string,
     tenantId: string,
@@ -406,7 +441,7 @@ export class UserService {
     return this.mapToResponse(updated!);
   }
 
-  // â”€â”€ Remove role â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ Remove role â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async removeRole(userId: string, role: UserRoleType): Promise<UserResponse> {
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundException("User not found");
@@ -416,7 +451,7 @@ export class UserService {
     return this.mapToResponse(updated!);
   }
 
-  // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   private async issueAccessToken(user: any, tenantId: string): Promise<string> {
     const secret = process.env.JWT_SECRET ?? "billinx-dev-secret-key-change-in-production";
     const roles = user.roles?.map((r: any) => r.role) ?? [];
