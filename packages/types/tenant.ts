@@ -10,6 +10,13 @@ export interface TenantAddress {
   countryCode: string;
 }
 
+export interface InterswitchCredentials {
+  clientId: string;
+  clientSecret: string;
+  serviceId: string;
+  businessId: string;
+}
+
 export interface CreateTenantRequest {
   name: string;
   tin: string;
@@ -20,6 +27,7 @@ export interface CreateTenantRequest {
   batchEnabled?: boolean;
   batchSize?: number;
   appCredential?: AppCredentialInput;
+  interswitchCredentials?: InterswitchCredentials;
 }
 
 export interface UpdateTenantRequest {
@@ -32,6 +40,7 @@ export interface UpdateTenantRequest {
   batchSize?: number;
   isActive?: boolean;
   appCredential?: AppCredentialInput;
+  interswitchCredentials?: InterswitchCredentials;
 }
 
 export interface AppCredentialInput {
@@ -56,6 +65,9 @@ export interface TenantResponse {
   batchSize: number;
   isActive: boolean;
   hasCredential: boolean;
+  hasInterswitchCredentials: boolean;
+  interswitchServiceId: string | null;
+  interswitchBusinessId: string | null;
   createdAt: string;
   updatedAt: string;
 }
