@@ -42,6 +42,8 @@ export class TenantRepository {
     data: CreateTenantRequest,
     encryptedCredential?: Buffer,
     credentialIv?: Buffer,
+    interswitchClientSecret?: Buffer,
+    interswitchSecretIv?: Buffer,
   ) {
     return this.prisma.asAdmin(async (tx) => {
       return tx.tenant.create({
@@ -56,6 +58,11 @@ export class TenantRepository {
           batchSize: data.batchSize ?? 100,
           encryptedCredential: encryptedCredential ?? null,
           credentialIv: credentialIv ?? null,
+          interswitchClientId: data.interswitchCredentials?.clientId ?? null,
+          interswitchClientSecret: interswitchClientSecret ?? null,
+          interswitchSecretIv: interswitchSecretIv ?? null,
+          interswitchServiceId: data.interswitchCredentials?.serviceId ?? null,
+          interswitchBusinessId: data.interswitchCredentials?.businessId ?? null,
         },
       });
     });
@@ -66,6 +73,8 @@ export class TenantRepository {
     data: UpdateTenantRequest,
     encryptedCredential?: Buffer,
     credentialIv?: Buffer,
+    interswitchClientSecret?: Buffer,
+    interswitchSecretIv?: Buffer,
   ) {
     return this.prisma.asAdmin(async (tx) => {
       return tx.tenant.update({
@@ -83,9 +92,19 @@ export class TenantRepository {
           }),
           ...(data.batchSize !== undefined && { batchSize: data.batchSize }),
           ...(data.isActive !== undefined && { isActive: data.isActive }),
-          ...(encryptedCredential && {
-            encryptedCredential,
-            credentialIv,
+          ...(encryptedCredential && { encryptedCredential, credentialIv }),
+          ...(data.interswitchCredentials?.clientId && {
+            interswitchClientId: data.interswitchCredentials.clientId,
+          }),
+          ...(interswitchClientSecret && {
+            interswitchClientSecret,
+            interswitchSecretIv,
+          }),
+          ...(data.interswitchCredentials?.serviceId && {
+            interswitchServiceId: data.interswitchCredentials.serviceId,
+          }),
+          ...(data.interswitchCredentials?.businessId && {
+            interswitchBusinessId: data.interswitchCredentials.businessId,
           }),
         },
       });

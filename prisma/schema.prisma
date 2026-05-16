@@ -8,20 +8,25 @@ datasource db {
 }
 
 model Tenant {
-  id                  String            @id @default(uuid())
-  name                String
-  tin                 String            @unique
-  registeredAddress   Json
-  appAdapterKey       String            @default("mock")
-  encryptedCredential Bytes?
-  credentialIv        Bytes?
-  environment         TenantEnvironment @default(SANDBOX)
-  rateLimitTier       RateLimitTier     @default(STANDARD)
-  batchEnabled        Boolean           @default(false)
-  batchSize           Int               @default(100)
-  isActive            Boolean           @default(true)
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  id                      String            @id @default(uuid())
+  name                    String
+  tin                     String            @unique
+  registeredAddress       Json
+  appAdapterKey           String            @default("mock")
+  encryptedCredential     Bytes?
+  credentialIv            Bytes?
+  environment             TenantEnvironment @default(SANDBOX)
+  rateLimitTier           RateLimitTier     @default(STANDARD)
+  batchEnabled            Boolean           @default(false)
+  batchSize               Int               @default(100)
+  isActive                Boolean           @default(true)
+  interswitchClientId     String?
+  interswitchClientSecret Bytes?
+  interswitchSecretIv     Bytes?
+  interswitchServiceId    String?
+  interswitchBusinessId   String?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
 
   apiKeys              ApiKey[]
   refreshTokens        RefreshToken[]
@@ -105,6 +110,7 @@ model IdempotencyRecord {
   environment           TenantEnvironment
   schemaVersion         String            @default("2.0")
   invoiceTypeCode       InvoiceTypeCode
+  invoiceKind           InvoiceKind?
   platformIrn           String            @unique
   firsConfirmedIrn      String?
   sourceReference       String?
@@ -116,9 +122,11 @@ model IdempotencyRecord {
   buyerTin              String?
   buyerName             String
   issueDate             DateTime
+  issueTime             String?
   dueDate               DateTime?
   taxPointDate          DateTime?
   actualDeliveryDate    DateTime?
+  paymentStatus         String?
   currency              String            @default("NGN")
   taxCurrencyCode       String?
   exchangeRate          Decimal?
@@ -277,6 +285,12 @@ enum InvoiceTypeCode {
   CREDIT_NOTE
   DEBIT_NOTE
   PROFORMA
+}
+
+enum InvoiceKind {
+  B2B
+  B2C
+  B2G
 }
 
 enum InvoiceStatus {
