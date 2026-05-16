@@ -13,6 +13,7 @@ import { PrismaService } from "../../../infrastructure/database/prisma.service";
 import { SecretsService } from "../../../infrastructure/secrets/secrets.service";
 import { ActivityService } from "../../activity/services/activity.service";
 import { RedisService } from "../../../shared/redis/redis.service";
+import { EmailService } from "../../../shared/email/email.service";
 import {
   UserRoleType,
   ROLE_PERMISSIONS,
@@ -48,6 +49,7 @@ export class UserService {
     private readonly secrets: SecretsService,
     private readonly activityService: ActivityService,
     private readonly redisService: RedisService,
+    private readonly emailService: EmailService,
   ) {}
 
   // â"€â"€ Self-serve registration (Route 2 â€" small businesses) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -270,8 +272,24 @@ export class UserService {
 
     this.logger.log(`Invitation sent to ${request.email} for tenant ${tenantId}`);
 
-    // In production this token would be emailed
-    // For now return it directly for testing
+    // Look up inviter name and tenant name for the email
+    this.prisma.asAdmin(async (tx) => {
+      const [inviter, tenant] = await Promise.all([
+        tx.user.findFirst({ where: { id: invitedBy.replace('user:', '') }, select: { firstName: true, lastName: true } }).catch(() => null),
+        tx.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
+      ]);
+      const inviterName = inviter
+        ? `${inviter.firstName} ${inviter.lastName}`.trim()
+        : 'A team member';
+      this.emailService.sendInvitation({
+        to: request.email,
+        invitedByName: inviterName,
+        tenantName: tenant?.name ?? 'your organisation',
+        role: request.role,
+        token,
+      });
+    }).catch((err: any) => this.logger.error(`Failed to load invitation email context: ${err.message}`));
+
     return {
       message: `Invitation created for ${request.email}`,
       invitationToken: token,
@@ -324,6 +342,17 @@ export class UserService {
       },
     });
 
+    // Send welcome email (fire-and-forget; tenant name resolved async)
+    this.prisma.asAdmin(async (tx) => {
+      const tenant = await tx.tenant.findUnique({ where: { id: invitation.tenantId }, select: { name: true } });
+      this.emailService.sendWelcome({
+        to: user.email,
+        firstName: user.firstName,
+        tenantName: tenant?.name ?? 'your organisation',
+        role: invitation.role,
+      });
+    }).catch((err: any) => this.logger.error(`Failed to send welcome email: ${err.message}`));
+
     return {
       accessToken,
       expiresIn: ACCESS_TOKEN_TTL,
@@ -363,11 +392,13 @@ export class UserService {
       payload: { email: user.email, action: "requested" },
     });
 
-    // In production this would be emailed
-    return {
-      message: "If that email exists, a reset link has been sent",
-      resetToken: token,
-    };
+    this.emailService.sendPasswordReset({
+      to: user.email,
+      firstName: user.firstName,
+      token,
+    });
+
+    return { message: "If that email exists, a reset link has been sent" };
   }
 
   // â"€â"€ Reset password â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -528,6 +559,14 @@ export class UserService {
       });
     });
     this.logger.log(`Access request received from ${request.companyName} (${request.email})`);
+
+    this.emailService.sendAccessRequestReceived({
+      to: request.email,
+      contactName: request.contactName,
+      companyName: request.companyName,
+      referenceId: accessRequest.id,
+    });
+
     return {
       message: "Thank you for your interest in Billinx. We will review your request and contact you within 24 hours.",
       referenceId: accessRequest.id,
