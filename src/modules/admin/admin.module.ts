@@ -6,6 +6,7 @@ import { PrismaService } from "../../infrastructure/database/prisma.service";
 import { SecretsService } from "../../infrastructure/secrets/secrets.service";
 import { ApiKeyService } from "../identity/services/api-key.service";
 import { AdminKeyGuard } from "../identity/guards/admin-key.guard";
+import { RedisService } from "../../shared/redis/redis.service";
 
 @Module({
   controllers: [AdminController],
@@ -16,6 +17,7 @@ import { AdminKeyGuard } from "../identity/guards/admin-key.guard";
     SecretsService,
     ApiKeyService,
     AdminKeyGuard,
+    RedisService,
   ],
   exports: [AdminService],
 })

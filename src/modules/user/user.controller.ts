@@ -24,6 +24,7 @@ import { UserService } from "./services/user.service";
 import { ApiKeyGuard } from "../identity/guards/api-key.guard";
 import { JwtGuard } from "../identity/guards/jwt.guard";
 import { AdminKeyGuard } from "../identity/guards/admin-key.guard";
+import { AuthRateLimitGuard } from "../../shared/guards/auth-rate-limit.guard";
 import { getRequestContext } from "../../shared/context/request-context";
 import {
   RegisterTenantRequest,
@@ -47,6 +48,7 @@ export class UserController {
 
   @Post("register")
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: "Self-serve tenant and owner registration" })
   async register(@Body() body: Record<string, any>) {
     return this.userService.registerTenant(body as RegisterTenantRequest);
@@ -54,6 +56,7 @@ export class UserController {
 
   @Post("auth/login")
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: "Login with email and password" })
   async login(@Body() body: Record<string, any>, @Req() req: Request) {
     const tenantId = body.tenantId;
@@ -70,6 +73,7 @@ export class UserController {
 
   @Post("auth/forgot-password")
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: "Request password reset email" })
   async forgotPassword(@Body() body: Record<string, any>) {
     return this.userService.forgotPassword(

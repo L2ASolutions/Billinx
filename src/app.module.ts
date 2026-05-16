@@ -1,6 +1,8 @@
 import { Module } from "@nestjs/common";
 import { APP_INTERCEPTOR, APP_FILTER } from "@nestjs/core";
 import { EventEmitterModule } from "@nestjs/event-emitter";
+import { RedisService } from "./shared/redis/redis.service";
+import { TenantRateLimitInterceptor } from "./shared/interceptors/tenant-rate-limit.interceptor";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { TenantModule } from "./modules/tenant/tenant.module";
 import { ActivityModule } from "./modules/activity/activity.module";
@@ -30,9 +32,14 @@ import { GlobalExceptionFilter } from "./shared/filters/global-exception.filter"
   providers: [
     PrismaService,
     SecretsService,
+    RedisService,
     {
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TenantRateLimitInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,

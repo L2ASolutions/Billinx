@@ -119,6 +119,15 @@ export class AdminController {
     });
   }
 
+  @Post("users/unlock")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Unlock a locked user account" })
+  async unlockAccount(@Body() body: Record<string, any>) {
+    return this.adminService.unlockAccount(body.tenantId, body.email);
+  }
+
   @Patch("access-requests/:id/reject")
   @HttpCode(HttpStatus.OK)
   @UseGuards(AdminJwtGuard)
