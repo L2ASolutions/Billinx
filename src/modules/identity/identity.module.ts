@@ -7,6 +7,8 @@ import { JwtGuard } from "./guards/jwt.guard";
 import { AdminKeyGuard } from "./guards/admin-key.guard";
 import { PrismaService } from "../../infrastructure/database/prisma.service";
 import { SecretsService } from "../../infrastructure/secrets/secrets.service";
+import { RedisService } from "../../shared/redis/redis.service";
+import { AuthRateLimitGuard } from "../../shared/guards/auth-rate-limit.guard";
 
 @Module({
   controllers: [IdentityController],
@@ -18,6 +20,8 @@ import { SecretsService } from "../../infrastructure/secrets/secrets.service";
     AdminKeyGuard,
     PrismaService,
     SecretsService,
+    RedisService,
+    AuthRateLimitGuard,
   ],
   exports: [
     ApiKeyGuard,
