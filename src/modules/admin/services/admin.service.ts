@@ -322,12 +322,50 @@ export class AdminService {
     };
   }
 async listAccessRequests(status?: string): Promise<any[]> {
-    return this.prisma.asAdmin(async (tx) => {
-      return tx.accessRequest.findMany({
+    const requests = await this.prisma.asAdmin((tx) =>
+      tx.accessRequest.findMany({
         where: status ? { status: status as any } : undefined,
         orderBy: { createdAt: "desc" },
-      });
-    });
+        include: { kybVerification: true },
+      }),
+    );
+
+    return requests.map((r: any) => ({
+      id: r.id,
+      companyName: r.companyName,
+      tin: r.tin,
+      contactName: r.contactName,
+      email: r.email,
+      phone: r.phone,
+      estimatedVolume: r.estimatedVolume,
+      useCase: r.useCase,
+      status: r.status,
+      cacRcNumber: r.cacRcNumber,
+      kybScore: r.kybScore,
+      reviewedBy: r.reviewedBy,
+      reviewedAt: r.reviewedAt?.toISOString(),
+      reviewNote: r.reviewNote,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+      kybVerification: r.kybVerification
+        ? {
+            id: r.kybVerification.id,
+            tinUserConfirmed: r.kybVerification.tinUserConfirmed,
+            tinConfirmedAt: r.kybVerification.tinConfirmedAt?.toISOString(),
+            tinProofNote: r.kybVerification.tinProofNote,
+            cacVerified: r.kybVerification.cacVerified,
+            cacCompanyName: r.kybVerification.cacCompanyName,
+            cacStatus: r.kybVerification.cacStatus,
+            cacRegistrationDate: r.kybVerification.cacRegistrationDate,
+            cacDirectors: r.kybVerification.cacDirectors,
+            nameMatchScore: r.kybVerification.nameMatchScore,
+            nameMatchResult: r.kybVerification.nameMatchResult,
+            riskScore: r.kybVerification.riskScore,
+            riskReasons: r.kybVerification.riskReasons,
+            cacErrorMessage: r.kybVerification.cacErrorMessage,
+          }
+        : null,
+    }));
   }
 
   async rejectAccessRequest(
