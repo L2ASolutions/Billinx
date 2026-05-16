@@ -13,6 +13,7 @@ import {
   CreateAdminUserRequest,
   AdminDashboardStats,
 } from "../../../../packages/types/admin";
+import { RedisService } from "../../../shared/redis/redis.service";
 import * as bcrypt from "bcrypt";
 import * as jwt from "jsonwebtoken";
 
@@ -23,7 +24,10 @@ const ACCESS_TOKEN_TTL = 8 * 60 * 60; // 8 hours for admin sessions
 export class AdminService {
   private readonly logger = new Logger(AdminService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
+  ) {}
 
   // ── Bootstrap first admin user ────────────────────────────────────────────
   async createAdminUser(
@@ -339,6 +343,13 @@ async listAccessRequests(status?: string): Promise<any[]> {
     });
     return { message: `Access request for ${request.companyName} rejected.` };
   }
+  // ── Account unlock ────────────────────────────────────────────────────────
+  async unlockAccount(tenantId: string, email: string): Promise<{ message: string }> {
+    await this.redisService.clearLoginFailures(tenantId, email);
+    this.logger.log(`Account unlocked by admin: tenantId=${tenantId} email=${email}`);
+    return { message: `Account for ${email} has been unlocked.` };
+  }
+
   // ── List admin users ──────────────────────────────────────────────────────
   async listAdminUsers(): Promise<AdminUserResponse[]> {
     const admins = await this.prisma.asAdmin(async (tx) => {

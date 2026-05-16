@@ -9,6 +9,8 @@ import { ApiKeyService } from "../identity/services/api-key.service";
 import { TokenService } from "../identity/services/token.service";
 import { JwtGuard } from "../identity/guards/jwt.guard";
 import { AdminKeyGuard } from "../identity/guards/admin-key.guard";
+import { RedisService } from "../../shared/redis/redis.service";
+import { AuthRateLimitGuard } from "../../shared/guards/auth-rate-limit.guard";
 
 @Module({
   controllers: [UserController],
@@ -22,6 +24,8 @@ import { AdminKeyGuard } from "../identity/guards/admin-key.guard";
     TokenService,
     JwtGuard,
     AdminKeyGuard,
+    RedisService,
+    AuthRateLimitGuard,
   ],
   exports: [UserService, UserRepository],
 })
