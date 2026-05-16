@@ -17,6 +17,7 @@ import {
   ApiBearerAuth,
   ApiHeader,
   ApiQuery,
+  ApiParam,
 } from "@nestjs/swagger";
 import { Request } from "express";
 import { AdminService } from "./services/admin.service";
@@ -144,5 +145,63 @@ export class AdminController {
       ctx.adminId,
       body.reviewNote,
     );
+  }
+
+  // ── Consent records ────────────────────────────────────────────────────────
+  @Get("consent-records")
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Admin: list consent records (NDPA 2023)" })
+  @ApiQuery({ name: "tenantId", required: false })
+  @ApiQuery({ name: "email", required: false })
+  @ApiQuery({ name: "consentType", required: false, enum: ["TERMS_AND_PRIVACY", "NDPR_DATA_PROCESSING", "BUSINESS_AUTHORISATION"] })
+  async listConsentRecords(
+    @Query("tenantId") tenantId?: string,
+    @Query("email") email?: string,
+    @Query("consentType") consentType?: string,
+  ) {
+    return this.adminService.listConsentRecords({ tenantId, email, consentType });
+  }
+
+  // ── Erasure requests ───────────────────────────────────────────────────────
+  @Get("erasure-requests")
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Admin: list right-to-erasure requests" })
+  @ApiQuery({ name: "status", required: false, enum: ["PENDING", "APPROVED", "REJECTED"] })
+  async listErasureRequests(@Query("status") status?: string) {
+    return this.adminService.listErasureRequests(status);
+  }
+
+  @Post("erasure-requests/:id/approve")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Admin: approve erasure request — anonymises user PII (NDPA 2023)",
+  })
+  @ApiParam({ name: "id", description: "Erasure request ID" })
+  async approveErasure(
+    @Param("id") id: string,
+    @Body() body: Record<string, any>,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getAdminCtx(req);
+    return this.adminService.approveErasure(id, ctx.adminId, body.reviewNote);
+  }
+
+  @Post("erasure-requests/:id/reject")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Admin: reject an erasure request" })
+  @ApiParam({ name: "id", description: "Erasure request ID" })
+  async rejectErasure(
+    @Param("id") id: string,
+    @Body() body: Record<string, any>,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getAdminCtx(req);
+    return this.adminService.rejectErasure(id, ctx.adminId, body.reviewNote);
   }
 }
