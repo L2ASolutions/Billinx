@@ -1,0 +1,44 @@
+# Build artifacts
+dist/
+build/
+coverage/
+
+# Dependencies (reinstalled in Docker)
+node_modules/
+
+# Dev / test files
+test/
+*.spec.ts
+*.e2e-spec.ts
+jest.config.*
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Version control
+.git/
+.gitignore
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Docker files (not needed inside container)
+Dockerfile
+docker-compose*.yml
+docker/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Misc
+pr-body.md
+README*.md
