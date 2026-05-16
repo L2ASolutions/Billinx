@@ -53,10 +53,26 @@ export class TenantService {
       credentialIv = iv;
     }
 
+    let interswitchClientSecret: Buffer | undefined;
+    let interswitchSecretIv: Buffer | undefined;
+
+    if (request.interswitchCredentials?.clientSecret) {
+      const masterKey = await this.secrets.getMasterEncryptionKey();
+      const { encrypted, iv } = this.credentialService.encrypt(
+        request.interswitchCredentials.clientSecret,
+        masterKey,
+        request.tin,
+      );
+      interswitchClientSecret = encrypted;
+      interswitchSecretIv = iv;
+    }
+
     const tenant = await this.tenantRepository.create(
       request,
       encryptedCredential,
       credentialIv,
+      interswitchClientSecret,
+      interswitchSecretIv,
     );
 
     this.logger.log(
@@ -114,11 +130,27 @@ export class TenantService {
       credentialIv = iv;
     }
 
+    let interswitchClientSecret: Buffer | undefined;
+    let interswitchSecretIv: Buffer | undefined;
+
+    if (request.interswitchCredentials?.clientSecret) {
+      const masterKey = await this.secrets.getMasterEncryptionKey();
+      const { encrypted, iv } = this.credentialService.encrypt(
+        request.interswitchCredentials.clientSecret,
+        masterKey,
+        tenant.tin,
+      );
+      interswitchClientSecret = encrypted;
+      interswitchSecretIv = iv;
+    }
+
     const updated = await this.tenantRepository.update(
       id,
       request,
       encryptedCredential,
       credentialIv,
+      interswitchClientSecret,
+      interswitchSecretIv,
     );
 
     this.logger.log(`Tenant updated: ${id}`);
@@ -175,6 +207,9 @@ export class TenantService {
       batchSize: tenant.batchSize,
       isActive: tenant.isActive,
       hasCredential: !!(tenant.encryptedCredential && tenant.credentialIv),
+      hasInterswitchCredentials: !!(tenant.interswitchClientId && tenant.interswitchClientSecret),
+      interswitchServiceId: tenant.interswitchServiceId ?? null,
+      interswitchBusinessId: tenant.interswitchBusinessId ?? null,
       createdAt: tenant.createdAt.toISOString(),
       updatedAt: tenant.updatedAt.toISOString(),
     };
