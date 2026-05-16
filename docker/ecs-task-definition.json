@@ -1,0 +1,98 @@
+{
+  "family": "billinx-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/billinxTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "billinx-api",
+      "image": "ACCOUNT_ID.dkr.ecr.af-south-1.amazonaws.com/billinx-api:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "PORT", "value": "3000" },
+        { "name": "AWS_REGION", "value": "af-south-1" },
+        { "name": "AWS_SES_REGION", "value": "us-east-1" },
+        { "name": "REDIS_PORT", "value": "6379" },
+        { "name": "MFA_ISSUER", "value": "Billinx" },
+        { "name": "APP_BASE_URL", "value": "https://app.billinx.ng" },
+        { "name": "EMAIL_FROM", "value": "Billinx <noreply@billinx.ng>" },
+        { "name": "INTERSWITCH_PROD_URL", "value": "https://api.interswitchgroup.com" },
+        { "name": "INTERSWITCH_SANDBOX_URL", "value": "https://qa.interswitchgroup.com" }
+      ],
+      "secrets": [
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:af-south-1:ACCOUNT_ID:secret:billinx/database/url"
+        },
+        {
+          "name": "REDIS_HOST",
+          "valueFrom": "arn:aws:secretsmanager:af-south-1:ACCOUNT_ID:secret:billinx/redis/host"
+        },
+        {
+          "name": "REDIS_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:af-south-1:ACCOUNT_ID:secret:billinx/redis/password"
+        },
+        {
+          "name": "JWT_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:af-south-1:ACCOUNT_ID:secret:billinx/jwt/secret"
+        },
+        {
+          "name": "ADMIN_JWT_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:af-south-1:ACCOUNT_ID:secret:billinx/admin/jwt-secret"
+        },
+        {
+          "name": "AWS_ACCESS_KEY_ID",
+          "valueFrom": "arn:aws:secretsmanager:af-south-1:ACCOUNT_ID:secret:billinx/aws/access-key-id"
+        },
+        {
+          "name": "AWS_SECRET_ACCESS_KEY",
+          "valueFrom": "arn:aws:secretsmanager:af-south-1:ACCOUNT_ID:secret:billinx/aws/secret-access-key"
+        },
+        {
+          "name": "JWT_PRIVATE_KEY_SECRET_ID",
+          "valueFrom": "arn:aws:secretsmanager:af-south-1:ACCOUNT_ID:secret:billinx/jwt/private-key-secret-id"
+        },
+        {
+          "name": "JWT_PUBLIC_KEY_SECRET_ID",
+          "valueFrom": "arn:aws:secretsmanager:af-south-1:ACCOUNT_ID:secret:billinx/jwt/public-key-secret-id"
+        },
+        {
+          "name": "MASTER_KEY_SECRET_ID",
+          "valueFrom": "arn:aws:secretsmanager:af-south-1:ACCOUNT_ID:secret:billinx/encryption/master-key-secret-id"
+        },
+        {
+          "name": "ADMIN_KEY_SECRET_ID",
+          "valueFrom": "arn:aws:secretsmanager:af-south-1:ACCOUNT_ID:secret:billinx/admin/key-hash-secret-id"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "wget -qO- http://localhost:3000/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/billinx-api",
+          "awslogs-region": "af-south-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
