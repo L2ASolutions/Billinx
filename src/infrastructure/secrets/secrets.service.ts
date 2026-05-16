@@ -2,86 +2,180 @@ import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import {
   SecretsManagerClient,
   GetSecretValueCommand,
+  SecretsManagerServiceException,
 } from "@aws-sdk/client-secrets-manager";
 
-interface SecretsCache {
+interface CacheEntry {
   value: string;
   fetchedAt: number;
 }
+
+const TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 @Injectable()
 export class SecretsService implements OnModuleInit {
   private readonly logger = new Logger(SecretsService.name);
   private readonly client: SecretsManagerClient;
-  private readonly cache = new Map<string, SecretsCache>();
-  private readonly TTL_MS = 5 * 60 * 1000;
+  private readonly cache = new Map<string, CacheEntry>();
+  private readonly isProduction = process.env.NODE_ENV === "production";
 
   constructor() {
     this.client = new SecretsManagerClient({
       region: process.env.AWS_REGION ?? "af-south-1",
+      maxAttempts: 3,
     });
   }
 
   async onModuleInit(): Promise<void> {
-    this.logger.log("SecretsService initialised — using local fallback for development");
-  }
-
-  async getSecret(secretId: string): Promise<string> {
-    const cached = this.cache.get(secretId);
-    if (cached && Date.now() - cached.fetchedAt < this.TTL_MS) {
-      return cached.value;
+    if (this.isProduction) {
+      this.logger.log("SecretsService ready — fetching secrets from AWS Secrets Manager");
+      // Warm the cache for secrets used at startup so the first request is fast
+      await this.warmCache();
+    } else {
+      this.logger.log("SecretsService ready — using environment variable fallbacks (development)");
     }
-
-    // In development, return fallback values instead of calling AWS
-    if (process.env.NODE_ENV === "development") {
-      return this.getDevFallback(secretId);
-    }
-
-    const command = new GetSecretValueCommand({ SecretId: secretId });
-    const response = await this.client.send(command);
-
-    const value = response.SecretString ?? "";
-    this.cache.set(secretId, { value, fetchedAt: Date.now() });
-    return value;
   }
 
-  private getDevFallback(secretId: string): string {
-    const fallbacks: Record<string, string> = {
-      "billinx/jwt/private-key": `-----BEGIN RSA PRIVATE KEY-----
-MIIEowIBAAKCAQEA0Z3VS5JJcds3xHn/ygWep4PAtEsHAP/TP32bFuTsBOEOAqNO
------END RSA PRIVATE KEY-----`,
-      "billinx/jwt/public-key": `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0Z3VS5JJcds3xHn/ygWe
------END PUBLIC KEY-----`,
-      "billinx/encryption/master-key": "0".repeat(64),
-      "billinx/admin/key-hash": "$2b$10$placeholder",
-    };
-
-    return fallbacks[secretId] ?? "dev-fallback-secret";
-  }
+  // ── Public helpers ────────────────────────────────────────────────────────
 
   async getJwtPrivateKey(): Promise<string> {
-    return this.getSecret(
-      process.env.JWT_PRIVATE_KEY_SECRET_ID ?? "billinx/jwt/private-key",
-    );
+    const secretId = process.env.JWT_PRIVATE_KEY_SECRET_ID ?? "billinx/production/jwt-private-key";
+    if (!this.isProduction) return this.getDevFallback(secretId);
+    return this.getSecret(secretId);
   }
 
   async getJwtPublicKey(): Promise<string> {
-    return this.getSecret(
-      process.env.JWT_PUBLIC_KEY_SECRET_ID ?? "billinx/jwt/public-key",
-    );
+    const secretId = process.env.JWT_PUBLIC_KEY_SECRET_ID ?? "billinx/production/jwt-public-key";
+    if (!this.isProduction) return this.getDevFallback(secretId);
+    return this.getSecret(secretId);
   }
 
   async getMasterEncryptionKey(): Promise<Buffer> {
-    const hex = await this.getSecret(
-      process.env.MASTER_KEY_SECRET_ID ?? "billinx/encryption/master-key",
-    );
+    const secretId = process.env.MASTER_KEY_SECRET_ID ?? "billinx/production/encryption-key";
+    const hex = this.isProduction
+      ? await this.getSecret(secretId)
+      : this.getDevFallback(secretId);
     return Buffer.from(hex.padEnd(64, "0").substring(0, 64), "hex");
   }
 
   async getAdminKeyHash(): Promise<string> {
-    return this.getSecret(
-      process.env.ADMIN_KEY_SECRET_ID ?? "billinx/admin/key-hash",
+    const secretId = process.env.ADMIN_KEY_SECRET_ID ?? "billinx/production/admin-api-key";
+    if (!this.isProduction) return this.getDevFallback(secretId);
+    return this.getSecret(secretId);
+  }
+
+  // ── Core fetch with cache ─────────────────────────────────────────────────
+
+  async getSecret(secretId: string): Promise<string> {
+    const cached = this.cache.get(secretId);
+    if (cached && Date.now() - cached.fetchedAt < TTL_MS) {
+      return cached.value;
+    }
+
+    if (!this.isProduction) {
+      const fallback = this.getDevFallback(secretId);
+      this.cache.set(secretId, { value: fallback, fetchedAt: Date.now() });
+      return fallback;
+    }
+
+    return this.fetchFromAws(secretId);
+  }
+
+  // ── AWS fetch with retry ──────────────────────────────────────────────────
+
+  private async fetchFromAws(secretId: string, attempt = 1): Promise<string> {
+    try {
+      const command = new GetSecretValueCommand({ SecretId: secretId });
+      const response = await this.client.send(command);
+      const value = response.SecretString ?? "";
+
+      if (!value || value.startsWith("PLACEHOLDER")) {
+        this.logger.warn(
+          `Secret "${secretId}" contains a placeholder value — update it with update-secrets.sh`,
+        );
+      }
+
+      this.cache.set(secretId, { value, fetchedAt: Date.now() });
+      return value;
+    } catch (err) {
+      const isThrottling =
+        err instanceof SecretsManagerServiceException &&
+        (err.name === "ThrottlingException" || err.$retryable?.throttling);
+
+      if (isThrottling && attempt < 3) {
+        const delay = attempt * 500;
+        this.logger.warn(`Secrets Manager throttled for "${secretId}" — retrying in ${delay}ms`);
+        await new Promise((r) => setTimeout(r, delay));
+        return this.fetchFromAws(secretId, attempt + 1);
+      }
+
+      this.logger.error(
+        `Failed to fetch secret "${secretId}" from Secrets Manager: ${(err as Error).message}`,
+      );
+      throw new Error(`Could not load required secret "${secretId}": ${(err as Error).message}`);
+    }
+  }
+
+  // ── Cache warmup ──────────────────────────────────────────────────────────
+
+  private async warmCache(): Promise<void> {
+    const criticalSecrets = [
+      process.env.MASTER_KEY_SECRET_ID ?? "billinx/production/encryption-key",
+      process.env.ADMIN_KEY_SECRET_ID ?? "billinx/production/admin-api-key",
+      process.env.JWT_PRIVATE_KEY_SECRET_ID ?? "billinx/production/jwt-private-key",
+      process.env.JWT_PUBLIC_KEY_SECRET_ID ?? "billinx/production/jwt-public-key",
+    ];
+
+    const results = await Promise.allSettled(
+      criticalSecrets.map((id) => this.fetchFromAws(id)),
     );
+
+    const failures = results.filter((r) => r.status === "rejected");
+    if (failures.length > 0) {
+      const errors = failures.map((r) =>
+        r.status === "rejected" ? r.reason?.message ?? "unknown" : ""
+      );
+      throw new Error(
+        `Failed to load ${failures.length} critical secret(s) on startup: ${errors.join("; ")}`,
+      );
+    }
+
+    this.logger.log(`Warmed ${criticalSecrets.length} secrets from Secrets Manager`);
+  }
+
+  // ── Development fallbacks ─────────────────────────────────────────────────
+
+  private getDevFallback(secretId: string): string {
+    const fallbacks: Record<string, string> = {
+      "billinx/production/jwt-private-key": DEV_RSA_PRIVATE_KEY,
+      "billinx/production/jwt-public-key": DEV_RSA_PUBLIC_KEY,
+      "billinx/production/encryption-key": "0".repeat(64),
+      "billinx/production/admin-api-key": "$2b$10$devplaceholderhashxxxxxxxxxxxxxxx",
+      "billinx/production/admin-key-hash": "$2b$10$devplaceholderhashxxxxxxxxxxxxxxx",
+      // Legacy secret names (backwards compat)
+      "billinx/jwt/private-key": DEV_RSA_PRIVATE_KEY,
+      "billinx/jwt/public-key": DEV_RSA_PUBLIC_KEY,
+      "billinx/encryption/master-key": "0".repeat(64),
+      "billinx/admin/key-hash": "$2b$10$devplaceholderhashxxxxxxxxxxxxxxx",
+    };
+
+    const value = fallbacks[secretId];
+    if (!value) {
+      this.logger.debug(`No dev fallback for secret "${secretId}" — returning placeholder`);
+      return "dev-fallback-secret";
+    }
+    return value;
   }
 }
+
+// Development-only RSA key pair (2048-bit, not used in production)
+const DEV_RSA_PRIVATE_KEY = `-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEA0Z3VS5JJcds3xHn/ygWep4PAtEsHAP/TP32bFuTsBOEOAqNO
+oxTPqMuInPtTjXnvVpNR29CGt0CXNL14wKKFJ9lLfIVeMfLFDGUAFwCsZGFkAUEn
+nkgXKGLF3E3QqNNjKaFhLo8FkCL0gWFTDUl2mmqAAHGn7u0E5n6hbJ90BtPiECCI
+-----END RSA PRIVATE KEY-----`;
+
+const DEV_RSA_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0Z3VS5JJcds3xHn/ygWe
+p4PAtEsHAP/TP32bFuTsBOEOAqNOoxTPqMuInPtTjXnvVpNR29CGt0CXNL14wKKF
+-----END PUBLIC KEY-----`;
