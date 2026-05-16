@@ -1,5 +1,44 @@
 export type AdminRole = "SUPER_ADMIN" | "STAFF";
 
+export type KybRiskScore = "PENDING" | "GREEN" | "AMBER" | "RED";
+
+export interface KybVerificationSummary {
+  id: string;
+  tinUserConfirmed: boolean;
+  tinConfirmedAt?: string;
+  tinProofNote?: string;
+  cacVerified: boolean;
+  cacCompanyName?: string;
+  cacStatus?: string;
+  cacRegistrationDate?: string;
+  cacDirectors?: any;
+  nameMatchScore?: number;
+  nameMatchResult?: string;
+  riskScore: KybRiskScore;
+  riskReasons?: string[];
+  cacErrorMessage?: string;
+}
+
+export interface AccessRequestListItem {
+  id: string;
+  companyName: string;
+  tin: string;
+  contactName: string;
+  email: string;
+  phone?: string;
+  estimatedVolume?: string;
+  useCase?: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  cacRcNumber?: string;
+  kybScore: KybRiskScore;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
+  createdAt: string;
+  updatedAt: string;
+  kybVerification: KybVerificationSummary | null;
+}
+
 export interface AdminLoginRequest {
   email: string;
   password: string;

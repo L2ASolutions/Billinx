@@ -447,15 +447,55 @@ model AccessRequest {
   estimatedVolume String?
   useCase         String?
   status          AccessRequestStatus @default(PENDING)
+  cacRcNumber     String?
+  kybScore        KybRiskScore        @default(PENDING)
   reviewedBy      String?
   reviewedAt      DateTime?
   reviewNote      String?
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
+  kybVerification KybVerification?
+
   @@index([status])
   @@index([email])
   @@map("access_requests")
+}
+
+// ── KYB VERIFICATION ──────────────────────────────────────────────────────────
+model KybVerification {
+  id                  String       @id @default(uuid())
+  accessRequestId     String       @unique
+  tenantId            String?
+
+  tin                 String
+  tinUserConfirmed    Boolean      @default(false)
+  tinConfirmedAt      DateTime?
+  tinConfirmedIp      String?
+  tinProofNote        String?
+
+  cacRcNumber         String?
+  cacVerified         Boolean      @default(false)
+  cacVerifiedAt       DateTime?
+  cacCompanyName      String?
+  cacStatus           String?
+  cacRegistrationDate String?
+  cacDirectors        Json?
+  cacRawResponse      Json?
+  cacErrorMessage     String?
+
+  nameMatchScore      Float?
+  nameMatchResult     String?
+
+  riskScore           KybRiskScore @default(PENDING)
+  riskReasons         Json?
+
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  accessRequest       AccessRequest @relation(fields: [accessRequestId], references: [id])
+
+  @@map("kyb_verifications")
 }
 // ── ADMIN USERS (L2A Solutions staff) ─────────────────────────────────────────
 model AdminUser {
@@ -482,6 +522,13 @@ enum AccessRequestStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum KybRiskScore {
+  PENDING
+  GREEN
+  AMBER
+  RED
 }
 enum ActivityEventType {
   USER_LOGIN
