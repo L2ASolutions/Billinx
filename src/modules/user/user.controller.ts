@@ -21,6 +21,7 @@ import {
 } from "@nestjs/swagger";
 import { Request } from "express";
 import { UserService } from "./services/user.service";
+import { MfaService } from "./services/mfa.service";
 import { ApiKeyGuard } from "../identity/guards/api-key.guard";
 import { JwtGuard } from "../identity/guards/jwt.guard";
 import { AdminKeyGuard } from "../identity/guards/admin-key.guard";
@@ -42,7 +43,10 @@ import {
 @ApiTags("Users")
 @Controller("v1")
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly mfaService: MfaService,
+  ) {}
 
   // ── Public endpoints (no auth required) ───────────────────────────────────
 
@@ -94,6 +98,81 @@ export class UserController {
   @ApiOperation({ summary: "Accept invitation and set password" })
   async acceptInvitation(@Body() body: Record<string, any>) {
     return this.userService.acceptInvitation(body as AcceptInvitationRequest);
+  }
+
+  @Post("auth/mfa/challenge")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthRateLimitGuard)
+  @ApiOperation({ summary: "Complete MFA step-2 login with OTP or backup code" })
+  async mfaChallenge(@Body() body: Record<string, any>, @Req() req: Request) {
+    return this.userService.completeMfaChallenge(
+      body.mfaToken,
+      body.code,
+      req.ip,
+      req.headers["user-agent"] as string,
+    );
+  }
+
+  // ── MFA management (JWT required) ────────────────────────────────────────────
+
+  @Post("auth/mfa/setup")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Begin MFA setup — returns QR code and manual entry key" })
+  async setupMfa() {
+    const ctx = getRequestContext();
+    const userId = ctx.actor.replace("user:", "");
+    const user = await this.userService.getUser(userId);
+    return this.mfaService.setupMfa(userId, user.email);
+  }
+
+  @Post("auth/mfa/verify-setup")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Verify first OTP code to confirm setup and enable MFA" })
+  async verifyMfaSetup(@Body() body: Record<string, any>) {
+    const ctx = getRequestContext();
+    const userId = ctx.actor.replace("user:", "");
+    await this.mfaService.verifySetupAndEnable(userId, body.code);
+    return { message: "MFA has been enabled on your account." };
+  }
+
+  @Post("auth/mfa/disable")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Disable MFA — requires current OTP or backup code" })
+  async disableMfa(@Body() body: Record<string, any>) {
+    const ctx = getRequestContext();
+    const userId = ctx.actor.replace("user:", "");
+    await this.mfaService.disableMfa(userId, body.code);
+    return { message: "MFA has been disabled on your account." };
+  }
+
+  @Get("auth/mfa/backup-codes")
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Generate new set of 8 backup codes (invalidates previous set)" })
+  async generateBackupCodes() {
+    const ctx = getRequestContext();
+    const userId = ctx.actor.replace("user:", "");
+    const codes = await this.mfaService.generateBackupCodes(userId);
+    return {
+      codes,
+      message: "Store these codes safely — they can each only be used once. This replaces any previous backup codes.",
+    };
+  }
+
+  @Get("auth/mfa/status")
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get MFA status for the current user" })
+  async getMfaStatus() {
+    const ctx = getRequestContext();
+    const userId = ctx.actor.replace("user:", "");
+    return this.mfaService.getMfaStatus(userId);
   }
 
   // ── Authenticated endpoints (JWT required) ────────────────────────────────
