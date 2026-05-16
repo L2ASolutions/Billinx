@@ -25,6 +25,10 @@ model Tenant {
   interswitchSecretIv     Bytes?
   interswitchServiceId    String?
   interswitchBusinessId   String?
+  nrsApiKey               Bytes?
+  nrsApiKeyIv             Bytes?
+  nrsApiSecret            Bytes?
+  nrsApiSecretIv          Bytes?
   createdAt               DateTime          @default(now())
   updatedAt               DateTime          @updatedAt
 
