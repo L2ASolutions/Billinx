@@ -8,6 +8,7 @@ import { ApiKeyService } from "../identity/services/api-key.service";
 import { AdminKeyGuard } from "../identity/guards/admin-key.guard";
 import { RedisService } from "../../shared/redis/redis.service";
 import { EmailService } from "../../shared/email/email.service";
+import { ConsentService } from "../consent/consent.service";
 
 @Module({
   controllers: [AdminController],
@@ -20,6 +21,7 @@ import { EmailService } from "../../shared/email/email.service";
     AdminKeyGuard,
     RedisService,
     EmailService,
+    ConsentService,
   ],
   exports: [AdminService],
 })

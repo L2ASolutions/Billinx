@@ -15,6 +15,7 @@ import { ActivityService } from "../../activity/services/activity.service";
 import { RedisService } from "../../../shared/redis/redis.service";
 import { EmailService } from "../../../shared/email/email.service";
 import { MfaService } from "./mfa.service";
+import { ConsentService } from "../../consent/consent.service";
 import {
   UserRoleType,
   ROLE_PERMISSIONS,
@@ -53,6 +54,7 @@ export class UserService {
     private readonly redisService: RedisService,
     private readonly emailService: EmailService,
     private readonly mfaService: MfaService,
+    private readonly consentService: ConsentService,
   ) {}
 
   // â"€â"€ Self-serve registration (Route 2 â€" small businesses) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -364,7 +366,11 @@ export class UserService {
   }
 
   // â"€â"€ Accept invitation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-  async acceptInvitation(request: AcceptInvitationRequest): Promise<LoginResponse> {
+  async acceptInvitation(
+    request: AcceptInvitationRequest,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<LoginResponse> {
     const invitation = await this.userRepository.findInvitationByToken(request.token);
 
     if (!invitation) {
@@ -408,6 +414,28 @@ export class UserService {
         registrationType: "invitation",
       },
     });
+
+    // Record consent (NDPA 2023) — fire-and-forget
+    Promise.all([
+      this.consentService.record({
+        email: user.email,
+        userId: user.id,
+        tenantId: invitation.tenantId,
+        consentType: 'TERMS_AND_PRIVACY',
+        ipAddress,
+        userAgent,
+      }),
+      this.consentService.record({
+        email: user.email,
+        userId: user.id,
+        tenantId: invitation.tenantId,
+        consentType: 'NDPR_DATA_PROCESSING',
+        ipAddress,
+        userAgent,
+      }),
+    ]).catch((err: any) =>
+      this.logger.error(`Failed to record consent: ${err.message}`),
+    );
 
     // Send welcome email (fire-and-forget; tenant name resolved async)
     this.prisma.asAdmin(async (tx) => {
@@ -592,15 +620,19 @@ export class UserService {
       createdAt: user.createdAt.toISOString(),
     };
   }
-  async requestAccess(request: {
-    companyName: string;
-    tin: string;
-    contactName: string;
-    email: string;
-    phone?: string;
-    estimatedVolume?: string;
-    useCase?: string;
-  }): Promise<{ message: string; referenceId: string }> {
+  async requestAccess(
+    request: {
+      companyName: string;
+      tin: string;
+      contactName: string;
+      email: string;
+      phone?: string;
+      estimatedVolume?: string;
+      useCase?: string;
+    },
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<{ message: string; referenceId: string }> {
     const existing = await this.prisma.asAdmin(async (tx) => {
       return tx.accessRequest.findFirst({
         where: { email: request.email, status: "PENDING" },
@@ -634,6 +666,19 @@ export class UserService {
       companyName: request.companyName,
       referenceId: accessRequest.id,
     });
+
+    // Record BUSINESS_AUTHORISATION consent — fire-and-forget
+    this.consentService
+      .record({
+        email: request.email,
+        consentType: 'BUSINESS_AUTHORISATION',
+        ipAddress,
+        userAgent,
+        metadata: { referenceId: accessRequest.id },
+      })
+      .catch((err: any) =>
+        this.logger.error(`Failed to record consent: ${err.message}`),
+      );
 
     return {
       message: "Thank you for your interest in Billinx. We will review your request and contact you within 24 hours.",
@@ -677,5 +722,13 @@ export class UserService {
       });
     });
     return { message: `Access request for ${request.companyName} rejected.` };
+  }
+
+  async listMyConsentRecords(userId: string) {
+    return this.consentService.listByUser(userId);
+  }
+
+  async requestErasure(userId: string, tenantId: string, email: string) {
+    return this.consentService.requestErasure({ userId, tenantId, email });
   }
 }
