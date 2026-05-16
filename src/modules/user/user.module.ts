@@ -14,6 +14,7 @@ import { AuthRateLimitGuard } from "../../shared/guards/auth-rate-limit.guard";
 import { EmailService } from "../../shared/email/email.service";
 import { MfaService } from "./services/mfa.service";
 import { CredentialService } from "../tenant/services/credential.service";
+import { ConsentService } from "../consent/consent.service";
 
 @Module({
   controllers: [UserController],
@@ -32,6 +33,7 @@ import { CredentialService } from "../tenant/services/credential.service";
     EmailService,
     MfaService,
     CredentialService,
+    ConsentService,
   ],
   exports: [UserService, UserRepository],
 })
