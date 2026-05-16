@@ -96,8 +96,12 @@ export class UserController {
   @Post("auth/accept-invitation")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Accept invitation and set password" })
-  async acceptInvitation(@Body() body: Record<string, any>) {
-    return this.userService.acceptInvitation(body as AcceptInvitationRequest);
+  async acceptInvitation(@Body() body: Record<string, any>, @Req() req: Request) {
+    return this.userService.acceptInvitation(
+      body as AcceptInvitationRequest,
+      req.ip,
+      req.headers["user-agent"] as string,
+    );
   }
 
   @Post("auth/mfa/challenge")
@@ -282,8 +286,12 @@ export class UserController {
   @Post("request-access")
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: "Request access to Billinx platform" })
-  async requestAccess(@Body() body: Record<string, any>) {
-    return this.userService.requestAccess(body as any);
+  async requestAccess(@Body() body: Record<string, any>, @Req() req: Request) {
+    return this.userService.requestAccess(
+      body as any,
+      req.ip,
+      req.headers["user-agent"] as string,
+    );
   }
 
   // ── Admin: list access requests ───────────────────────────────────────────
@@ -326,5 +334,34 @@ export class UserController {
       body.reviewedBy ?? "admin",
       body.reviewNote,
     );
+  }
+
+  // ── Consent records (JWT required) ───────────────────────────────────────
+  @Get("users/me/consent-records")
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get consent records for the current user (NDPA 2023)" })
+  async getMyConsentRecords() {
+    const ctx = getRequestContext();
+    const userId = ctx.actor.replace("user:", "");
+    return this.userService.listMyConsentRecords(userId);
+  }
+
+  // ── Right to erasure (JWT required) ──────────────────────────────────────
+  @Post("users/me/request-erasure")
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Submit a right-to-erasure request under NDPA 2023",
+    description:
+      "Flags the account for PII erasure review. Does not delete immediately. " +
+      "Admin approval required. Invoice records are not affected.",
+  })
+  async requestErasure() {
+    const ctx = getRequestContext();
+    const userId = ctx.actor.replace("user:", "");
+    const user = await this.userService.getUser(userId);
+    return this.userService.requestErasure(userId, ctx.tenantId, user.email);
   }
 }

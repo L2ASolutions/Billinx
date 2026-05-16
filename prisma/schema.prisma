@@ -363,25 +363,27 @@ model SystemError {
 
 // ── USERS ─────────────────────────────────────────────────────────────────────
 model User {
-  id                String      @id @default(uuid())
-  tenantId          String
-  email             String
-  passwordHash      String
-  firstName         String
-  lastName          String
-  isActive          Boolean     @default(true)
-  isVerified        Boolean     @default(false)
-  mfaEnabled        Boolean     @default(false)
-  mfaSecret         Bytes?
-  mfaSecretIv       Bytes?
-  mfaBackupCodes    Json?
-  lastLoginAt       DateTime?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id                   String    @id @default(uuid())
+  tenantId             String
+  email                String
+  passwordHash         String
+  firstName            String
+  lastName             String
+  isActive             Boolean   @default(true)
+  isVerified           Boolean   @default(false)
+  mfaEnabled           Boolean   @default(false)
+  mfaSecret            Bytes?
+  mfaSecretIv          Bytes?
+  mfaBackupCodes       Json?
+  lastLoginAt          DateTime?
+  isErased             Boolean   @default(false)
+  erasureRequestedAt   DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  tenant            Tenant      @relation(fields: [tenantId], references: [id])
-  roles             UserRole[]
-  invitations       UserInvitation[]
+  tenant               Tenant        @relation(fields: [tenantId], references: [id])
+  roles                UserRole[]
+  invitations          UserInvitation[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -529,6 +531,58 @@ enum KybRiskScore {
   GREEN
   AMBER
   RED
+}
+
+enum ConsentType {
+  TERMS_AND_PRIVACY
+  NDPR_DATA_PROCESSING
+  BUSINESS_AUTHORISATION
+}
+
+enum ErasureRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ── CONSENT RECORDS ───────────────────────────────────────────────────────────
+model ConsentRecord {
+  id             String      @id @default(uuid())
+  userId         String?
+  tenantId       String?
+  email          String
+  consentType    ConsentType
+  consentVersion String      @default("1.0")
+  ipAddress      String?
+  userAgent      String?
+  consentedAt    DateTime    @default(now())
+  revokedAt      DateTime?
+  isRevoked      Boolean     @default(false)
+  metadata       Json?
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([email])
+  @@index([consentType])
+  @@map("consent_records")
+}
+
+// ── ERASURE REQUESTS ──────────────────────────────────────────────────────────
+model ErasureRequest {
+  id          String               @id @default(uuid())
+  userId      String
+  tenantId    String
+  email       String
+  status      ErasureRequestStatus @default(PENDING)
+  requestedAt DateTime             @default(now())
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  reviewNote  String?
+  erasedAt    DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@map("erasure_requests")
 }
 enum ActivityEventType {
   USER_LOGIN

@@ -15,6 +15,7 @@ import {
 } from "../../../../packages/types/admin";
 import { RedisService } from "../../../shared/redis/redis.service";
 import { EmailService } from "../../../shared/email/email.service";
+import { ConsentService } from "../../consent/consent.service";
 import * as bcrypt from "bcrypt";
 import * as jwt from "jsonwebtoken";
 
@@ -29,6 +30,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
     private readonly emailService: EmailService,
+    private readonly consentService: ConsentService,
   ) {}
 
   // ── Bootstrap first admin user ────────────────────────────────────────────
@@ -403,6 +405,28 @@ async listAccessRequests(status?: string): Promise<any[]> {
       return tx.adminUser.findMany({ orderBy: { createdAt: "asc" } });
     });
     return admins.map((a: any) => this.mapToResponse(a));
+  }
+
+  // ── Consent records ───────────────────────────────────────────────────────
+  async listConsentRecords(filters: {
+    tenantId?: string;
+    email?: string;
+    consentType?: string;
+  }) {
+    return this.consentService.listAll(filters);
+  }
+
+  // ── Erasure requests ──────────────────────────────────────────────────────
+  async listErasureRequests(status?: string) {
+    return this.consentService.listErasureRequests(status);
+  }
+
+  async approveErasure(id: string, adminId: string, reviewNote?: string) {
+    return this.consentService.approveErasure(id, adminId, reviewNote);
+  }
+
+  async rejectErasure(id: string, adminId: string, reviewNote?: string) {
+    return this.consentService.rejectErasure(id, adminId, reviewNote);
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
