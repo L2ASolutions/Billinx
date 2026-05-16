@@ -14,6 +14,7 @@ import { SecretsService } from "../../../infrastructure/secrets/secrets.service"
 import { ActivityService } from "../../activity/services/activity.service";
 import { RedisService } from "../../../shared/redis/redis.service";
 import { EmailService } from "../../../shared/email/email.service";
+import { MfaService } from "./mfa.service";
 import {
   UserRoleType,
   ROLE_PERMISSIONS,
@@ -29,6 +30,7 @@ import {
   UserListResponse,
   RegisterResponse,
   LoginResponse,
+  MfaChallengeResponse,
 } from "../../../../packages/types/user";
 import * as bcrypt from "bcrypt";
 import * as crypto from "crypto";
@@ -50,6 +52,7 @@ export class UserService {
     private readonly activityService: ActivityService,
     private readonly redisService: RedisService,
     private readonly emailService: EmailService,
+    private readonly mfaService: MfaService,
   ) {}
 
   // â"€â"€ Self-serve registration (Route 2 â€" small businesses) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -208,11 +211,32 @@ export class UserService {
       throw new UnauthorizedException("Invalid email or password");
     }
 
-    // ── 4. Success: clear failure counter, issue token ────────────────────────
+    // ── 4. Success: clear failure counter ────────────────────────────────────
     await this.redisService.clearLoginFailures(tenantId, request.email);
-    await this.userRepository.update(user.id, { lastLoginAt: new Date() });
 
+    // ── 5. MFA check ──────────────────────────────────────────────────────────
+    if ((user as any).mfaEnabled) {
+      const mfaToken = this.mfaService.issueMfaToken(user.id, tenantId);
+      this.activityService.track({
+        tenantId,
+        eventType: "USER_LOGIN",
+        actor: `user:${user.id}`,
+        actorEmail: user.email,
+        ipAddress,
+        userAgent,
+        entityType: "User",
+        entityId: user.id,
+        payload: { email: user.email, mfaRequired: true },
+      });
+      return { mfaRequired: true, mfaToken, expiresIn: 300 };
+    }
+
+    // ── 6. No MFA: issue full JWT ────────────────────────────────────────────
+    await this.userRepository.update(user.id, { lastLoginAt: new Date() });
     const accessToken = await this.issueAccessToken(user, tenantId);
+
+    const roles = (user as any).roles?.map((r: any) => r.role) ?? [];
+    const isPrivileged = roles.includes("OWNER") || roles.includes("ADMIN");
 
     this.activityService.track({
       tenantId,
@@ -224,6 +248,49 @@ export class UserService {
       entityType: "User",
       entityId: user.id,
       payload: { email: user.email },
+    });
+
+    return {
+      accessToken,
+      expiresIn: ACCESS_TOKEN_TTL,
+      tokenType: "Bearer",
+      user: this.mapToResponse(user),
+      mfaSetupRequired: isPrivileged ? true : undefined,
+    };
+  }
+
+  // ── Complete MFA challenge (step 2 of login) ──────────────────────────────
+  async completeMfaChallenge(
+    mfaToken: string,
+    code: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<MfaChallengeResponse> {
+    const { userId, tenantId } = this.mfaService.verifyMfaToken(mfaToken);
+
+    const valid = await this.mfaService.verifyCode(userId, code);
+    if (!valid) {
+      throw new UnauthorizedException("Invalid MFA code.");
+    }
+
+    const user = await this.userRepository.findById(userId);
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException("Account not found or inactive.");
+    }
+
+    await this.userRepository.update(userId, { lastLoginAt: new Date() });
+    const accessToken = await this.issueAccessToken(user, tenantId);
+
+    this.activityService.track({
+      tenantId,
+      eventType: "USER_LOGIN",
+      actor: `user:${userId}`,
+      actorEmail: user.email,
+      ipAddress,
+      userAgent,
+      entityType: "User",
+      entityId: userId,
+      payload: { email: user.email, mfaVerified: true },
     });
 
     return {
@@ -518,6 +585,7 @@ export class UserService {
       fullName: `${user.firstName} ${user.lastName}`.trim(),
       isActive: user.isActive,
       isVerified: user.isVerified,
+      mfaEnabled: user.mfaEnabled ?? false,
       roles,
       permissions,
       lastLoginAt: user.lastLoginAt?.toISOString(),

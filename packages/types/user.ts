@@ -100,6 +100,7 @@ export interface UserResponse {
   fullName: string;
   isActive: boolean;
   isVerified: boolean;
+  mfaEnabled: boolean;
   roles: UserRoleType[];
   permissions: string[];
   lastLoginAt?: string;
@@ -131,8 +132,33 @@ export interface RegisterResponse {
 }
 
 export interface LoginResponse {
+  accessToken?: string;
+  expiresIn: number;
+  tokenType?: "Bearer";
+  user?: UserResponse;
+  mfaRequired?: boolean;
+  mfaToken?: string;
+  mfaSetupRequired?: boolean;
+}
+
+export interface MfaSetupResponse {
+  qrCodeBase64: string;
+  manualKey: string;
+}
+
+export interface MfaChallengeRequest {
+  mfaToken: string;
+  code: string;
+}
+
+export interface MfaChallengeResponse {
   accessToken: string;
   expiresIn: number;
   tokenType: "Bearer";
   user: UserResponse;
+}
+
+export interface BackupCodesResponse {
+  codes: string[];
+  message: string;
 }
