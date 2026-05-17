@@ -11,6 +11,17 @@ async function bootstrap() {
     logger: ["error", "warn", "log"],
   });
 
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+    : ["http://localhost:3001"];
+
+  app.enableCors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type", "Idempotency-Key", "X-Admin-Key"],
+    credentials: true,
+  });
+
   app.use(helmet());
   app.use(express.json());
   app.use(express.text({ type: "application/xml" }));
