@@ -4,7 +4,8 @@ import { SESClient, SendRawEmailCommand } from '@aws-sdk/client-ses';
 
 const FROM_ADDRESS = process.env.EMAIL_FROM ?? 'Billinx <noreply@billinx.ng>';
 const APP_BASE_URL = process.env.APP_BASE_URL ?? 'https://app.billinx.ng';
-const AWS_REGION = process.env.AWS_SES_REGION ?? process.env.AWS_REGION ?? 'us-east-1';
+const AWS_REGION =
+  process.env.AWS_SES_REGION ?? process.env.AWS_REGION ?? 'us-east-1';
 
 // ─── Shared brand styles ──────────────────────────────────────────────────────
 
@@ -135,7 +136,9 @@ export class EmailService {
 
   private send(to: string, subject: string, html: string): void {
     if (!this.enabled && !process.env.DEV_SMTP_USER) {
-      this.logger.debug(`[Email skipped — no transport] To: ${to} | Subject: ${subject}`);
+      this.logger.debug(
+        `[Email skipped — no transport] To: ${to} | Subject: ${subject}`,
+      );
       return;
     }
 
@@ -147,7 +150,9 @@ export class EmailService {
           subject,
           html,
         });
-        this.logger.log(`Email sent to ${to}: ${subject} (messageId: ${info.messageId})`);
+        this.logger.log(
+          `Email sent to ${to}: ${subject} (messageId: ${info.messageId})`,
+        );
       } catch (err: any) {
         this.logger.error(`Failed to send email to ${to}: ${err.message}`);
       }
@@ -167,16 +172,28 @@ export class EmailService {
     const html = baseLayout(
       'You have been invited to Billinx',
       h1('You have been invited') +
-      p(`<strong>${opts.invitedByName}</strong> has invited you to join <strong>${opts.tenantName}</strong> on Billinx as <strong>${opts.role}</strong>.`) +
-      p('Click the button below to accept your invitation and set your password.') +
-      ctaButton(link, 'Accept Invitation') +
-      p(`This invitation expires in 7 days. If the button above does not work, copy and paste the link below into your browser:`) +
-      tokenBox(link) +
-      divider() +
-      p(`If you were not expecting this invitation, you can safely ignore this email.`),
+        p(
+          `<strong>${opts.invitedByName}</strong> has invited you to join <strong>${opts.tenantName}</strong> on Billinx as <strong>${opts.role}</strong>.`,
+        ) +
+        p(
+          'Click the button below to accept your invitation and set your password.',
+        ) +
+        ctaButton(link, 'Accept Invitation') +
+        p(
+          `This invitation expires in 7 days. If the button above does not work, copy and paste the link below into your browser:`,
+        ) +
+        tokenBox(link) +
+        divider() +
+        p(
+          `If you were not expecting this invitation, you can safely ignore this email.`,
+        ),
     );
 
-    this.send(opts.to, `You've been invited to ${opts.tenantName} on Billinx`, html);
+    this.send(
+      opts.to,
+      `You've been invited to ${opts.tenantName} on Billinx`,
+      html,
+    );
   }
 
   // ─── 2. Invitation accepted → welcome email ──────────────────────────────────
@@ -191,11 +208,17 @@ export class EmailService {
     const html = baseLayout(
       'Welcome to Billinx',
       h1(`Welcome to Billinx, ${opts.firstName}!`) +
-      p(`Your account has been created and you are now a member of <strong>${opts.tenantName}</strong> with the role of <strong>${opts.role}</strong>.`) +
-      p('You can now log in and start managing your e-invoices for FIRS compliance.') +
-      ctaButton(loginLink, 'Go to Dashboard') +
-      divider() +
-      p(`Need help? Our documentation is at <a href="https://docs.billinx.ng" style="color:${BRAND_GREEN};">docs.billinx.ng</a> or email us at <a href="mailto:support@billinx.ng" style="color:${BRAND_GREEN};">support@billinx.ng</a>.`),
+        p(
+          `Your account has been created and you are now a member of <strong>${opts.tenantName}</strong> with the role of <strong>${opts.role}</strong>.`,
+        ) +
+        p(
+          'You can now log in and start managing your e-invoices for FIRS compliance.',
+        ) +
+        ctaButton(loginLink, 'Go to Dashboard') +
+        divider() +
+        p(
+          `Need help? Our documentation is at <a href="https://docs.billinx.ng" style="color:${BRAND_GREEN};">docs.billinx.ng</a> or email us at <a href="mailto:support@billinx.ng" style="color:${BRAND_GREEN};">support@billinx.ng</a>.`,
+        ),
     );
 
     this.send(opts.to, 'Welcome to Billinx — your account is ready', html);
@@ -212,13 +235,21 @@ export class EmailService {
     const html = baseLayout(
       'Reset your Billinx password',
       h1('Reset your password') +
-      p(`Hi ${opts.firstName}, we received a request to reset the password for your Billinx account.`) +
-      p('Click the button below to choose a new password. This link expires in 2 hours.') +
-      ctaButton(link, 'Reset Password') +
-      p('If the button does not work, copy and paste this link into your browser:') +
-      tokenBox(link) +
-      divider() +
-      p('If you did not request a password reset, you can safely ignore this email. Your password will not change.'),
+        p(
+          `Hi ${opts.firstName}, we received a request to reset the password for your Billinx account.`,
+        ) +
+        p(
+          'Click the button below to choose a new password. This link expires in 2 hours.',
+        ) +
+        ctaButton(link, 'Reset Password') +
+        p(
+          'If the button does not work, copy and paste this link into your browser:',
+        ) +
+        tokenBox(link) +
+        divider() +
+        p(
+          'If you did not request a password reset, you can safely ignore this email. Your password will not change.',
+        ),
     );
 
     this.send(opts.to, 'Reset your Billinx password', html);
@@ -235,11 +266,15 @@ export class EmailService {
     const html = baseLayout(
       'We received your Billinx access request',
       h1('We received your request') +
-      p(`Hi ${opts.contactName},`) +
-      p(`Thank you for applying for access to Billinx on behalf of <strong>${opts.companyName}</strong>. We have received your request and our team will review it within 24 hours.`) +
-      p('You will receive an email notification once your request has been reviewed.') +
-      divider() +
-      `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        p(`Hi ${opts.contactName},`) +
+        p(
+          `Thank you for applying for access to Billinx on behalf of <strong>${opts.companyName}</strong>. We have received your request and our team will review it within 24 hours.`,
+        ) +
+        p(
+          'You will receive an email notification once your request has been reviewed.',
+        ) +
+        divider() +
+        `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
         <tr>
           <td style="background:#f4f6f8;border-radius:6px;padding:16px 20px;">
             <p style="margin:0 0 6px;font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Reference ID</p>
@@ -247,8 +282,12 @@ export class EmailService {
           </td>
         </tr>
       </table>` +
-      p('') +
-      p('Keep this reference ID for your records. If you have any questions, contact us at <a href="mailto:support@billinx.ng" style="color:' + BRAND_GREEN + ';">support@billinx.ng</a>.'),
+        p('') +
+        p(
+          'Keep this reference ID for your records. If you have any questions, contact us at <a href="mailto:support@billinx.ng" style="color:' +
+            BRAND_GREEN +
+            ';">support@billinx.ng</a>.',
+        ),
     );
 
     this.send(opts.to, 'Billinx — we received your access request', html);
@@ -265,18 +304,30 @@ export class EmailService {
     const html = baseLayout(
       'Your Billinx access request has been approved',
       h1('Your request has been approved!') +
-      p(`Hi ${opts.contactName},`) +
-      p(`Great news — your access request for <strong>${opts.companyName}</strong> has been approved. Your Billinx account is ready.`) +
-      (opts.invitationToken
-        ? p('Click the button below to set your password and activate your account.') +
-          ctaButton(
-            `${APP_BASE_URL}/accept-invitation?token=${opts.invitationToken}`,
-            'Activate Your Account',
-          ) +
-          p('This link expires in 7 days.')
-        : p('An invitation will be sent to this address shortly by our team.')) +
-      divider() +
-      p('If you have any questions about getting started, visit <a href="https://docs.billinx.ng" style="color:' + BRAND_GREEN + ';">docs.billinx.ng</a> or contact <a href="mailto:support@billinx.ng" style="color:' + BRAND_GREEN + ';">support@billinx.ng</a>.'),
+        p(`Hi ${opts.contactName},`) +
+        p(
+          `Great news — your access request for <strong>${opts.companyName}</strong> has been approved. Your Billinx account is ready.`,
+        ) +
+        (opts.invitationToken
+          ? p(
+              'Click the button below to set your password and activate your account.',
+            ) +
+            ctaButton(
+              `${APP_BASE_URL}/accept-invitation?token=${opts.invitationToken}`,
+              'Activate Your Account',
+            ) +
+            p('This link expires in 7 days.')
+          : p(
+              'An invitation will be sent to this address shortly by our team.',
+            )) +
+        divider() +
+        p(
+          'If you have any questions about getting started, visit <a href="https://docs.billinx.ng" style="color:' +
+            BRAND_GREEN +
+            ';">docs.billinx.ng</a> or contact <a href="mailto:support@billinx.ng" style="color:' +
+            BRAND_GREEN +
+            ';">support@billinx.ng</a>.',
+        ),
     );
 
     this.send(opts.to, 'Your Billinx access request has been approved', html);
@@ -299,9 +350,11 @@ export class EmailService {
       `<div style="display:inline-block;background:#e6f9f3;border:1px solid #1D9E75;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
         <span style="font-size:12px;font-weight:600;color:${BRAND_GREEN};text-transform:uppercase;letter-spacing:0.5px;">&#10003; FIRS Accepted</span>
       </div>` +
-      h1('Invoice accepted') +
-      p(`Good news — FIRS has accepted an invoice submitted by <strong>${opts.tenantName}</strong>.`) +
-      `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+        h1('Invoice accepted') +
+        p(
+          `Good news — FIRS has accepted an invoice submitted by <strong>${opts.tenantName}</strong>.`,
+        ) +
+        `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
               style="background:#f8faf9;border:1px solid #d4edda;border-radius:6px;margin:0 0 20px;">
         <tr><td style="padding:20px;">
           ${opts.buyerName ? `<div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Buyer</span><br /><strong style="color:${BRAND_DARK};">${opts.buyerName}</strong></div>` : ''}
@@ -310,9 +363,11 @@ export class EmailService {
           ${opts.totalAmount ? `<div><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Amount</span><br /><strong style="font-size:16px;color:${BRAND_GREEN};">${opts.totalAmount}</strong></div>` : ''}
         </td></tr>
       </table>` +
-      ctaButton(dashboardLink, 'View Invoice') +
-      divider() +
-      p('You can download the invoice QR code and compliance certificate from your Billinx dashboard.'),
+        ctaButton(dashboardLink, 'View Invoice') +
+        divider() +
+        p(
+          'You can download the invoice QR code and compliance certificate from your Billinx dashboard.',
+        ),
     );
 
     this.send(opts.to, `Invoice accepted by FIRS — ${opts.platformIrn}`, html);
@@ -335,9 +390,11 @@ export class EmailService {
       `<div style="display:inline-block;background:#fdf0ef;border:1px solid #e74c3c;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
         <span style="font-size:12px;font-weight:600;color:#c0392b;text-transform:uppercase;letter-spacing:0.5px;">&#10007; FIRS Rejected</span>
       </div>` +
-      h1('Invoice rejected') +
-      p(`Unfortunately, FIRS has rejected an invoice submitted by <strong>${opts.tenantName}</strong>. You may need to correct and resubmit it.`) +
-      `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+        h1('Invoice rejected') +
+        p(
+          `Unfortunately, FIRS has rejected an invoice submitted by <strong>${opts.tenantName}</strong>. You may need to correct and resubmit it.`,
+        ) +
+        `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
               style="background:#fdf8f8;border:1px solid #f5c6cb;border-radius:6px;margin:0 0 20px;">
         <tr><td style="padding:20px;">
           ${opts.buyerName ? `<div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Buyer</span><br /><strong style="color:${BRAND_DARK};">${opts.buyerName}</strong></div>` : ''}
@@ -346,9 +403,13 @@ export class EmailService {
           ${opts.errorMessage ? `<div><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Reason</span><br /><span style="font-size:14px;color:#444;">${opts.errorMessage}</span></div>` : ''}
         </td></tr>
       </table>` +
-      ctaButton(dashboardLink, 'View & Correct Invoice') +
-      divider() +
-      p('Review the rejection reason, correct the invoice data, and resubmit through your Billinx dashboard. Contact <a href="mailto:support@billinx.ng" style="color:' + BRAND_GREEN + ';">support@billinx.ng</a> if you need assistance.'),
+        ctaButton(dashboardLink, 'View & Correct Invoice') +
+        divider() +
+        p(
+          'Review the rejection reason, correct the invoice data, and resubmit through your Billinx dashboard. Contact <a href="mailto:support@billinx.ng" style="color:' +
+            BRAND_GREEN +
+            ';">support@billinx.ng</a> if you need assistance.',
+        ),
     );
 
     this.send(opts.to, `Invoice rejected by FIRS — ${opts.platformIrn}`, html);
@@ -366,9 +427,11 @@ export class EmailService {
       `<div style="display:inline-block;background:#fff3cd;border:1px solid #ffc107;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
         <span style="font-size:12px;font-weight:600;color:#856404;text-transform:uppercase;letter-spacing:0.5px;">&#9888; Security Alert</span>
       </div>` +
-      h1(`Hi ${opts.firstName}, your account has been locked`) +
-      p(`Your Billinx account has been <strong>temporarily locked</strong> after 5 failed login attempts.`) +
-      `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+        h1(`Hi ${opts.firstName}, your account has been locked`) +
+        p(
+          `Your Billinx account has been <strong>temporarily locked</strong> after 5 failed login attempts.`,
+        ) +
+        `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
               style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;margin:0 0 20px;">
         <tr><td style="padding:20px;">
           <div style="margin-bottom:12px;">
@@ -381,11 +444,19 @@ export class EmailService {
           </div>
         </td></tr>
       </table>` +
-      ctaButton(`${APP_BASE_URL}/forgot-password`, 'Reset Password') +
-      divider() +
-      p('<strong>Was this not you?</strong> If you did not make these login attempts, your account may be under attack. Contact <a href="mailto:support@billinx.ng" style="color:' + BRAND_GREEN + ';">support@billinx.ng</a> immediately.'),
+        ctaButton(`${APP_BASE_URL}/forgot-password`, 'Reset Password') +
+        divider() +
+        p(
+          '<strong>Was this not you?</strong> If you did not make these login attempts, your account may be under attack. Contact <a href="mailto:support@billinx.ng" style="color:' +
+            BRAND_GREEN +
+            ';">support@billinx.ng</a> immediately.',
+        ),
     );
 
-    this.send(opts.to, 'Security alert — your Billinx account has been locked', html);
+    this.send(
+      opts.to,
+      'Security alert — your Billinx account has been locked',
+      html,
+    );
   }
 }

@@ -5,10 +5,10 @@ import {
   HttpException,
   HttpStatus,
   Logger,
-} from "@nestjs/common";
-import { Response, Request } from "express";
-import { getOptionalRequestContext } from "../context/request-context";
-import * as Sentry from "@sentry/nestjs";
+} from '@nestjs/common';
+import { Response, Request } from 'express';
+import { getOptionalRequestContext } from '../context/request-context';
+import * as Sentry from '@sentry/nestjs';
 
 export interface ErrorResponse {
   error: string;
@@ -30,19 +30,19 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const requestCtx = getOptionalRequestContext();
 
     let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-    let error = "INTERNAL_SERVER_ERROR";
-    let message = "An unexpected error occurred";
+    let error = 'INTERNAL_SERVER_ERROR';
+    let message = 'An unexpected error occurred';
 
     if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
       const exceptionResponse = exception.getResponse();
 
-      if (typeof exceptionResponse === "object") {
+      if (typeof exceptionResponse === 'object') {
         const resp = exceptionResponse as Record<string, unknown>;
         error = (resp.error as string) ?? exception.name;
         message = (resp.message as string) ?? exception.message;
       } else {
-        message = exceptionResponse as string;
+        message = exceptionResponse;
         error = exception.name;
       }
     } else if (exception instanceof Error) {
@@ -82,23 +82,24 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     requestCtx: any,
   ): void {
     // Dynamically import to avoid circular dependencies
-    import("../../infrastructure/database/prisma.service")
+    import('../../infrastructure/database/prisma.service')
       .then(({ PrismaService }) => {
         const prisma = new PrismaService();
         return prisma.asAdmin(async (tx) => {
           return tx.systemError.create({
             data: {
-              tenantId: requestCtx?.tenantId !== "ADMIN"
-                ? requestCtx?.tenantId ?? null
-                : null,
-              errorCode: error.name ?? "UNKNOWN_ERROR",
+              tenantId:
+                requestCtx?.tenantId !== 'ADMIN'
+                  ? (requestCtx?.tenantId ?? null)
+                  : null,
+              errorCode: error.name ?? 'UNKNOWN_ERROR',
               errorMessage: error.message,
               stackTrace: error.stack ?? null,
               endpoint: request.path,
               method: request.method,
               actor: requestCtx?.actor ?? null,
               requestId: requestCtx?.requestId ?? null,
-              severity: "HIGH",
+              severity: 'HIGH',
               isResolved: false,
             },
           });

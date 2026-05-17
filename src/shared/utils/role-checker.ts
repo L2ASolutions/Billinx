@@ -1,7 +1,7 @@
-import { ForbiddenException } from "@nestjs/common";
+import { ForbiddenException } from '@nestjs/common';
 
 // Hierarchy from highest to lowest privilege
-const ROLE_ORDER = ["OWNER", "ADMIN", "ACCOUNTANT", "VIEWER"] as const;
+const ROLE_ORDER = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'VIEWER'] as const;
 type Role = (typeof ROLE_ORDER)[number];
 
 function roleRank(role: string): number {

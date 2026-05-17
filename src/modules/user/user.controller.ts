@@ -11,22 +11,21 @@ import {
   HttpStatus,
   UseGuards,
   Req,
-} from "@nestjs/common";
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
   ApiHeader,
   ApiQuery,
-} from "@nestjs/swagger";
-import { Request } from "express";
-import { UserService } from "./services/user.service";
-import { MfaService } from "./services/mfa.service";
-import { ApiKeyGuard } from "../identity/guards/api-key.guard";
-import { JwtGuard } from "../identity/guards/jwt.guard";
-import { AdminKeyGuard } from "../identity/guards/admin-key.guard";
-import { AuthRateLimitGuard } from "../../shared/guards/auth-rate-limit.guard";
-import { getRequestContext } from "../../shared/context/request-context";
+} from '@nestjs/swagger';
+import { Request } from 'express';
+import { UserService } from './services/user.service';
+import { MfaService } from './services/mfa.service';
+import { JwtGuard } from '../identity/guards/jwt.guard';
+import { AdminKeyGuard } from '../identity/guards/admin-key.guard';
+import { AuthRateLimitGuard } from '../../shared/guards/auth-rate-limit.guard';
+import { getRequestContext } from '../../shared/context/request-context';
 import {
   RegisterTenantRequest,
   InviteUserRequest,
@@ -36,12 +35,11 @@ import {
   ResetPasswordRequest,
   ChangePasswordRequest,
   UpdateUserRequest,
-  AssignRoleRequest,
   UserRoleType,
-} from "../../../packages/types/user";
+} from '../../../packages/types/user';
 
-@ApiTags("Users")
-@Controller("v1")
+@ApiTags('Users')
+@Controller('v1')
 export class UserController {
   constructor(
     private readonly userService: UserService,
@@ -50,35 +48,35 @@ export class UserController {
 
   // ── Public endpoints (no auth required) ───────────────────────────────────
 
-  @Post("register")
+  @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(AuthRateLimitGuard)
-  @ApiOperation({ summary: "Self-serve tenant and owner registration" })
+  @ApiOperation({ summary: 'Self-serve tenant and owner registration' })
   async register(@Body() body: Record<string, any>) {
     return this.userService.registerTenant(body as RegisterTenantRequest);
   }
 
-  @Post("auth/login")
+  @Post('auth/login')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthRateLimitGuard)
-  @ApiOperation({ summary: "Login with email and password" })
+  @ApiOperation({ summary: 'Login with email and password' })
   async login(@Body() body: Record<string, any>, @Req() req: Request) {
     const tenantId = body.tenantId;
     if (!tenantId) {
-      return { error: "tenantId is required" };
+      return { error: 'tenantId is required' };
     }
     return this.userService.login(
       tenantId,
       body as LoginRequest,
       req.ip,
-      req.headers["user-agent"],
+      req.headers['user-agent'],
     );
   }
 
-  @Post("auth/forgot-password")
+  @Post('auth/forgot-password')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthRateLimitGuard)
-  @ApiOperation({ summary: "Request password reset email" })
+  @ApiOperation({ summary: 'Request password reset email' })
   async forgotPassword(@Body() body: Record<string, any>) {
     return this.userService.forgotPassword(
       body.tenantId,
@@ -86,165 +84,179 @@ export class UserController {
     );
   }
 
-  @Post("auth/reset-password")
+  @Post('auth/reset-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Reset password using reset token" })
+  @ApiOperation({ summary: 'Reset password using reset token' })
   async resetPassword(@Body() body: Record<string, any>) {
     return this.userService.resetPassword(body as ResetPasswordRequest);
   }
 
-  @Post("auth/accept-invitation")
+  @Post('auth/accept-invitation')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Accept invitation and set password" })
-  async acceptInvitation(@Body() body: Record<string, any>, @Req() req: Request) {
+  @ApiOperation({ summary: 'Accept invitation and set password' })
+  async acceptInvitation(
+    @Body() body: Record<string, any>,
+    @Req() req: Request,
+  ) {
     return this.userService.acceptInvitation(
       body as AcceptInvitationRequest,
       req.ip,
-      req.headers["user-agent"] as string,
+      req.headers['user-agent'],
     );
   }
 
-  @Post("auth/mfa/challenge")
+  @Post('auth/mfa/challenge')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthRateLimitGuard)
-  @ApiOperation({ summary: "Complete MFA step-2 login with OTP or backup code" })
+  @ApiOperation({
+    summary: 'Complete MFA step-2 login with OTP or backup code',
+  })
   async mfaChallenge(@Body() body: Record<string, any>, @Req() req: Request) {
     return this.userService.completeMfaChallenge(
       body.mfaToken,
       body.code,
       req.ip,
-      req.headers["user-agent"] as string,
+      req.headers['user-agent'],
     );
   }
 
   // ── MFA management (JWT required) ────────────────────────────────────────────
 
-  @Post("auth/mfa/setup")
+  @Post('auth/mfa/setup')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Begin MFA setup — returns QR code and manual entry key" })
+  @ApiOperation({
+    summary: 'Begin MFA setup — returns QR code and manual entry key',
+  })
   async setupMfa() {
     const ctx = getRequestContext();
-    const userId = ctx.actor.replace("user:", "");
+    const userId = ctx.actor.replace('user:', '');
     const user = await this.userService.getUser(userId);
     return this.mfaService.setupMfa(userId, user.email);
   }
 
-  @Post("auth/mfa/verify-setup")
+  @Post('auth/mfa/verify-setup')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Verify first OTP code to confirm setup and enable MFA" })
+  @ApiOperation({
+    summary: 'Verify first OTP code to confirm setup and enable MFA',
+  })
   async verifyMfaSetup(@Body() body: Record<string, any>) {
     const ctx = getRequestContext();
-    const userId = ctx.actor.replace("user:", "");
+    const userId = ctx.actor.replace('user:', '');
     await this.mfaService.verifySetupAndEnable(userId, body.code);
-    return { message: "MFA has been enabled on your account." };
+    return { message: 'MFA has been enabled on your account.' };
   }
 
-  @Post("auth/mfa/disable")
+  @Post('auth/mfa/disable')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Disable MFA — requires current OTP or backup code" })
+  @ApiOperation({
+    summary: 'Disable MFA — requires current OTP or backup code',
+  })
   async disableMfa(@Body() body: Record<string, any>) {
     const ctx = getRequestContext();
-    const userId = ctx.actor.replace("user:", "");
+    const userId = ctx.actor.replace('user:', '');
     await this.mfaService.disableMfa(userId, body.code);
-    return { message: "MFA has been disabled on your account." };
+    return { message: 'MFA has been disabled on your account.' };
   }
 
-  @Get("auth/mfa/backup-codes")
+  @Get('auth/mfa/backup-codes')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Generate new set of 8 backup codes (invalidates previous set)" })
+  @ApiOperation({
+    summary: 'Generate new set of 8 backup codes (invalidates previous set)',
+  })
   async generateBackupCodes() {
     const ctx = getRequestContext();
-    const userId = ctx.actor.replace("user:", "");
+    const userId = ctx.actor.replace('user:', '');
     const codes = await this.mfaService.generateBackupCodes(userId);
     return {
       codes,
-      message: "Store these codes safely — they can each only be used once. This replaces any previous backup codes.",
+      message:
+        'Store these codes safely — they can each only be used once. This replaces any previous backup codes.',
     };
   }
 
-  @Get("auth/mfa/status")
+  @Get('auth/mfa/status')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Get MFA status for the current user" })
+  @ApiOperation({ summary: 'Get MFA status for the current user' })
   async getMfaStatus() {
     const ctx = getRequestContext();
-    const userId = ctx.actor.replace("user:", "");
+    const userId = ctx.actor.replace('user:', '');
     return this.mfaService.getMfaStatus(userId);
   }
 
   // ── Authenticated endpoints (JWT required) ────────────────────────────────
 
-  @Get("users/me")
+  @Get('users/me')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Get current user profile" })
+  @ApiOperation({ summary: 'Get current user profile' })
   async getMe() {
     const ctx = getRequestContext();
-    const userId = ctx.actor.replace("user:", "");
+    const userId = ctx.actor.replace('user:', '');
     return this.userService.getUser(userId);
   }
 
-  @Patch("users/me")
+  @Patch('users/me')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Update current user profile" })
+  @ApiOperation({ summary: 'Update current user profile' })
   async updateMe(@Body() body: Record<string, any>) {
     const ctx = getRequestContext();
-    const userId = ctx.actor.replace("user:", "");
+    const userId = ctx.actor.replace('user:', '');
     return this.userService.updateUser(userId, body as UpdateUserRequest);
   }
 
-  @Post("users/me/change-password")
+  @Post('users/me/change-password')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Change current user password" })
+  @ApiOperation({ summary: 'Change current user password' })
   async changePassword(@Body() body: Record<string, any>) {
     const ctx = getRequestContext();
-    const userId = ctx.actor.replace("user:", "");
-    return this.userService.changePassword(userId, body as ChangePasswordRequest);
+    const userId = ctx.actor.replace('user:', '');
+    return this.userService.changePassword(
+      userId,
+      body as ChangePasswordRequest,
+    );
   }
 
-  @Get("users")
+  @Get('users')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "List all users in tenant" })
+  @ApiOperation({ summary: 'List all users in tenant' })
   async listUsers() {
     const ctx = getRequestContext();
     return this.userService.listUsers(ctx.tenantId);
   }
 
-  @Get("users/:id")
+  @Get('users/:id')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Get user by ID" })
-  async getUser(@Param("id") id: string) {
+  @ApiOperation({ summary: 'Get user by ID' })
+  async getUser(@Param('id') id: string) {
     return this.userService.getUser(id);
   }
 
-  @Patch("users/:id")
+  @Patch('users/:id')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Update user" })
-  async updateUser(
-    @Param("id") id: string,
-    @Body() body: Record<string, any>,
-  ) {
+  @ApiOperation({ summary: 'Update user' })
+  async updateUser(@Param('id') id: string, @Body() body: Record<string, any>) {
     return this.userService.updateUser(id, body as UpdateUserRequest);
   }
 
-  @Post("users/invite")
+  @Post('users/invite')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Invite a new user to the tenant" })
+  @ApiOperation({ summary: 'Invite a new user to the tenant' })
   async inviteUser(@Body() body: Record<string, any>) {
     const ctx = getRequestContext();
     return this.userService.inviteUser(
@@ -254,15 +266,12 @@ export class UserController {
     );
   }
 
-  @Post("users/:id/roles")
+  @Post('users/:id/roles')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Assign role to user" })
-  async assignRole(
-    @Param("id") id: string,
-    @Body() body: Record<string, any>,
-  ) {
+  @ApiOperation({ summary: 'Assign role to user' })
+  async assignRole(@Param('id') id: string, @Body() body: Record<string, any>) {
     const ctx = getRequestContext();
     return this.userService.assignRole(
       id,
@@ -271,96 +280,95 @@ export class UserController {
     );
   }
 
-  @Delete("users/:id/roles/:role")
+  @Delete('users/:id/roles/:role')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Remove role from user" })
-  async removeRole(
-    @Param("id") id: string,
-    @Param("role") role: string,
-  ) {
+  @ApiOperation({ summary: 'Remove role from user' })
+  async removeRole(@Param('id') id: string, @Param('role') role: string) {
     return this.userService.removeRole(id, role as UserRoleType);
   }
-// ── Public: request access ────────────────────────────────────────────────
-  @Post("request-access")
+  // ── Public: request access ────────────────────────────────────────────────
+  @Post('request-access')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: "Request access to Billinx platform" })
+  @ApiOperation({ summary: 'Request access to Billinx platform' })
   async requestAccess(@Body() body: Record<string, any>, @Req() req: Request) {
     return this.userService.requestAccess(
       body as any,
       req.ip,
-      req.headers["user-agent"] as string,
+      req.headers['user-agent'],
     );
   }
 
   // ── Admin: list access requests ───────────────────────────────────────────
-  @Get("admin/access-requests")
+  @Get('admin/access-requests')
   @UseGuards(AdminKeyGuard)
-  @ApiOperation({ summary: "Admin: list all access requests" })
-  @ApiHeader({ name: "X-Admin-Key", required: true })
-  @ApiQuery({ name: "status", required: false })
-  async listAccessRequests(@Query("status") status?: string) {
+  @ApiOperation({ summary: 'Admin: list all access requests' })
+  @ApiHeader({ name: 'X-Admin-Key', required: true })
+  @ApiQuery({ name: 'status', required: false })
+  async listAccessRequests(@Query('status') status?: string) {
     return this.userService.listAccessRequests(status);
   }
 
-  @Patch("admin/access-requests/:id/approve")
+  @Patch('admin/access-requests/:id/approve')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AdminKeyGuard)
-  @ApiOperation({ summary: "Admin: approve an access request" })
-  @ApiHeader({ name: "X-Admin-Key", required: true })
+  @ApiOperation({ summary: 'Admin: approve an access request' })
+  @ApiHeader({ name: 'X-Admin-Key', required: true })
   async approveAccessRequest(
-    @Param("id") id: string,
+    @Param('id') id: string,
     @Body() body: Record<string, any>,
   ) {
     return this.userService.approveAccessRequest(
       id,
-      body.reviewedBy ?? "admin",
+      body.reviewedBy ?? 'admin',
       body.reviewNote,
     );
   }
 
-  @Patch("admin/access-requests/:id/reject")
+  @Patch('admin/access-requests/:id/reject')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AdminKeyGuard)
-  @ApiOperation({ summary: "Admin: reject an access request" })
-  @ApiHeader({ name: "X-Admin-Key", required: true })
+  @ApiOperation({ summary: 'Admin: reject an access request' })
+  @ApiHeader({ name: 'X-Admin-Key', required: true })
   async rejectAccessRequest(
-    @Param("id") id: string,
+    @Param('id') id: string,
     @Body() body: Record<string, any>,
   ) {
     return this.userService.rejectAccessRequest(
       id,
-      body.reviewedBy ?? "admin",
+      body.reviewedBy ?? 'admin',
       body.reviewNote,
     );
   }
 
   // ── Consent records (JWT required) ───────────────────────────────────────
-  @Get("users/me/consent-records")
+  @Get('users/me/consent-records')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Get consent records for the current user (NDPA 2023)" })
+  @ApiOperation({
+    summary: 'Get consent records for the current user (NDPA 2023)',
+  })
   async getMyConsentRecords() {
     const ctx = getRequestContext();
-    const userId = ctx.actor.replace("user:", "");
+    const userId = ctx.actor.replace('user:', '');
     return this.userService.listMyConsentRecords(userId);
   }
 
   // ── Right to erasure (JWT required) ──────────────────────────────────────
-  @Post("users/me/request-erasure")
+  @Post('users/me/request-erasure')
   @HttpCode(HttpStatus.ACCEPTED)
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: "Submit a right-to-erasure request under NDPA 2023",
+    summary: 'Submit a right-to-erasure request under NDPA 2023',
     description:
-      "Flags the account for PII erasure review. Does not delete immediately. " +
-      "Admin approval required. Invoice records are not affected.",
+      'Flags the account for PII erasure review. Does not delete immediately. ' +
+      'Admin approval required. Invoice records are not affected.',
   })
   async requestErasure() {
     const ctx = getRequestContext();
-    const userId = ctx.actor.replace("user:", "");
+    const userId = ctx.actor.replace('user:', '');
     const user = await this.userService.getUser(userId);
     return this.userService.requestErasure(userId, ctx.tenantId, user.email);
   }

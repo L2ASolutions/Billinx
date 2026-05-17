@@ -1,15 +1,15 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { AppAdapter } from "../app-adapter.interface";
+import { Injectable, Logger } from '@nestjs/common';
+import { AppAdapter } from '../app-adapter.interface';
 import {
   SubmissionRequest,
   SubmissionResult,
-} from "../../../../../packages/types/submission";
-import * as crypto from "crypto";
+} from '../../../../../packages/types/submission';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class MockAdapter implements AppAdapter {
-  readonly adapterKey = "mock";
-  readonly adapterName = "Mock FIRS Adapter (Sandbox)";
+  readonly adapterKey = 'mock';
+  readonly adapterName = 'Mock FIRS Adapter (Sandbox)';
 
   private readonly logger = new Logger(MockAdapter.name);
 
@@ -31,9 +31,9 @@ export class MockAdapter implements AppAdapter {
       );
       return {
         success: false,
-        errorCode: "FIRS-ERR-4021",
+        errorCode: 'FIRS-ERR-4021',
         errorMessage:
-          "Invalid or unregistered Buyer TIN. The TIN provided does not match any registered taxpayer in the FIRS database.",
+          'Invalid or unregistered Buyer TIN. The TIN provided does not match any registered taxpayer in the FIRS database.',
         retryable: false,
       };
     }
@@ -53,24 +53,24 @@ export class MockAdapter implements AppAdapter {
       csid,
       qrCodeBase64,
       rawResponse: {
-        status: "ACCEPTED",
+        status: 'ACCEPTED',
         firsIrn: firsConfirmedIrn,
         csid,
         timestamp: new Date().toISOString(),
-        accessPoint: "MockAdapter/Sandbox",
+        accessPoint: 'MockAdapter/Sandbox',
       },
     };
   }
 
   async checkStatus(
     platformIrn: string,
-    tenantCredential: Record<string, unknown>,
+    _tenantCredential: Record<string, unknown>,
   ): Promise<SubmissionResult> {
     await this.delay(300);
     return {
       success: true,
       firsConfirmedIrn: this.generateFirsIrn(platformIrn),
-      rawResponse: { status: "ACCEPTED" },
+      rawResponse: { status: 'ACCEPTED' },
     };
   }
 
@@ -80,15 +80,15 @@ export class MockAdapter implements AppAdapter {
   }
 
   private generateFirsIrn(platformIrn: string): string {
-    const parts = platformIrn.split("-");
-    const tin = parts[0] ?? "UNK";
-    const date = parts[1] ?? "20260101";
-    const uid = crypto.randomBytes(4).toString("hex").toUpperCase();
+    const parts = platformIrn.split('-');
+    const tin = parts[0] ?? 'UNK';
+    const date = parts[1] ?? '20260101';
+    const uid = crypto.randomBytes(4).toString('hex').toUpperCase();
     return `NGA-MBS-${date.substring(0, 4)}-${date.substring(4, 6)}-${date.substring(6, 8)}-${tin}-${uid}`;
   }
 
   private generateCsid(): string {
-    return `SHA256:${crypto.randomBytes(32).toString("hex")}`;
+    return `SHA256:${crypto.randomBytes(32).toString('hex')}`;
   }
 
   private generateMockQrCode(firsIrn: string): string {
@@ -96,7 +96,7 @@ export class MockAdapter implements AppAdapter {
     // For sandbox we return a base64 placeholder
     return Buffer.from(
       `BILLINX_QR|${firsIrn}|${new Date().toISOString()}`,
-    ).toString("base64");
+    ).toString('base64');
   }
 
   private delay(ms: number): Promise<void> {
