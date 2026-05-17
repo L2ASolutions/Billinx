@@ -39,7 +39,10 @@ export class ProductCatalogService {
       where.isActive = filters.isActive === 'true';
     }
     if (filters.category) {
-      where.productCategory = { contains: filters.category, mode: 'insensitive' };
+      where.productCategory = {
+        contains: filters.category,
+        mode: 'insensitive',
+      };
     }
     if (filters.search) {
       where.OR = [
@@ -54,7 +57,10 @@ export class ProductCatalogService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return { data: products.map((p: any) => this.mapProduct(p)), total: products.length };
+    return {
+      data: products.map((p: any) => this.mapProduct(p)),
+      total: products.length,
+    };
   }
 
   async updateProduct(id: string, tenantId: string, data: Record<string, any>) {
@@ -67,13 +73,21 @@ export class ProductCatalogService {
       where: { id },
       data: {
         name: data.name ?? existing.name,
-        description: data.description !== undefined ? data.description : existing.description,
+        description:
+          data.description !== undefined
+            ? data.description
+            : existing.description,
         hsnCode: data.hsnCode !== undefined ? data.hsnCode : existing.hsnCode,
-        productCategory: data.productCategory !== undefined ? data.productCategory : existing.productCategory,
-        unitPrice: data.unitPrice !== undefined ? data.unitPrice : existing.unitPrice,
+        productCategory:
+          data.productCategory !== undefined
+            ? data.productCategory
+            : existing.productCategory,
+        unitPrice:
+          data.unitPrice !== undefined ? data.unitPrice : existing.unitPrice,
         currency: data.currency ?? existing.currency,
         taxCategoryId: data.taxCategoryId ?? existing.taxCategoryId,
-        isActive: data.isActive !== undefined ? data.isActive : existing.isActive,
+        isActive:
+          data.isActive !== undefined ? data.isActive : existing.isActive,
       },
     });
     return this.mapProduct(updated);

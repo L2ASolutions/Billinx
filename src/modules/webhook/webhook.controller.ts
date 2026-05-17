@@ -11,7 +11,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { WebhookService } from './services/webhook.service';
 import { ApiKeyGuard } from '../identity/guards/api-key.guard';
 import { getRequestContext } from '../../shared/context/request-context';
@@ -73,7 +78,11 @@ export class WebhookController {
 
   @Get('deliveries')
   @ApiOperation({ summary: 'List webhook deliveries' })
-  @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'DELIVERED', 'FAILED', 'DEAD_LETTERED'] })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['PENDING', 'DELIVERED', 'FAILED', 'DEAD_LETTERED'],
+  })
   async listDeliveries(@Query('status') status?: string) {
     const { tenantId } = getRequestContext();
     return this.webhookService.listDeliveries(tenantId, status);

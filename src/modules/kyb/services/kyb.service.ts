@@ -19,7 +19,9 @@ function levenshtein(a: string, b: string): number {
   if (a.length === 0) return b.length;
   if (b.length === 0) return a.length;
   const dp: number[][] = Array.from({ length: a.length + 1 }, (_, i) =>
-    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
+    Array.from({ length: b.length + 1 }, (_, j) =>
+      i === 0 ? j : j === 0 ? i : 0,
+    ),
   );
   for (let i = 1; i <= a.length; i++) {
     for (let j = 1; j <= b.length; j++) {
@@ -54,8 +56,10 @@ function riskFromScore(score: number): {
   riskScore: 'GREEN' | 'AMBER' | 'RED';
   nameMatchResult: string;
 } {
-  if (score >= 90) return { riskScore: 'GREEN', nameMatchResult: 'HIGH_CONFIDENCE' };
-  if (score >= 70) return { riskScore: 'AMBER', nameMatchResult: 'PARTIAL_MATCH' };
+  if (score >= 90)
+    return { riskScore: 'GREEN', nameMatchResult: 'HIGH_CONFIDENCE' };
+  if (score >= 70)
+    return { riskScore: 'AMBER', nameMatchResult: 'PARTIAL_MATCH' };
   return { riskScore: 'RED', nameMatchResult: 'LOW_CONFIDENCE' };
 }
 
@@ -173,11 +177,17 @@ export class KybService {
       const cacStatus: string =
         cacData.status ?? cacData.companyStatus ?? cacData.company_status ?? '';
       const cacRegistrationDate: string =
-        cacData.registrationDate ?? cacData.registration_date ?? cacData.rcDate ?? '';
+        cacData.registrationDate ??
+        cacData.registration_date ??
+        cacData.rcDate ??
+        '';
       const cacDirectors: any =
         cacData.directors ?? cacData.proprietors ?? cacData.partners ?? [];
 
-      const nameScore = computeNameMatchScore(request.companyName, cacCompanyName);
+      const nameScore = computeNameMatchScore(
+        request.companyName,
+        cacCompanyName,
+      );
       const { riskScore, nameMatchResult } = riskFromScore(nameScore);
       const riskReasons: string[] = [];
 

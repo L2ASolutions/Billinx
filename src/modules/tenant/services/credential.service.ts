@@ -1,7 +1,7 @@
-import { Injectable, Logger } from "@nestjs/common";
-import * as crypto from "crypto";
+import { Injectable, Logger } from '@nestjs/common';
+import * as crypto from 'crypto';
 
-const ALGORITHM = "aes-256-gcm";
+const ALGORITHM = 'aes-256-gcm';
 const KEY_LENGTH = 32;
 const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
@@ -12,7 +12,7 @@ export class CredentialService {
 
   private deriveKey(masterKey: Buffer, tenantId: string): Buffer {
     return crypto
-      .createHmac("sha256", masterKey)
+      .createHmac('sha256', masterKey)
       .update(tenantId)
       .digest()
       .slice(0, KEY_LENGTH);
@@ -28,7 +28,7 @@ export class CredentialService {
     const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
 
     const encrypted = Buffer.concat([
-      cipher.update(plaintext, "utf8"),
+      cipher.update(plaintext, 'utf8'),
       cipher.final(),
       cipher.getAuthTag(),
     ]);
@@ -55,7 +55,7 @@ export class CredentialService {
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
     decipher.setAuthTag(authTag);
 
-    return decipher.update(ciphertext) + decipher.final("utf8");
+    return decipher.update(ciphertext) + decipher.final('utf8');
   }
 
   encryptCredential(
