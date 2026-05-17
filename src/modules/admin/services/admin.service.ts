@@ -16,6 +16,7 @@ import {
 import { RedisService } from "../../../shared/redis/redis.service";
 import { EmailService } from "../../../shared/email/email.service";
 import { ConsentService } from "../../consent/consent.service";
+import { submissionQueue } from "../../submission/queues/submission.queue";
 import * as bcrypt from "bcrypt";
 import * as jwt from "jsonwebtoken";
 
@@ -446,6 +447,94 @@ async listAccessRequests(status?: string): Promise<any[]> {
       secret,
       { expiresIn: ACCESS_TOKEN_TTL },
     );
+  }
+
+  // ── Metrics ───────────────────────────────────────────────────────────────
+  async getMetrics() {
+    const now = new Date();
+
+    const todayMidnight = new Date(now);
+    todayMidnight.setHours(0, 0, 0, 0);
+
+    const monday = new Date(now);
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    monday.setHours(0, 0, 0, 0);
+
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const [
+      todayTotal, todayAccepted,
+      weekTotal, weekAccepted,
+      monthTotal, monthAccepted,
+      activeTenants,
+      recentErrors,
+      totalDeliveries24h, deliveredDeliveries24h,
+    ] = await this.prisma.asAdmin(async (tx) => {
+      return Promise.all([
+        tx.invoice.count({ where: { createdAt: { gte: todayMidnight } } }),
+        tx.invoice.count({ where: { createdAt: { gte: todayMidnight }, status: "ACCEPTED" } }),
+        tx.invoice.count({ where: { createdAt: { gte: monday } } }),
+        tx.invoice.count({ where: { createdAt: { gte: monday }, status: "ACCEPTED" } }),
+        tx.invoice.count({ where: { createdAt: { gte: monthStart } } }),
+        tx.invoice.count({ where: { createdAt: { gte: monthStart }, status: "ACCEPTED" } }),
+        tx.tenant.count({ where: { isActive: true } }),
+        tx.systemError.count({ where: { occurredAt: { gte: yesterday } } }),
+        tx.webhookDelivery.count({ where: { createdAt: { gte: yesterday } } }),
+        tx.webhookDelivery.count({ where: { createdAt: { gte: yesterday }, status: "DELIVERED" } }),
+      ]);
+    });
+
+    return {
+      invoices: {
+        today: { total: todayTotal, accepted: todayAccepted, acceptanceRate: todayTotal > 0 ? Math.round((todayAccepted / todayTotal) * 100) : 0 },
+        week: { total: weekTotal, accepted: weekAccepted, acceptanceRate: weekTotal > 0 ? Math.round((weekAccepted / weekTotal) * 100) : 0 },
+        month: { total: monthTotal, accepted: monthAccepted, acceptanceRate: monthTotal > 0 ? Math.round((monthAccepted / monthTotal) * 100) : 0 },
+      },
+      activeTenants,
+      errors: { last24h: recentErrors },
+      webhooks: {
+        deliveriesLast24h: totalDeliveries24h,
+        successfulLast24h: deliveredDeliveries24h,
+        successRate: totalDeliveries24h > 0 ? Math.round((deliveredDeliveries24h / totalDeliveries24h) * 100) : 0,
+      },
+      generatedAt: now.toISOString(),
+    };
+  }
+
+  // ── Queue monitoring ──────────────────────────────────────────────────────
+  async getQueueStatus() {
+    try {
+      const counts = await submissionQueue.getJobCounts();
+      return {
+        waiting: counts.waiting ?? 0,
+        active: counts.active ?? 0,
+        completed: counts.completed ?? 0,
+        failed: counts.failed ?? 0,
+        delayed: counts.delayed ?? 0,
+      };
+    } catch (err: any) {
+      this.logger.error(`Queue status failed: ${err.message}`);
+      return { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, error: err.message };
+    }
+  }
+
+  async retryFailedJobs() {
+    try {
+      const failedJobs = await submissionQueue.getFailed();
+      let retried = 0;
+      for (const job of failedJobs) {
+        await job.retry();
+        retried++;
+      }
+      this.logger.log(`Retried ${retried} failed submission jobs`);
+      return { retried };
+    } catch (err: any) {
+      this.logger.error(`Retry failed jobs error: ${err.message}`);
+      return { retried: 0, error: err.message };
+    }
   }
 
   private mapToResponse(admin: any): AdminUserResponse {
