@@ -19,7 +19,7 @@ import {
   ValidationResponse,
 } from "../../../../packages/types/invoice";
 import { XmlInvoiceBuilder } from "./xml-invoice.builder";
-
+import { checkRole } from "../../../shared/utils/role-checker";
 import { SubmissionService } from "../../submission/services/submission.service";
 
 @Injectable()
@@ -331,7 +331,9 @@ export class InvoiceService {
     tenantId: string,
     actor: string,
     request: CancelInvoiceRequest,
+    actorRoles: string[] = [],
   ): Promise<InvoiceResponse> {
+    checkRole(actorRoles, "ADMIN");
     const invoice = await this.invoiceRepository.findById(id);
     if (!invoice || invoice.tenantId !== tenantId) {
       throw new NotFoundException(`Invoice ${id} not found`);
