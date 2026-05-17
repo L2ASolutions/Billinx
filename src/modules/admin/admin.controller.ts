@@ -10,6 +10,7 @@ import {
   HttpStatus,
   UseGuards,
   Req,
+  Delete,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -230,5 +231,23 @@ export class AdminController {
   @ApiOperation({ summary: "Re-queue all failed submission jobs" })
   async retryFailedJobs() {
     return this.adminService.retryFailedJobs();
+  }
+
+  // ── Data retention ────────────────────────────────────────────────────────
+  @Get("retention/stats")
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get data retention statistics" })
+  async getRetentionStats() {
+    return this.adminService.getRetentionStats();
+  }
+
+  @Post("retention/run")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Manually trigger data retention archiving" })
+  async runRetention() {
+    return this.adminService.runRetention();
   }
 }

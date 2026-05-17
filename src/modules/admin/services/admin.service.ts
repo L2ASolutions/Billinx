@@ -17,6 +17,7 @@ import { RedisService } from "../../../shared/redis/redis.service";
 import { EmailService } from "../../../shared/email/email.service";
 import { ConsentService } from "../../consent/consent.service";
 import { submissionQueue } from "../../submission/queues/submission.queue";
+import { RetentionService } from "../../../shared/retention/retention.service";
 import * as bcrypt from "bcrypt";
 import * as jwt from "jsonwebtoken";
 
@@ -32,6 +33,7 @@ export class AdminService {
     private readonly redisService: RedisService,
     private readonly emailService: EmailService,
     private readonly consentService: ConsentService,
+    private readonly retentionService: RetentionService,
   ) {}
 
   // ── Bootstrap first admin user ────────────────────────────────────────────
@@ -536,6 +538,24 @@ async listAccessRequests(status?: string): Promise<any[]> {
       return { retried: 0, error: err.message };
     }
   }
+
+  // ── Data retention ────────────────────────────────────────────────────────
+  async getRetentionStats() {
+    return this.retentionService.getRetentionStats();
+  }
+
+  async runRetention() {
+    const [invoices, events] = await Promise.all([
+      this.retentionService.archiveOldInvoices(),
+      this.retentionService.archiveOldActivityEvents(),
+    ]);
+    return {
+      invoicesArchived: invoices.archived,
+      activityEventsArchived: events.archived,
+      ranAt: new Date().toISOString(),
+    };
+  }
+
 
   private mapToResponse(admin: any): AdminUserResponse {
     return {
