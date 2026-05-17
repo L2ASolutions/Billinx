@@ -43,7 +43,9 @@ billinx/
 │   │   ├── activity/      Activity events + system error tracking
 │   │   ├── kyb/           Know Your Business (CAC verification + risk scoring)
 │   │   ├── admin/         L2A Solutions staff portal
-│   │   └── consent/       NDPA 2023 consent + right-to-erasure
+│   │   ├── consent/       NDPA 2023 consent + right-to-erasure
+│   │   ├── product-catalog/ Tenant product catalog; /v1/products CRUD + line-item formatter
+│   │   └── export/        Compliance CSV/JSON/monthly export + platform-wide admin export
 │   ├── infrastructure/
 │   │   ├── database/      PrismaService (shared DB client, RLS middleware)
 │   │   └── secrets/       SecretsService (AWS Secrets Manager, 5-min cache)
@@ -51,6 +53,7 @@ billinx/
 │       ├── context/       CLS request context (tenantId, actor, requestId)
 │       ├── email/         AWS SES transactional email
 │       ├── interceptors/  AuditLog, Idempotency, TenantRateLimit
+│       └── retention/     RetentionService — daily cron archiving (7yr invoices, 2yr events)
 │       ├── filters/       GlobalExceptionFilter → SystemError table
 │       └── guards/        AuthRateLimitGuard
 ├── prisma/
@@ -183,6 +186,9 @@ billinx/
 20260516000000_add_kyb
 20260516010000_add_consent
 20260516020000_add_nrs_invoice_fields
+20260517130000_add_data_retention_fields
+20260517140000_add_audit_hash_chaining
+20260517150000_add_product_catalog
 ```
 
 Run pending migrations: `npx prisma migrate deploy`
@@ -320,6 +326,10 @@ Two workflows (requires `workflow` scope on PAT to push):
 | `docs/nrs-api-spec.md` | NRS E-Invoicing API spec; static header auth (`x-api-key` / `x-api-secret`) |
 | `docs/nrs-invoice-schema.md` | Complete NRS invoice JSON field reference |
 | `docs/interswitch-api-spec.md` | Interswitch/NRS platform roles and integration flow |
+| `docs/quickstart.md` | Developer quickstart with curl examples (6 steps to first FIRS invoice) |
+| `docs/postman-setup.md` | Postman import and environment setup guide |
+| `docs/billinx-api.postman_collection.json` | Postman Collection v2.1 with all endpoint groups |
+| `docs/api-changelog.md` | API versioning policy, deprecation process, v1 release history |
 
 ---
 
@@ -332,3 +342,42 @@ Two workflows (requires `workflow` scope on PAT to push):
 - **Error handling**: throw NestJS exceptions (`NotFoundException`, `ForbiddenException`, etc.); `GlobalExceptionFilter` formats and logs them
 - **Secrets in prod**: all secrets come from AWS Secrets Manager via `SecretsService`; never hardcode in production
 - **Idempotency**: all mutating endpoints should accept an `Idempotency-Key` header; the interceptor handles replay automatically
+
+---
+
+## New Modules (May 2026)
+
+### product-catalog (`src/modules/product-catalog/`)
+- Tenant product catalog for pre-loading line item data into invoices
+- CRUD endpoints: `POST/GET/PATCH/DELETE /v1/products`
+- `GET /v1/products/:id/as-line-item` — returns product as ready-to-use invoice line item
+- Tenant-scoped (JwtGuard); search by name/description/HSN code, filter by category or isActive
+
+### export (`src/modules/export/`)
+- Compliance export: `GET /v1/invoices/export/csv?startDate=&endDate=`
+- JSON export: `GET /v1/invoices/export/json?startDate=&endDate=`
+- Monthly report: `GET /v1/invoices/export/monthly?year=&month=`
+- Admin platform-wide CSV: `GET /v1/admin/export/platform-csv?startDate=&endDate=`
+- Redis rate limit: 60-second cooldown per tenant per export request
+
+### retention (`src/shared/retention/`)
+- `RetentionService` — daily cron at 02:00 UTC
+- Archives invoices older than 7 years (`isArchived = true`, sets `archivedAt`)
+- Archives activity events older than 2 years (`isArchived = true`)
+- Admin endpoints: `GET /v1/admin/retention/stats`, `POST /v1/admin/retention/run`
+- Requires `ScheduleModule.forRoot()` in AppModule (from `@nestjs/schedule`)
+
+### Hash-chained audit log (ActivityEvent)
+- Every `ActivityEvent` now stores `entryHash` (SHA-256) and `previousHash`
+- Chain: `SHA256(tenantId|eventType|actor|occurredAt|payload|previousHash)`
+- First event per tenant uses `"GENESIS"` as previousHash
+- Verification: `GET /v1/admin/audit/verify` recomputes and validates entire chain
+
+### Enhanced health check (`GET /health`)
+- Returns database latency (ms), Redis latency (ms), submission queue depth, and process uptime
+- `status: "ok"` when both DB and Redis are connected; `"degraded"` otherwise
+
+### Monitoring endpoints
+- `GET /v1/admin/metrics` — invoice counts (today/week/month), acceptance rates, active tenants, system errors, webhook delivery rates
+- `GET /v1/admin/queue/status` — BullMQ job counts (waiting, active, completed, failed, delayed)
+- `POST /v1/admin/queue/retry-failed` — re-queues all failed submission jobs
