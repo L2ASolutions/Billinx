@@ -120,11 +120,12 @@ ADMIN_HASH=$(node -e "const bcrypt=require('bcrypt'); bcrypt.hash('${ADMIN_KEY}'
 ./scripts/update-secrets.sh billinx/production/aws-ses-secret "your-ses-secret-key"
 
 # JWT RSA keys (for SecretsService.getJwtPrivateKey())
+# See "JWT RSA Key Pair" section below for full details
 openssl genrsa -out /tmp/jwt_private.pem 2048
 openssl rsa -in /tmp/jwt_private.pem -pubout -out /tmp/jwt_public.pem
 ./scripts/update-secrets.sh billinx/production/jwt-private-key "$(cat /tmp/jwt_private.pem)"
 ./scripts/update-secrets.sh billinx/production/jwt-public-key  "$(cat /tmp/jwt_public.pem)"
-rm /tmp/jwt_private.pem /tmp/jwt_public.pem  # Never leave key files on disk
+rm -f /tmp/jwt_private.pem /tmp/jwt_public.pem  # Never leave key files on disk
 
 # CAC API key
 ./scripts/update-secrets.sh billinx/production/cac-api-key "your-cac-bearer-token"
@@ -411,3 +412,72 @@ When traffic grows, scale these in `terraform.tfvars` and re-apply:
 | RDS `multi_az` | `false` | `true` (edit in rds/main.tf) |
 
 Add Auto Scaling to ECS by adding `aws_appautoscaling_target` and `aws_appautoscaling_policy` resources to the ECS module.
+
+---
+
+## JWT RSA Key Pair
+
+Billinx uses RS256 (RSA + SHA-256) for JWT signing. The private key signs tokens; the public key verifies them. **The private key is a production secret — treat it like a database password.**
+
+### Generating the key pair
+
+```bash
+# Generate a 2048-bit RSA private key
+openssl genrsa -out private.key 2048
+
+# Extract the public key
+openssl rsa -in private.key -pubout -out public.key
+
+# Verify
+openssl rsa -in private.key -check -noout   # "RSA key ok"
+```
+
+### Local development
+
+Set the full PEM content in your `.env` file. Use `\n` for newlines or a multiline string:
+
+```bash
+# In .env — paste the full content of private.key
+JWT_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEA...
+...
+-----END RSA PRIVATE KEY-----"
+
+# In .env — paste the full content of public.key
+JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+...
+-----END PUBLIC KEY-----"
+```
+
+Never commit `private.key` or `public.key` — `.gitignore` blocks `*.key` and `*.pem`.
+
+### Storing in AWS Secrets Manager (production)
+
+```bash
+# Store the full PEM content as a single Secrets Manager secret
+aws secretsmanager put-secret-value \
+  --secret-id billinx/production/jwt-private-key \
+  --secret-string "$(cat private.key)" \
+  --region af-south-1
+
+aws secretsmanager put-secret-value \
+  --secret-id billinx/production/jwt-public-key \
+  --secret-string "$(cat public.key)" \
+  --region af-south-1
+
+# Delete local key files immediately after uploading
+rm -f private.key public.key
+```
+
+The `SecretsService` fetches these at startup and caches them for 5 minutes. The ECS task environment variables `JWT_PRIVATE_KEY_SECRET_ID` and `JWT_PUBLIC_KEY_SECRET_ID` tell it which Secrets Manager secrets to fetch.
+
+### Key rotation
+
+1. Generate a new key pair (commands above)
+2. Upload the new public key to Secrets Manager — existing tokens continue to work until they expire (access tokens: 15 min)
+3. Upload the new private key — all new tokens are signed with the new key
+4. Wait 15 minutes for all old tokens to expire naturally
+5. Delete local key files
+
+No redeployment needed — the `SecretsService` cache expires every 5 minutes and picks up the new keys automatically.

@@ -53,7 +53,7 @@ export class ApiKeyGuard implements CanActivate {
       tier: tenant.rateLimitTier as RateLimitTier,
       actor: `apikey:${keyId}`,
       actorType: "apikey",
-      requestId: crypto.randomUUID(),
+      requestId: (request.headers["x-request-id"] as string) ?? crypto.randomUUID(),
       isAdmin: false,
     };
 

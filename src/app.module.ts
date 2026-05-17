@@ -1,5 +1,6 @@
-import { Module } from "@nestjs/common";
+import { Module, NestModule, MiddlewareConsumer } from "@nestjs/common";
 import { APP_INTERCEPTOR, APP_FILTER } from "@nestjs/core";
+import { CorrelationIdMiddleware } from "./shared/middleware/correlation-id.middleware";
 import { EventEmitterModule } from "@nestjs/event-emitter";
 import { RedisService } from "./shared/redis/redis.service";
 import { TenantRateLimitInterceptor } from "./shared/interceptors/tenant-rate-limit.interceptor";
@@ -59,4 +60,8 @@ import { GlobalExceptionFilter } from "./shared/filters/global-exception.filter"
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(CorrelationIdMiddleware).forRoutes("*");
+  }
+}
