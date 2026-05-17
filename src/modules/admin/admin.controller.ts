@@ -283,4 +283,15 @@ export class AdminController {
     }
     return this.adminService.exportPlatformCSV(startDate, endDate);
   }
+
+  // ── Audit chain verification ───────────────────────────────────────────────
+  @Get('audit/verify')
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Verify the integrity of the hash-chained immutable audit log',
+  })
+  async verifyAuditChain() {
+    return this.adminService.verifyAuditChain();
+  }
 }
