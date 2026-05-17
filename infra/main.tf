@@ -8,14 +8,13 @@ terraform {
     }
   }
 
-  # Remote state — configure before running terraform init
-  # backend "s3" {
-  #   bucket         = "billinx-terraform-state"
-  #   key            = "production/terraform.tfstate"
-  #   region         = "af-south-1"
-  #   encrypt        = true
-  #   dynamodb_table = "billinx-terraform-locks"
-  # }
+  backend "s3" {
+    bucket         = "billinx-terraform-state"
+    key            = "production/terraform.tfstate"
+    region         = "af-south-1"
+    encrypt        = true
+    dynamodb_table = "billinx-terraform-locks"
+  }
 }
 
 provider "aws" {

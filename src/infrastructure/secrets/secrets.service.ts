@@ -146,36 +146,34 @@ export class SecretsService implements OnModuleInit {
   // ── Development fallbacks ─────────────────────────────────────────────────
 
   private getDevFallback(secretId: string): string {
+    const devPrivateKey = process.env.JWT_PRIVATE_KEY ?? "";
+    const devPublicKey = process.env.JWT_PUBLIC_KEY ?? "";
+
+    if (!devPrivateKey && (secretId.includes("jwt-private-key") || secretId.includes("jwt/private-key"))) {
+      throw new Error(
+        `JWT_PRIVATE_KEY environment variable is required in development. ` +
+        `Generate a key pair with: openssl genrsa -out private.key 2048 && openssl rsa -in private.key -pubout -out public.key`,
+      );
+    }
+
     const fallbacks: Record<string, string> = {
-      "billinx/production/jwt-private-key": DEV_RSA_PRIVATE_KEY,
-      "billinx/production/jwt-public-key": DEV_RSA_PUBLIC_KEY,
-      "billinx/production/encryption-key": "0".repeat(64),
+      "billinx/production/jwt-private-key": devPrivateKey,
+      "billinx/production/jwt-public-key": devPublicKey,
+      "billinx/production/encryption-key": process.env.MASTER_ENCRYPTION_KEY ?? "0".repeat(64),
       "billinx/production/admin-api-key": "$2b$10$devplaceholderhashxxxxxxxxxxxxxxx",
       "billinx/production/admin-key-hash": "$2b$10$devplaceholderhashxxxxxxxxxxxxxxx",
       // Legacy secret names (backwards compat)
-      "billinx/jwt/private-key": DEV_RSA_PRIVATE_KEY,
-      "billinx/jwt/public-key": DEV_RSA_PUBLIC_KEY,
-      "billinx/encryption/master-key": "0".repeat(64),
+      "billinx/jwt/private-key": devPrivateKey,
+      "billinx/jwt/public-key": devPublicKey,
+      "billinx/encryption/master-key": process.env.MASTER_ENCRYPTION_KEY ?? "0".repeat(64),
       "billinx/admin/key-hash": "$2b$10$devplaceholderhashxxxxxxxxxxxxxxx",
     };
 
     const value = fallbacks[secretId];
-    if (!value) {
+    if (value === undefined) {
       this.logger.debug(`No dev fallback for secret "${secretId}" — returning placeholder`);
       return "dev-fallback-secret";
     }
     return value;
   }
 }
-
-// Development-only RSA key pair (2048-bit, not used in production)
-const DEV_RSA_PRIVATE_KEY = `-----BEGIN RSA PRIVATE KEY-----
-***REDACTED-RSA-PLACEHOLDER***
-***REDACTED-RSA-PLACEHOLDER***
-***REDACTED-RSA-PLACEHOLDER***
------END RSA PRIVATE KEY-----`;
-
-const DEV_RSA_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-***REDACTED-RSA-PLACEHOLDER***
-***REDACTED-RSA-PLACEHOLDER***
------END PUBLIC KEY-----`;
