@@ -34,7 +34,7 @@ export class JwtGuard implements CanActivate {
       tier: payload.tier,
       actor: `user:${payload.sub}`,
       actorType: "user",
-      requestId: crypto.randomUUID(),
+      requestId: (request.headers["x-request-id"] as string) ?? crypto.randomUUID(),
       isAdmin: payload.role === "admin",
     };
 

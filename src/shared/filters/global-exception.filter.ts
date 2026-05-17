@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 import { Response, Request } from "express";
 import { getOptionalRequestContext } from "../context/request-context";
+import * as Sentry from "@sentry/nestjs";
 
 export interface ErrorResponse {
   error: string;
@@ -49,6 +50,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         `Unhandled exception: ${exception.message}`,
         exception.stack,
       );
+
+      Sentry.captureException(exception, {
+        extra: {
+          path: request.path,
+          method: request.method,
+          requestId: requestCtx?.requestId,
+          tenantId: requestCtx?.tenantId,
+        },
+      });
 
       // Log to system errors table asynchronously
       this.trackSystemError(exception, request, requestCtx);
