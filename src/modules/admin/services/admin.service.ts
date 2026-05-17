@@ -20,6 +20,7 @@ import { submissionQueue } from '../../submission/queues/submission.queue';
 import { RetentionService } from '../../../shared/retention/retention.service';
 import { ExportService } from '../../export/export.service';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import * as jwt from 'jsonwebtoken';
 
 const BCRYPT_ROUNDS = 12;
@@ -602,6 +603,48 @@ export class AdminService {
   // ── Export ───────────────────────────────────────────────────────────────
   async exportPlatformCSV(startDate: string, endDate: string): Promise<string> {
     return this.exportService.exportPlatformCSV(startDate, endDate);
+  }
+
+  // ── Audit chain verification ──────────────────────────────────────────────
+  async verifyAuditChain(): Promise<{ valid: boolean; totalEvents: number; brokenAt: string | null }> {
+    const events = await this.prisma.asAdmin(async (tx) => {
+      return (tx as any).activityEvent.findMany({
+        orderBy: { occurredAt: 'asc' },
+        select: {
+          id: true,
+          tenantId: true,
+          eventType: true,
+          actor: true,
+          occurredAt: true,
+          payload: true,
+          entryHash: true,
+          previousHash: true,
+        },
+      });
+    });
+
+    let brokenAt: string | null = null;
+
+    for (let i = 0; i < events.length; i++) {
+      const event = events[i];
+      if (!event.entryHash) continue;
+
+      const previousHash = event.previousHash ?? 'GENESIS';
+      const payloadStr = JSON.stringify(event.payload);
+      const hashInput = `${event.tenantId}|${event.eventType}|${event.actor}|${new Date(event.occurredAt).toISOString()}|${payloadStr}|${previousHash}`;
+      const expectedHash = crypto.createHash('sha256').update(hashInput).digest('hex');
+
+      if (expectedHash !== event.entryHash) {
+        brokenAt = event.id;
+        break;
+      }
+    }
+
+    return {
+      valid: brokenAt === null,
+      totalEvents: events.length,
+      brokenAt,
+    };
   }
 
   private mapToResponse(admin: any): AdminUserResponse {

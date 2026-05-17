@@ -332,9 +332,11 @@ model ActivityEvent {
   userAgent   String?
   entityType  String?
   entityId    String?
-  payload     Json
-  occurredAt  DateTime          @default(now())
-  isArchived  Boolean           @default(false)
+  payload      Json
+  occurredAt   DateTime @default(now())
+  isArchived   Boolean  @default(false)
+  entryHash    String?
+  previousHash String?
 
   tenant      Tenant?           @relation(fields: [tenantId], references: [id])
 
