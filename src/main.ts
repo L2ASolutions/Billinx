@@ -52,6 +52,9 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup("docs", app, document);
+  app.getHttpAdapter().get('/openapi.json', (_req: any, res: any) => {
+    res.json(document);
+  });
 }
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
