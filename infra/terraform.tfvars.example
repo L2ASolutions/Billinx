@@ -1,0 +1,44 @@
+# ── Required — must be set before running terraform apply ─────────────────────
+
+# Your 12-digit AWS account ID
+aws_account_id = "123456789012"
+
+# Domain name the API will be served on
+domain_name = "api.billinx.ng"
+
+# ACM certificate ARN — must be in af-south-1
+# Request via: AWS Console → Certificate Manager → Request → Add api.billinx.ng
+certificate_arn = "arn:aws:acm:af-south-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# RDS master password (16+ chars, no @, %, / characters)
+db_password = "CHANGE_ME_strong_password_here"
+
+# Redis AUTH token (16-128 chars, alphanumeric + most symbols, no @)
+redis_auth_token = "CHANGE_ME_redis_auth_token_here"
+
+# ── Optional overrides (defaults shown) ───────────────────────────────────────
+
+aws_region  = "af-south-1"
+app_name    = "billinx"
+environment = "production"
+
+# Email for CloudWatch alarm notifications (leave empty to disable email alerts)
+alert_email = "devops@l2asolutions.com"
+
+# ── Networking ────────────────────────────────────────────────────────────────
+
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
+availability_zones   = ["af-south-1a", "af-south-1b"]
+
+# ── Compute (MVP sizing — scale up when needed) ───────────────────────────────
+
+db_instance_class = "db.t3.micro"
+redis_node_type   = "cache.t3.micro"
+desired_count     = 1
+
+# ── Deployment ────────────────────────────────────────────────────────────────
+
+# Initial deploy uses "latest"; CI/CD overrides this with git SHA
+image_tag = "latest"
