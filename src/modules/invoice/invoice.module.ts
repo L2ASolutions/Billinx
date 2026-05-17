@@ -16,6 +16,8 @@ import { JwtGuard } from "../identity/guards/jwt.guard";
 import { SubmissionService } from "../submission/services/submission.service";
 import { MockAdapter } from "../submission/adapters/mock/mock.adapter";
 import { InterswitchAdapter } from "../submission/adapters/interswitch/interswitch.adapter";
+import { ExportService } from "../export/export.service";
+import { RedisService } from "../../shared/redis/redis.service";
 
 @Module({
   imports: [EventEmitterModule],
@@ -36,6 +38,8 @@ import { InterswitchAdapter } from "../submission/adapters/interswitch/interswit
     SubmissionService,
     MockAdapter,
     InterswitchAdapter,
+    ExportService,
+    RedisService,
   ],
   exports: [InvoiceService, InvoiceRepository],
 })

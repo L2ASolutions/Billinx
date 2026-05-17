@@ -27,6 +27,7 @@ import {
 } from "@nestjs/swagger";
 import { Request, Response } from "express";
 import { InvoiceService } from "./services/invoice.service";
+import { ExportService } from "../export/export.service";
 import { ApiKeyGuard } from "../identity/guards/api-key.guard";
 import { JwtGuard } from "../identity/guards/jwt.guard";
 import {
@@ -40,7 +41,10 @@ import {
 export class InvoiceController {
   private readonly logger = new Logger(InvoiceController.name);
 
-  constructor(private readonly invoiceService: InvoiceService) {}
+  constructor(
+    private readonly invoiceService: InvoiceService,
+    private readonly exportService: ExportService,
+  ) {}
 
   private getCtx(req: Request): any {
     return (req as any)._billinxContext;
@@ -151,6 +155,77 @@ export class InvoiceController {
   async getInvoiceStats(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getInvoiceStats(ctx.tenantId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Export routes (static segments — must precede :id param routes)
+  // ---------------------------------------------------------------------------
+
+  @Get("export/csv")
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Export invoices as CSV for compliance reporting" })
+  @ApiQuery({ name: "startDate", required: true })
+  @ApiQuery({ name: "endDate", required: true })
+  async exportCSV(
+    @Req() req: Request,
+    @Query("startDate") startDate: string,
+    @Query("endDate") endDate: string,
+  ) {
+    const ctx = this.getCtx(req);
+    if (!startDate || !endDate) {
+      throw new BadRequestException("startDate and endDate are required");
+    }
+    const csv = await this.exportService.exportInvoicesCSV(
+      ctx.tenantId,
+      startDate,
+      endDate,
+    );
+    return csv;
+  }
+
+  @Get("export/json")
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Export invoices as JSON in NRS canonical format" })
+  @ApiQuery({ name: "startDate", required: true })
+  @ApiQuery({ name: "endDate", required: true })
+  async exportJSON(
+    @Req() req: Request,
+    @Query("startDate") startDate: string,
+    @Query("endDate") endDate: string,
+  ) {
+    const ctx = this.getCtx(req);
+    if (!startDate || !endDate) {
+      throw new BadRequestException("startDate and endDate are required");
+    }
+    return this.exportService.exportInvoicesJSON(
+      ctx.tenantId,
+      startDate,
+      endDate,
+    );
+  }
+
+  @Get("export/monthly")
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get monthly invoice summary report" })
+  @ApiQuery({ name: "year", required: true, type: Number })
+  @ApiQuery({ name: "month", required: true, type: Number })
+  async exportMonthly(
+    @Req() req: Request,
+    @Query("year") year: string,
+    @Query("month") month: string,
+  ) {
+    const ctx = this.getCtx(req);
+    if (!year || !month) {
+      throw new BadRequestException("year and month are required");
+    }
+    return this.exportService.exportMonthlyReport(
+      ctx.tenantId,
+      Number(year),
+      Number(month),
+    );
   }
 
   // ---------------------------------------------------------------------------

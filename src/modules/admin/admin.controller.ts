@@ -10,7 +10,7 @@ import {
   HttpStatus,
   UseGuards,
   Req,
-  Delete,
+  BadRequestException,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -249,5 +249,22 @@ export class AdminController {
   @ApiOperation({ summary: "Manually trigger data retention archiving" })
   async runRetention() {
     return this.adminService.runRetention();
+  }
+
+  // ── Platform CSV export ────────────────────────────────────────────────────
+  @Get("export/platform-csv")
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Export all invoices across all tenants as CSV" })
+  @ApiQuery({ name: "startDate", required: true })
+  @ApiQuery({ name: "endDate", required: true })
+  async exportPlatformCSV(
+    @Query("startDate") startDate: string,
+    @Query("endDate") endDate: string,
+  ) {
+    if (!startDate || !endDate) {
+      throw new BadRequestException("startDate and endDate are required");
+    }
+    return this.adminService.exportPlatformCSV(startDate, endDate);
   }
 }
