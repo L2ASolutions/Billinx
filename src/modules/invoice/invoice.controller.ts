@@ -6,19 +6,26 @@ import {
   Body,
   Param,
   Query,
+  Headers,
   HttpCode,
   HttpStatus,
   UseGuards,
   Logger,
   Req,
+  Res,
+  Header,
+  BadRequestException,
 } from "@nestjs/common";
 import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
   ApiQuery,
+  ApiConsumes,
+  ApiProduces,
+  ApiHeader,
 } from "@nestjs/swagger";
-import { Request } from "express";
+import { Request, Response } from "express";
 import { InvoiceService } from "./services/invoice.service";
 import { ApiKeyGuard } from "../identity/guards/api-key.guard";
 import { JwtGuard } from "../identity/guards/jwt.guard";
@@ -38,6 +45,10 @@ export class InvoiceController {
   private getCtx(req: Request): any {
     return (req as any)._billinxContext;
   }
+
+  // ---------------------------------------------------------------------------
+  // JSON routes
+  // ---------------------------------------------------------------------------
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -65,6 +76,36 @@ export class InvoiceController {
   async validateInvoice(@Body() body: Record<string, any>) {
     return this.invoiceService.validateInvoice(body);
   }
+
+  // ---------------------------------------------------------------------------
+  // XML routes (static segments — must precede :id param routes)
+  // ---------------------------------------------------------------------------
+
+  @Post("from-xml")
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(ApiKeyGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Create invoice from NRS-compliant XML body" })
+  @ApiConsumes("application/xml")
+  async createInvoiceFromXml(
+    @Body() body: unknown,
+    @Req() req: Request,
+  ) {
+    if (typeof body !== "string" || !body.trim()) {
+      throw new BadRequestException("Request body must be a non-empty XML string");
+    }
+    const ctx = this.getCtx(req);
+    return this.invoiceService.createInvoiceFromXml(
+      ctx.tenantId,
+      ctx.environment,
+      ctx.actor,
+      body,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // List / stats
+  // ---------------------------------------------------------------------------
 
   @Get()
   @UseGuards(ApiKeyGuard)
@@ -112,13 +153,46 @@ export class InvoiceController {
     return this.invoiceService.getInvoiceStats(ctx.tenantId);
   }
 
+  // ---------------------------------------------------------------------------
+  // Single-invoice routes — :id param
+  // ---------------------------------------------------------------------------
+
   @Get(":id")
   @UseGuards(ApiKeyGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Get invoice by ID" })
-  async getInvoice(@Param("id") id: string, @Req() req: Request) {
+  @ApiOperation({
+    summary: "Get invoice by ID (JSON or XML via Accept header)",
+  })
+  @ApiHeader({
+    name: "Accept",
+    required: false,
+    description: "application/json (default) or application/xml",
+  })
+  @ApiProduces("application/json", "application/xml")
+  async getInvoice(
+    @Param("id") id: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Headers("accept") accept?: string,
+  ) {
     const ctx = this.getCtx(req);
+    if (accept?.includes("application/xml")) {
+      const xml = await this.invoiceService.exportAsXml(id, ctx.tenantId);
+      res.setHeader("Content-Type", "application/xml");
+      return xml;
+    }
     return this.invoiceService.getInvoice(id, ctx.tenantId);
+  }
+
+  @Get(":id/xml")
+  @UseGuards(ApiKeyGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get invoice as NRS-compliant XML" })
+  @Header("Content-Type", "application/xml")
+  @ApiProduces("application/xml")
+  async getInvoiceXml(@Param("id") id: string, @Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.exportAsXml(id, ctx.tenantId);
   }
 
   @Get(":id/status")
@@ -148,6 +222,10 @@ export class InvoiceController {
       body as any,
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Dashboard routes (JWT auth)
+  // ---------------------------------------------------------------------------
 
   @Post("dashboard")
   @HttpCode(HttpStatus.CREATED)
