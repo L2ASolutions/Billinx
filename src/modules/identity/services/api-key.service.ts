@@ -22,6 +22,14 @@ export class ApiKeyService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  private defaultExpiryDate(): Date | null {
+    const days = parseInt(process.env.API_KEY_DEFAULT_EXPIRY_DAYS ?? "365", 10);
+    if (!days || days <= 0) return null;
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+
   async createApiKey(
     tenantId: string,
     request: CreateApiKeyRequest,
@@ -42,7 +50,7 @@ export class ApiKeyService {
           keyPrefix,
           environment,
           name,
-          expiresAt: expiresAt ? new Date(expiresAt) : null,
+          expiresAt: expiresAt ? new Date(expiresAt) : this.defaultExpiryDate(),
         },
       });
     });

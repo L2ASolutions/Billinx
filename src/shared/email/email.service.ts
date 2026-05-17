@@ -353,4 +353,39 @@ export class EmailService {
 
     this.send(opts.to, `Invoice rejected by FIRS — ${opts.platformIrn}`, html);
   }
+
+  // ─── 8. Account locked ───────────────────────────────────────────────────────
+
+  sendAccountLocked(opts: {
+    to: string;
+    firstName: string;
+    lockoutMinutes: number;
+  }): void {
+    const html = baseLayout(
+      'Security alert — account locked',
+      `<div style="display:inline-block;background:#fff3cd;border:1px solid #ffc107;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
+        <span style="font-size:12px;font-weight:600;color:#856404;text-transform:uppercase;letter-spacing:0.5px;">&#9888; Security Alert</span>
+      </div>` +
+      h1(`Hi ${opts.firstName}, your account has been locked`) +
+      p(`Your Billinx account has been <strong>temporarily locked</strong> after 5 failed login attempts.`) +
+      `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+              style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;margin:0 0 20px;">
+        <tr><td style="padding:20px;">
+          <div style="margin-bottom:12px;">
+            <span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Unlock in</span><br />
+            <strong style="font-size:18px;color:#856404;">${opts.lockoutMinutes} minute${opts.lockoutMinutes !== 1 ? 's' : ''}</strong>
+          </div>
+          <div>
+            <span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">What to do</span><br />
+            <span style="font-size:14px;color:#444;">Wait ${opts.lockoutMinutes} minute${opts.lockoutMinutes !== 1 ? 's' : ''}, then try again with your correct password. If you forgot your password, use the reset link below.</span>
+          </div>
+        </td></tr>
+      </table>` +
+      ctaButton(`${APP_BASE_URL}/forgot-password`, 'Reset Password') +
+      divider() +
+      p('<strong>Was this not you?</strong> If you did not make these login attempts, your account may be under attack. Contact <a href="mailto:support@billinx.ng" style="color:' + BRAND_GREEN + ';">support@billinx.ng</a> immediately.'),
+    );
+
+    this.send(opts.to, 'Security alert — your Billinx account has been locked', html);
+  }
 }
