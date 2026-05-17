@@ -2,7 +2,9 @@ import { Module, NestModule, MiddlewareConsumer } from "@nestjs/common";
 import { APP_INTERCEPTOR, APP_FILTER } from "@nestjs/core";
 import { CorrelationIdMiddleware } from "./shared/middleware/correlation-id.middleware";
 import { EventEmitterModule } from "@nestjs/event-emitter";
+import { ScheduleModule } from "@nestjs/schedule";
 import { RedisService } from "./shared/redis/redis.service";
+import { RetentionModule } from "./shared/retention/retention.module";
 import { TenantRateLimitInterceptor } from "./shared/interceptors/tenant-rate-limit.interceptor";
 import { IdentityModule } from "./modules/identity/identity.module";
 import { TenantModule } from "./modules/tenant/tenant.module";
@@ -26,6 +28,8 @@ import { GlobalExceptionFilter } from "./shared/filters/global-exception.filter"
 @Module({
   imports: [
     EventEmitterModule.forRoot({ wildcard: false, delimiter: '.' }),
+    ScheduleModule.forRoot(),
+    RetentionModule,
     IdentityModule,
     TenantModule,
     ActivityModule,

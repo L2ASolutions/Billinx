@@ -1,0 +1,3 @@
+ALTER TABLE invoices ADD COLUMN "archivedAt" TIMESTAMP(3);
+ALTER TABLE invoices ADD COLUMN "isArchived" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE activity_events ADD COLUMN "isArchived" BOOLEAN NOT NULL DEFAULT false;

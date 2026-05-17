@@ -9,6 +9,7 @@ import { AdminKeyGuard } from "../identity/guards/admin-key.guard";
 import { RedisService } from "../../shared/redis/redis.service";
 import { EmailService } from "../../shared/email/email.service";
 import { ConsentService } from "../consent/consent.service";
+import { RetentionService } from "../../shared/retention/retention.service";
 
 @Module({
   controllers: [AdminController],
@@ -22,6 +23,7 @@ import { ConsentService } from "../consent/consent.service";
     RedisService,
     EmailService,
     ConsentService,
+    RetentionService,
   ],
   exports: [AdminService],
 })
