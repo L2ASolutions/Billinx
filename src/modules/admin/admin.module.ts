@@ -10,6 +10,7 @@ import { RedisService } from "../../shared/redis/redis.service";
 import { EmailService } from "../../shared/email/email.service";
 import { ConsentService } from "../consent/consent.service";
 import { RetentionService } from "../../shared/retention/retention.service";
+import { ExportService } from "../export/export.service";
 
 @Module({
   controllers: [AdminController],
@@ -24,6 +25,7 @@ import { RetentionService } from "../../shared/retention/retention.service";
     EmailService,
     ConsentService,
     RetentionService,
+    ExportService,
   ],
   exports: [AdminService],
 })

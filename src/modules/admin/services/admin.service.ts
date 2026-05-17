@@ -18,6 +18,7 @@ import { EmailService } from "../../../shared/email/email.service";
 import { ConsentService } from "../../consent/consent.service";
 import { submissionQueue } from "../../submission/queues/submission.queue";
 import { RetentionService } from "../../../shared/retention/retention.service";
+import { ExportService } from "../../export/export.service";
 import * as bcrypt from "bcrypt";
 import * as jwt from "jsonwebtoken";
 
@@ -34,6 +35,7 @@ export class AdminService {
     private readonly emailService: EmailService,
     private readonly consentService: ConsentService,
     private readonly retentionService: RetentionService,
+    private readonly exportService: ExportService,
   ) {}
 
   // ── Bootstrap first admin user ────────────────────────────────────────────
@@ -556,6 +558,10 @@ async listAccessRequests(status?: string): Promise<any[]> {
     };
   }
 
+  // ── Export ───────────────────────────────────────────────────────────────
+  async exportPlatformCSV(startDate: string, endDate: string): Promise<string> {
+    return this.exportService.exportPlatformCSV(startDate, endDate);
+  }
 
   private mapToResponse(admin: any): AdminUserResponse {
     return {
