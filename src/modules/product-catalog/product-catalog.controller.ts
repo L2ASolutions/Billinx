@@ -21,7 +21,6 @@ import {
 import { Request } from 'express';
 import { ProductCatalogService } from './product-catalog.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';
-import { ApiKeyGuard } from '../identity/guards/api-key.guard';
 
 @ApiTags('Products')
 @Controller('v1/products')

@@ -4,16 +4,16 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
-} from "@nestjs/common";
-import { TenantRepository } from "../repositories/tenant.repository";
-import { CredentialService } from "./credential.service";
-import { SecretsService } from "../../../infrastructure/secrets/secrets.service";
+} from '@nestjs/common';
+import { TenantRepository } from '../repositories/tenant.repository';
+import { CredentialService } from './credential.service';
+import { SecretsService } from '../../../infrastructure/secrets/secrets.service';
 import {
   CreateTenantRequest,
   UpdateTenantRequest,
   TenantResponse,
   TenantListResponse,
-} from "../../../../packages/types/tenant";
+} from '../../../../packages/types/tenant';
 
 @Injectable()
 export class TenantService {
@@ -34,9 +34,7 @@ export class TenantService {
     }
 
     if (!this.isValidTin(request.tin)) {
-      throw new BadRequestException(
-        `Invalid TIN format: ${request.tin}`,
-      );
+      throw new BadRequestException(`Invalid TIN format: ${request.tin}`);
     }
 
     let encryptedCredential: Buffer | undefined;
@@ -190,7 +188,7 @@ export class TenantService {
   }
 
   private isValidTin(tin: string): boolean {
-    const tinPattern = /^[A-Z0-9\-]{5,20}$/i;
+    const tinPattern = /^[A-Z0-9-]{5,20}$/i;
     return tinPattern.test(tin);
   }
 
@@ -207,7 +205,9 @@ export class TenantService {
       batchSize: tenant.batchSize,
       isActive: tenant.isActive,
       hasCredential: !!(tenant.encryptedCredential && tenant.credentialIv),
-      hasInterswitchCredentials: !!(tenant.interswitchClientId && tenant.interswitchClientSecret),
+      hasInterswitchCredentials: !!(
+        tenant.interswitchClientId && tenant.interswitchClientSecret
+      ),
       interswitchServiceId: tenant.interswitchServiceId ?? null,
       interswitchBusinessId: tenant.interswitchBusinessId ?? null,
       createdAt: tenant.createdAt.toISOString(),
