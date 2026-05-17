@@ -1,4 +1,7 @@
-import { SubmissionRequest, SubmissionResult } from "../../../../packages/types/submission";
+import {
+  SubmissionRequest,
+  SubmissionResult,
+} from '../../../../packages/types/submission';
 
 export interface AppAdapter {
   readonly adapterKey: string;
@@ -14,7 +17,10 @@ export interface AppAdapter {
    * Check the status of a previously submitted invoice.
    * Used for polling when the APP provider is async.
    */
-  checkStatus(platformIrn: string, tenantCredential: Record<string, unknown>): Promise<SubmissionResult>;
+  checkStatus(
+    platformIrn: string,
+    tenantCredential: Record<string, unknown>,
+  ): Promise<SubmissionResult>;
 
   /**
    * Verify connectivity to the APP provider.

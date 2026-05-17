@@ -1,8 +1,16 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { Worker, Job } from 'bullmq';
 import { WebhookService } from '../services/webhook.service';
 import { WebhookDeliveryJobData } from '../../../../packages/types/webhook';
-import { WEBHOOK_QUEUE_NAME, webhookRedisConnection } from '../queues/webhook.queue';
+import {
+  WEBHOOK_QUEUE_NAME,
+  webhookRedisConnection,
+} from '../queues/webhook.queue';
 
 @Injectable()
 export class WebhookWorker implements OnModuleInit, OnModuleDestroy {
@@ -24,7 +32,10 @@ export class WebhookWorker implements OnModuleInit, OnModuleDestroy {
       this.worker = new Worker<WebhookDeliveryJobData>(
         WEBHOOK_QUEUE_NAME,
         async (job: Job<WebhookDeliveryJobData>) => {
-          await this.webhookService.processDelivery(job.data.deliveryId, job.attemptsMade);
+          await this.webhookService.processDelivery(
+            job.data.deliveryId,
+            job.attemptsMade,
+          );
         },
         {
           connection: webhookRedisConnection,
@@ -54,7 +65,9 @@ export class WebhookWorker implements OnModuleInit, OnModuleDestroy {
 
       this.logger.log('Webhook delivery worker started');
     } catch (err: any) {
-      this.logger.warn(`Webhook worker could not start (Redis unavailable): ${err.message}`);
+      this.logger.warn(
+        `Webhook worker could not start (Redis unavailable): ${err.message}`,
+      );
     }
   }
 

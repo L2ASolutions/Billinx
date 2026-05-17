@@ -41,7 +41,9 @@ export class ConsentService {
           consentVersion: params.consentVersion ?? '1.0',
           ipAddress: params.ipAddress ?? null,
           userAgent: params.userAgent ?? null,
-          metadata: (params.metadata as Prisma.InputJsonValue | undefined) ?? Prisma.JsonNull,
+          metadata:
+            (params.metadata as Prisma.InputJsonValue | undefined) ??
+            Prisma.JsonNull,
         },
       }),
     );
@@ -145,7 +147,9 @@ export class ConsentService {
     );
     if (!erasure) throw new NotFoundException('Erasure request not found');
     if (erasure.status !== 'PENDING') {
-      throw new ConflictException(`Erasure request is already ${erasure.status.toLowerCase()}`);
+      throw new ConflictException(
+        `Erasure request is already ${erasure.status.toLowerCase()}`,
+      );
     }
 
     const randomHash = await bcrypt.hash(crypto.randomUUID(), 10);
@@ -215,7 +219,9 @@ export class ConsentService {
     );
     if (!erasure) throw new NotFoundException('Erasure request not found');
     if (erasure.status !== 'PENDING') {
-      throw new ConflictException(`Erasure request is already ${erasure.status.toLowerCase()}`);
+      throw new ConflictException(
+        `Erasure request is already ${erasure.status.toLowerCase()}`,
+      );
     }
 
     await this.prisma.asAdmin(async (tx) => {

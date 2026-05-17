@@ -3,9 +3,9 @@ import {
   OnModuleInit,
   OnModuleDestroy,
   Logger,
-} from "@nestjs/common";
-import { PrismaClient } from "@prisma/client";
-import { getOptionalRequestContext } from "../../shared/context/request-context";
+} from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
+import { getOptionalRequestContext } from '../../shared/context/request-context';
 
 @Injectable()
 export class PrismaService
@@ -17,17 +17,18 @@ export class PrismaService
   constructor() {
     super({
       log: [
-        { emit: "event", level: "error" },
-        { emit: "event", level: "warn" },
+        { emit: 'event', level: 'error' },
+        { emit: 'event', level: 'warn' },
       ],
-      errorFormat: "minimal",
+      errorFormat: 'minimal',
     });
 
     this.$use(async (params, next) => {
       const ctx = getOptionalRequestContext();
 
       if (ctx?.tenantId && !ctx.isAdmin) {
-        await this.$executeRaw`SET LOCAL app.current_tenant_id = ${ctx.tenantId}`;
+        await this
+          .$executeRaw`SET LOCAL app.current_tenant_id = ${ctx.tenantId}`;
       }
 
       return next(params);
@@ -36,12 +37,12 @@ export class PrismaService
 
   async onModuleInit(): Promise<void> {
     await this.$connect();
-    this.logger.log("Database connection established");
+    this.logger.log('Database connection established');
   }
 
   async onModuleDestroy(): Promise<void> {
     await this.$disconnect();
-    this.logger.log("Database connection closed");
+    this.logger.log('Database connection closed');
   }
 
   async asAdmin<T>(fn: (prisma: PrismaClient) => Promise<T>): Promise<T> {

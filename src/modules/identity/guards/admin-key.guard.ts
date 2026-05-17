@@ -4,13 +4,13 @@ import {
   ExecutionContext,
   UnauthorizedException,
   Logger,
-} from "@nestjs/common";
-import { Request } from "express";
-import { PrismaService } from "../../../infrastructure/database/prisma.service";
-import { runWithContext } from "../../../shared/context/request-context";
-import { RequestContext } from "../../../../packages/types/identity";
-import * as bcrypt from "bcrypt";
-import * as crypto from "crypto";
+} from '@nestjs/common';
+import { Request } from 'express';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { runWithContext } from '../../../shared/context/request-context';
+import { RequestContext } from '../../../../packages/types/identity';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 const ADMIN_KEY_PREFIX_LENGTH = 20;
 
@@ -22,10 +22,10 @@ export class AdminKeyGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    const adminKey = request.headers["x-admin-key"] as string;
+    const adminKey = request.headers['x-admin-key'] as string;
 
     if (!adminKey) {
-      throw new UnauthorizedException("Missing X-Admin-Key header");
+      throw new UnauthorizedException('Missing X-Admin-Key header');
     }
 
     const keyPrefix = adminKey.substring(0, ADMIN_KEY_PREFIX_LENGTH);
@@ -40,20 +40,20 @@ export class AdminKeyGuard implements CanActivate {
     `;
 
     if (!candidates.length) {
-      throw new UnauthorizedException("Invalid admin key");
+      throw new UnauthorizedException('Invalid admin key');
     }
 
     const valid = await bcrypt.compare(adminKey, candidates[0].keyHash);
     if (!valid) {
-      throw new UnauthorizedException("Invalid admin key");
+      throw new UnauthorizedException('Invalid admin key');
     }
 
     const requestContext: RequestContext = {
-      tenantId: "ADMIN",
-      environment: "PRODUCTION",
-      tier: "ENTERPRISE",
+      tenantId: 'ADMIN',
+      environment: 'PRODUCTION',
+      tier: 'ENTERPRISE',
       actor: `admin:${candidates[0].id}`,
-      actorType: "admin",
+      actorType: 'admin',
       requestId: crypto.randomUUID(),
       isAdmin: true,
     };

@@ -4,13 +4,13 @@ import {
   ExecutionContext,
   CallHandler,
   Logger,
-} from "@nestjs/common";
-import { Observable } from "rxjs";
-import { tap, catchError } from "rxjs/operators";
-import { throwError } from "rxjs";
-import { Request } from "express";
-import { PrismaService } from "../../infrastructure/database/prisma.service";
-import { getOptionalRequestContext } from "../context/request-context";
+} from '@nestjs/common';
+import { Observable } from 'rxjs';
+import { tap, catchError } from 'rxjs/operators';
+import { throwError } from 'rxjs';
+import { Request } from 'express';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { getOptionalRequestContext } from '../context/request-context';
 
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {
@@ -42,25 +42,27 @@ export class AuditLogInterceptor implements NestInterceptor {
     const ctx = getOptionalRequestContext();
     if (!ctx) return;
 
-    const payload = JSON.parse(JSON.stringify({
-      method: request.method,
-      path: request.path,
-      statusCode: error ? 500 : 200,
-      durationMs,
-      body: this.sanitiseBody(request.body),
-      error: error ? { message: error.message, name: error.name } : null,
-    }));
+    const payload = JSON.parse(
+      JSON.stringify({
+        method: request.method,
+        path: request.path,
+        statusCode: error ? 500 : 200,
+        durationMs,
+        body: this.sanitiseBody(request.body),
+        error: error ? { message: error.message, name: error.name } : null,
+      }),
+    );
 
     this.prisma.auditLog
       .create({
         data: {
-          tenantId: ctx.tenantId === "ADMIN" ? null : ctx.tenantId,
-          eventType: `api.${request.method.toLowerCase()}.${error ? "error" : "success"}`,
-          entityType: "HttpRequest",
+          tenantId: ctx.tenantId === 'ADMIN' ? null : ctx.tenantId,
+          eventType: `api.${request.method.toLowerCase()}.${error ? 'error' : 'success'}`,
+          entityType: 'HttpRequest',
           entityId: ctx.requestId,
           actor: ctx.actor,
           ipAddress: request.ip,
-          userAgent: request.headers["user-agent"],
+          userAgent: request.headers['user-agent'],
           payload,
         },
       })
@@ -70,17 +72,23 @@ export class AuditLogInterceptor implements NestInterceptor {
   }
 
   private sanitiseBody(body: unknown): unknown {
-    if (!body || typeof body !== "object") return body;
+    if (!body || typeof body !== 'object') return body;
 
     const REDACTED_FIELDS = new Set([
-      "password", "apiKey", "key", "secret", "token",
-      "credential", "privateKey", "authorization",
+      'password',
+      'apiKey',
+      'key',
+      'secret',
+      'token',
+      'credential',
+      'privateKey',
+      'authorization',
     ]);
 
     return Object.fromEntries(
       Object.entries(body as Record<string, unknown>).map(([k, v]) => [
         k,
-        REDACTED_FIELDS.has(k.toLowerCase()) ? "[REDACTED]" : v,
+        REDACTED_FIELDS.has(k.toLowerCase()) ? '[REDACTED]' : v,
       ]),
     );
   }

@@ -5,16 +5,16 @@ import {
   CallHandler,
   ConflictException,
   Logger,
-} from "@nestjs/common";
-import { Observable, of } from "rxjs";
-import { tap } from "rxjs/operators";
-import { Request, Response } from "express";
-import { PrismaService } from "../../infrastructure/database/prisma.service";
-import { getRequestContext } from "../context/request-context";
-import * as crypto from "crypto";
+} from '@nestjs/common';
+import { Observable, of } from 'rxjs';
+import { tap } from 'rxjs/operators';
+import { Request, Response } from 'express';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { getRequestContext } from '../context/request-context';
+import * as crypto from 'crypto';
 
 const IDEMPOTENCY_TTL_HOURS = 24;
-const IDEMPOTENCY_KEY_HEADER = "idempotency-key";
+const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
 
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
@@ -29,7 +29,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
 
-    if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) {
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
       return next.handle();
     }
 
@@ -40,7 +40,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
     }
 
     if (idempotencyKey.length > 255) {
-      throw new ConflictException("Idempotency-Key must be <= 255 characters");
+      throw new ConflictException('Idempotency-Key must be <= 255 characters');
     }
 
     let ctx: ReturnType<typeof getRequestContext> | null = null;
@@ -56,7 +56,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
       return tx.idempotencyRecord.findUnique({
         where: {
           tenantId_idempotencyKey: {
-            tenantId: ctx!.tenantId,
+            tenantId: ctx.tenantId,
             idempotencyKey,
           },
         },
@@ -66,7 +66,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
     if (existing) {
       if (existing.requestHash !== requestHash) {
         throw new ConflictException(
-          "Idempotency-Key reused with different request body",
+          'Idempotency-Key reused with different request body',
         );
       }
 
@@ -74,7 +74,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
         `Idempotency replay: key=${idempotencyKey} tenant=${ctx.tenantId}`,
       );
 
-      response.setHeader("Idempotent-Replayed", "true");
+      response.setHeader('Idempotent-Replayed', 'true');
       response.status(existing.responseStatus);
       return of(existing.responseBody);
     }
@@ -89,7 +89,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
         await this.prisma.asAdmin(async (tx) => {
           return tx.idempotencyRecord.create({
             data: {
-              tenantId: ctx!.tenantId,
+              tenantId: ctx.tenantId,
               idempotencyKey,
               requestHash,
               responseBody: JSON.parse(JSON.stringify(responseBody ?? {})),
@@ -104,8 +104,8 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
   private hashBody(body: unknown): string {
     return crypto
-      .createHash("sha256")
+      .createHash('sha256')
       .update(JSON.stringify(body ?? {}))
-      .digest("hex");
+      .digest('hex');
   }
 }

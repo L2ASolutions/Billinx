@@ -4,12 +4,12 @@ import {
   ExecutionContext,
   UnauthorizedException,
   Logger,
-} from "@nestjs/common";
-import { Request } from "express";
-import { TokenService } from "../services/token.service";
-import { runWithContext } from "../../../shared/context/request-context";
-import { RequestContext } from "../../../../packages/types/identity";
-import * as crypto from "crypto";
+} from '@nestjs/common';
+import { Request } from 'express';
+import { TokenService } from '../services/token.service';
+import { runWithContext } from '../../../shared/context/request-context';
+import { RequestContext } from '../../../../packages/types/identity';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class JwtGuard implements CanActivate {
@@ -19,10 +19,10 @@ export class JwtGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    const authHeader = request.headers["authorization"];
+    const authHeader = request.headers['authorization'];
 
-    if (!authHeader?.startsWith("Bearer ")) {
-      throw new UnauthorizedException("Missing Authorization header");
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Missing Authorization header');
     }
 
     const token = authHeader.substring(7).trim();
@@ -33,9 +33,10 @@ export class JwtGuard implements CanActivate {
       environment: payload.environment,
       tier: payload.tier,
       actor: `user:${payload.sub}`,
-      actorType: "user",
-      requestId: (request.headers["x-request-id"] as string) ?? crypto.randomUUID(),
-      isAdmin: payload.role === "admin",
+      actorType: 'user',
+      requestId:
+        (request.headers['x-request-id'] as string) ?? crypto.randomUUID(),
+      isAdmin: payload.role === 'admin',
     };
 
     return new Promise((resolve) => {

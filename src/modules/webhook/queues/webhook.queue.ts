@@ -10,17 +10,22 @@ export const webhookRedisConnection = {
   password: process.env.REDIS_PASSWORD ?? undefined,
 };
 
-export const webhookQueue = new Queue<WebhookDeliveryJobData>(WEBHOOK_QUEUE_NAME, {
-  connection: webhookRedisConnection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: { type: 'custom' },
-    removeOnComplete: { count: 200 },
-    removeOnFail: { count: 500 },
+export const webhookQueue = new Queue<WebhookDeliveryJobData>(
+  WEBHOOK_QUEUE_NAME,
+  {
+    connection: webhookRedisConnection,
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: { type: 'custom' },
+      removeOnComplete: { count: 200 },
+      removeOnFail: { count: 500 },
+    },
   },
-});
+);
 
-export async function addToWebhookQueue(data: WebhookDeliveryJobData): Promise<void> {
+export async function addToWebhookQueue(
+  data: WebhookDeliveryJobData,
+): Promise<void> {
   const logger = new Logger('WebhookQueue');
   await webhookQueue.add('deliver-webhook', data, {
     jobId: `webhook-${data.deliveryId}`,

@@ -1,5 +1,5 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../../infrastructure/database/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
 
 @Injectable()
 export class UserRepository {
@@ -13,13 +13,20 @@ export class UserRepository {
 
   async findByEmail(tenantId: string, email: string) {
     return this.prisma.asAdmin(async (tx) => {
-      return tx.user.findUnique({ where: { tenantId_email: { tenantId, email } }, include: { roles: true } });
+      return tx.user.findUnique({
+        where: { tenantId_email: { tenantId, email } },
+        include: { roles: true },
+      });
     });
   }
 
   async findByTenantId(tenantId: string) {
     return this.prisma.asAdmin(async (tx) => {
-      return tx.user.findMany({ where: { tenantId }, include: { roles: true }, orderBy: { createdAt: "desc" } });
+      return tx.user.findMany({
+        where: { tenantId },
+        include: { roles: true },
+        orderBy: { createdAt: 'desc' },
+      });
     });
   }
 
@@ -41,21 +48,26 @@ export class UserRepository {
           firstName: data.firstName,
           lastName: data.lastName,
           isVerified: data.isVerified ?? false,
-          roles: { create: { tenantId: data.tenantId, role: data.role as any } },
+          roles: {
+            create: { tenantId: data.tenantId, role: data.role as any },
+          },
         },
         include: { roles: true },
       });
     });
   }
 
-  async update(id: string, data: {
-    firstName?: string;
-    lastName?: string;
-    isActive?: boolean;
-    isVerified?: boolean;
-    passwordHash?: string;
-    lastLoginAt?: Date;
-  }) {
+  async update(
+    id: string,
+    data: {
+      firstName?: string;
+      lastName?: string;
+      isActive?: boolean;
+      isVerified?: boolean;
+      passwordHash?: string;
+      lastLoginAt?: Date;
+    },
+  ) {
     return this.prisma.asAdmin(async (tx) => {
       return tx.user.update({ where: { id }, data, include: { roles: true } });
     });
@@ -98,11 +110,18 @@ export class UserRepository {
 
   async acceptInvitation(token: string) {
     return this.prisma.asAdmin(async (tx) => {
-      return tx.userInvitation.update({ where: { token }, data: { acceptedAt: new Date() } });
+      return tx.userInvitation.update({
+        where: { token },
+        data: { acceptedAt: new Date() },
+      });
     });
   }
 
-  async createPasswordResetToken(data: { userId: string; token: string; expiresAt: Date }) {
+  async createPasswordResetToken(data: {
+    userId: string;
+    token: string;
+    expiresAt: Date;
+  }) {
     return this.prisma.asAdmin(async (tx) => {
       return tx.passwordResetToken.create({ data });
     });
@@ -116,7 +135,10 @@ export class UserRepository {
 
   async markPasswordResetTokenUsed(token: string) {
     return this.prisma.asAdmin(async (tx) => {
-      return tx.passwordResetToken.update({ where: { token }, data: { usedAt: new Date() } });
+      return tx.passwordResetToken.update({
+        where: { token },
+        data: { usedAt: new Date() },
+      });
     });
   }
 }

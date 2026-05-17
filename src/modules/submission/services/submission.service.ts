@@ -1,17 +1,17 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { EventEmitter2 } from "@nestjs/event-emitter";
-import { PrismaService } from "../../../infrastructure/database/prisma.service";
-import { ActivityService } from "../../activity/services/activity.service";
-import { MockAdapter } from "../adapters/mock/mock.adapter";
-import { InterswitchAdapter } from "../adapters/interswitch/interswitch.adapter";
-import { AppAdapter } from "../adapters/app-adapter.interface";
-import { addToSubmissionQueue } from "../queues/submission.queue";
+import { Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { ActivityService } from '../../activity/services/activity.service';
+import { MockAdapter } from '../adapters/mock/mock.adapter';
+import { InterswitchAdapter } from '../adapters/interswitch/interswitch.adapter';
+import { AppAdapter } from '../adapters/app-adapter.interface';
+import { addToSubmissionQueue } from '../queues/submission.queue';
 import {
   SubmissionRequest,
   SubmissionResult,
   AppAdapterKey,
   QueueJobData,
-} from "../../../../packages/types/submission";
+} from '../../../../packages/types/submission';
 
 @Injectable()
 export class SubmissionService {
@@ -25,8 +25,8 @@ export class SubmissionService {
     private readonly interswitchAdapter: InterswitchAdapter,
     private readonly eventEmitter: EventEmitter2,
   ) {
-    this.adapters.set("mock", mockAdapter);
-    this.adapters.set("interswitch", interswitchAdapter);
+    this.adapters.set('mock', mockAdapter);
+    this.adapters.set('interswitch', interswitchAdapter);
   }
 
   async queueInvoice(
@@ -46,28 +46,32 @@ export class SubmissionService {
     await this.prisma.asAdmin(async (tx) => {
       await tx.invoice.update({
         where: { id: invoiceId },
-        data: { status: "QUEUED" },
+        data: { status: 'QUEUED' },
       });
       await tx.invoiceStateHistory.create({
         data: {
           invoiceId,
           tenantId,
-          fromStatus: "DRAFT",
-          toStatus: "QUEUED",
-          actor: "system:submission-service",
-          reason: "Invoice queued for FIRS submission",
+          fromStatus: 'DRAFT',
+          toStatus: 'QUEUED',
+          actor: 'system:submission-service',
+          reason: 'Invoice queued for FIRS submission',
         } as any,
       });
     });
 
     await addToSubmissionQueue(jobData);
-    this.logger.log(`Invoice ${platformIrn} queued for submission via ${adapterKey}`);
+    this.logger.log(
+      `Invoice ${platformIrn} queued for submission via ${adapterKey}`,
+    );
   }
 
   async processSubmission(jobData: QueueJobData): Promise<void> {
     const { invoiceId, tenantId, platformIrn, adapterKey, attempt } = jobData;
 
-    this.logger.log(`Processing submission: ${platformIrn} via ${adapterKey} (attempt ${attempt})`);
+    this.logger.log(
+      `Processing submission: ${platformIrn} via ${adapterKey} (attempt ${attempt})`,
+    );
 
     const adapter = this.adapters.get(adapterKey);
     if (!adapter) throw new Error(`No adapter found for key: ${adapterKey}`);
@@ -80,16 +84,16 @@ export class SubmissionService {
     await this.prisma.asAdmin(async (tx) => {
       await tx.invoice.update({
         where: { id: invoiceId },
-        data: { status: "SUBMITTING" },
+        data: { status: 'SUBMITTING' },
       });
       await tx.invoiceStateHistory.create({
         data: {
           invoiceId,
           tenantId,
-          fromStatus: "QUEUED",
-          toStatus: "SUBMITTING",
-          actor: "system:submission-worker",
-          reason: "Submitting to FIRS",
+          fromStatus: 'QUEUED',
+          toStatus: 'SUBMITTING',
+          actor: 'system:submission-worker',
+          reason: 'Submitting to FIRS',
         } as any,
       });
     });
@@ -121,16 +125,27 @@ export class SubmissionService {
     } catch (err: any) {
       result = {
         success: false,
-        errorCode: "ADAPTER_ERROR",
+        errorCode: 'ADAPTER_ERROR',
         errorMessage: err.message,
         retryable: true,
       };
     }
 
     if (result.success) {
-      await this.handleSuccess(invoiceId, tenantId, submissionAttempt.id, result);
+      await this.handleSuccess(
+        invoiceId,
+        tenantId,
+        submissionAttempt.id,
+        result,
+      );
     } else {
-      await this.handleFailure(invoiceId, tenantId, submissionAttempt.id, result, attempt);
+      await this.handleFailure(
+        invoiceId,
+        tenantId,
+        submissionAttempt.id,
+        result,
+        attempt,
+      );
     }
   }
 
@@ -144,7 +159,7 @@ export class SubmissionService {
       await tx.invoice.update({
         where: { id: invoiceId },
         data: {
-          status: "ACCEPTED",
+          status: 'ACCEPTED',
           firsConfirmedIrn: result.firsConfirmedIrn ?? null,
           qrCodeBase64: result.qrCodeBase64 ?? null,
           acceptedAt: new Date(),
@@ -166,9 +181,9 @@ export class SubmissionService {
         data: {
           invoiceId,
           tenantId,
-          fromStatus: "SUBMITTING",
-          toStatus: "ACCEPTED",
-          actor: "system:firs",
+          fromStatus: 'SUBMITTING',
+          toStatus: 'ACCEPTED',
+          actor: 'system:firs',
           reason: `FIRS accepted. IRN: ${result.firsConfirmedIrn}`,
         } as any,
       });
@@ -176,9 +191,9 @@ export class SubmissionService {
 
     this.activityService.track({
       tenantId,
-      eventType: "INVOICE_ACCEPTED",
-      actor: "system:firs",
-      entityType: "Invoice",
+      eventType: 'INVOICE_ACCEPTED',
+      actor: 'system:firs',
+      entityType: 'Invoice',
       entityId: invoiceId,
       payload: {
         invoiceId,
@@ -187,9 +202,9 @@ export class SubmissionService {
       },
     });
 
-    this.eventEmitter.emit("invoice.accepted", {
+    this.eventEmitter.emit('invoice.accepted', {
       tenantId,
-      eventType: "invoice.accepted",
+      eventType: 'invoice.accepted',
       invoiceId,
       platformIrn: result.firsConfirmedIrn ?? invoiceId,
       data: {
@@ -200,7 +215,9 @@ export class SubmissionService {
       },
     });
 
-    this.logger.log(`Invoice ${invoiceId} accepted by FIRS. IRN: ${result.firsConfirmedIrn}`);
+    this.logger.log(
+      `Invoice ${invoiceId} accepted by FIRS. IRN: ${result.firsConfirmedIrn}`,
+    );
   }
 
   private async handleFailure(
@@ -212,7 +229,7 @@ export class SubmissionService {
   ): Promise<void> {
     const maxAttempts = 3;
     const isFinal = !result.retryable || attempt >= maxAttempts;
-    const newStatus = isFinal ? "DEAD_LETTERED" : "SUBMISSION_FAILED";
+    const newStatus = isFinal ? 'DEAD_LETTERED' : 'SUBMISSION_FAILED';
 
     await this.prisma.asAdmin(async (tx) => {
       await tx.invoice.update({
@@ -235,19 +252,19 @@ export class SubmissionService {
         data: {
           invoiceId,
           tenantId,
-          fromStatus: "SUBMITTING",
+          fromStatus: 'SUBMITTING',
           toStatus: newStatus,
-          actor: "system:firs",
-          reason: result.errorMessage ?? "Submission failed",
+          actor: 'system:firs',
+          reason: result.errorMessage ?? 'Submission failed',
         } as any,
       });
     });
 
     this.activityService.track({
       tenantId,
-      eventType: "INVOICE_REJECTED",
-      actor: "system:firs",
-      entityType: "Invoice",
+      eventType: 'INVOICE_REJECTED',
+      actor: 'system:firs',
+      entityType: 'Invoice',
       entityId: invoiceId,
       payload: {
         invoiceId,
@@ -259,9 +276,9 @@ export class SubmissionService {
     });
 
     if (isFinal) {
-      this.eventEmitter.emit("invoice.rejected", {
+      this.eventEmitter.emit('invoice.rejected', {
         tenantId,
-        eventType: "invoice.rejected",
+        eventType: 'invoice.rejected',
         invoiceId,
         platformIrn: invoiceId,
         data: {
@@ -273,7 +290,7 @@ export class SubmissionService {
     }
 
     this.logger.warn(
-      `Invoice ${invoiceId} ${isFinal ? "rejected" : "failed (will retry)"}. Error: ${result.errorMessage}`,
+      `Invoice ${invoiceId} ${isFinal ? 'rejected' : 'failed (will retry)'}. Error: ${result.errorMessage}`,
     );
   }
 
