@@ -16,6 +16,7 @@ import { EmailModule } from "./shared/email/email.module";
 import { HealthModule } from "./health/health.module";
 import { KybModule } from "./modules/kyb/kyb.module";
 import { ConsentModule } from "./modules/consent/consent.module";
+import { ProductCatalogModule } from "./modules/product-catalog/product-catalog.module";
 import { PrismaService } from "./infrastructure/database/prisma.service";
 import { SecretsService } from "./infrastructure/secrets/secrets.service";
 import { IdempotencyInterceptor } from "./shared/interceptors/idempotency.interceptor";
@@ -37,6 +38,7 @@ import { GlobalExceptionFilter } from "./shared/filters/global-exception.filter"
     HealthModule,
     KybModule,
     ConsentModule,
+    ProductCatalogModule,
   ],
   providers: [
     PrismaService,
