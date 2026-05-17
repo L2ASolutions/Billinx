@@ -24,7 +24,10 @@ export class TenantRateLimitInterceptor implements NestInterceptor {
 
   constructor(private readonly redisService: RedisService) {}
 
-  async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
+  async intercept(
+    context: ExecutionContext,
+    next: CallHandler,
+  ): Promise<Observable<any>> {
     const http = context.switchToHttp();
     const req = http.getRequest<Request>();
     const res = http.getResponse<Response>();
@@ -38,11 +41,8 @@ export class TenantRateLimitInterceptor implements NestInterceptor {
     const hourBucket = Math.floor(Date.now() / (WINDOW_SECS * 1000));
     const key = `rl:api:tenant:${ctx.tenantId}:${hourBucket}`;
 
-    const { allowed, remaining, retryAfter } = await this.redisService.checkRateLimit(
-      key,
-      limit,
-      WINDOW_SECS,
-    );
+    const { allowed, remaining, retryAfter } =
+      await this.redisService.checkRateLimit(key, limit, WINDOW_SECS);
 
     res.setHeader('X-RateLimit-Limit', limit);
     res.setHeader('X-RateLimit-Remaining', remaining);

@@ -65,12 +65,18 @@ export class WebhookService {
     return this.mapSubscription(subscription);
   }
 
-  async listSubscriptions(tenantId: string): Promise<WebhookSubscriptionResponse[]> {
-    const subs = await this.webhookRepository.findSubscriptionsByTenant(tenantId);
+  async listSubscriptions(
+    tenantId: string,
+  ): Promise<WebhookSubscriptionResponse[]> {
+    const subs =
+      await this.webhookRepository.findSubscriptionsByTenant(tenantId);
     return subs.map((s) => this.mapSubscription(s));
   }
 
-  async getSubscription(id: string, tenantId: string): Promise<WebhookSubscriptionResponse> {
+  async getSubscription(
+    id: string,
+    tenantId: string,
+  ): Promise<WebhookSubscriptionResponse> {
     const sub = await this.assertSubscriptionOwnership(id, tenantId);
     return this.mapSubscription(sub);
   }
@@ -102,12 +108,21 @@ export class WebhookService {
 
   // ─── Delivery management ─────────────────────────────────────────────────
 
-  async listDeliveries(tenantId: string, status?: string): Promise<WebhookDeliveryResponse[]> {
-    const deliveries = await this.webhookRepository.findDeliveriesByTenant(tenantId, status);
+  async listDeliveries(
+    tenantId: string,
+    status?: string,
+  ): Promise<WebhookDeliveryResponse[]> {
+    const deliveries = await this.webhookRepository.findDeliveriesByTenant(
+      tenantId,
+      status,
+    );
     return deliveries.map((d) => this.mapDelivery(d));
   }
 
-  async getDelivery(id: string, tenantId: string): Promise<WebhookDeliveryResponse> {
+  async getDelivery(
+    id: string,
+    tenantId: string,
+  ): Promise<WebhookDeliveryResponse> {
     const delivery = await this.webhookRepository.findDeliveryById(id);
     if (!delivery || delivery.tenantId !== tenantId) {
       throw new NotFoundException(`Webhook delivery ${id} not found`);
@@ -115,7 +130,10 @@ export class WebhookService {
     return this.mapDelivery(delivery);
   }
 
-  async retryDelivery(id: string, tenantId: string): Promise<WebhookDeliveryResponse> {
+  async retryDelivery(
+    id: string,
+    tenantId: string,
+  ): Promise<WebhookDeliveryResponse> {
     const delivery = await this.webhookRepository.findDeliveryById(id);
     if (!delivery || delivery.tenantId !== tenantId) {
       throw new NotFoundException(`Webhook delivery ${id} not found`);
@@ -161,10 +179,11 @@ export class WebhookService {
 
   private async dispatchEvent(event: WebhookInvoiceEvent): Promise<void> {
     try {
-      const subscriptions = await this.webhookRepository.findActiveSubscriptionsForEvent(
-        event.tenantId,
-        event.eventType,
-      );
+      const subscriptions =
+        await this.webhookRepository.findActiveSubscriptionsForEvent(
+          event.tenantId,
+          event.eventType,
+        );
 
       if (subscriptions.length === 0) return;
 
@@ -194,13 +213,18 @@ export class WebhookService {
         `Dispatched ${event.eventType} to ${subscriptions.length} subscription(s) for tenant ${event.tenantId}`,
       );
     } catch (err: any) {
-      this.logger.error(`Failed to dispatch ${event.eventType}: ${err.message}`);
+      this.logger.error(
+        `Failed to dispatch ${event.eventType}: ${err.message}`,
+      );
     }
   }
 
   // ─── Worker entry point ───────────────────────────────────────────────────
 
-  async processDelivery(deliveryId: string, attemptsMade: number): Promise<void> {
+  async processDelivery(
+    deliveryId: string,
+    attemptsMade: number,
+  ): Promise<void> {
     const delivery = await this.webhookRepository.findDeliveryById(deliveryId);
     if (!delivery) throw new Error(`Delivery ${deliveryId} not found`);
 
@@ -230,7 +254,8 @@ export class WebhookService {
       responseBody = result.body;
       success = statusCode >= 200 && statusCode < 300;
     } catch (err: any) {
-      responseBody = err.name === 'AbortError' ? 'Request timed out' : err.message;
+      responseBody =
+        err.name === 'AbortError' ? 'Request timed out' : err.message;
     }
 
     const attemptCount = delivery.attemptCount + 1;
@@ -245,7 +270,9 @@ export class WebhookService {
         deliveredAt: new Date(),
         nextRetryAt: null,
       });
-      this.logger.log(`Webhook delivery ${deliveryId} delivered (HTTP ${statusCode})`);
+      this.logger.log(
+        `Webhook delivery ${deliveryId} delivered (HTTP ${statusCode})`,
+      );
       return;
     }
 
@@ -264,7 +291,9 @@ export class WebhookService {
     });
 
     if (isLastAttempt) {
-      this.logger.warn(`Webhook delivery ${deliveryId} dead-lettered after ${MAX_ATTEMPTS} attempts`);
+      this.logger.warn(
+        `Webhook delivery ${deliveryId} dead-lettered after ${MAX_ATTEMPTS} attempts`,
+      );
       return;
     }
 
@@ -333,11 +362,15 @@ export class WebhookService {
     const hostname = parsed.hostname.toLowerCase();
 
     if (hostname === 'localhost' || hostname === '0.0.0.0') {
-      throw new BadRequestException('Webhook URL cannot target a private or reserved address');
+      throw new BadRequestException(
+        'Webhook URL cannot target a private or reserved address',
+      );
     }
 
     if (hostname.endsWith('.local') || hostname.endsWith('.internal')) {
-      throw new BadRequestException('Webhook URL cannot target a private or reserved address');
+      throw new BadRequestException(
+        'Webhook URL cannot target a private or reserved address',
+      );
     }
 
     // Block private IPv4 ranges + AWS metadata endpoint
@@ -352,14 +385,23 @@ export class WebhookService {
         (a === 172 && b >= 16 && b <= 31) ||
         (a === 192 && b === 168);
       if (isPrivate) {
-        throw new BadRequestException('Webhook URL cannot target a private or reserved address');
+        throw new BadRequestException(
+          'Webhook URL cannot target a private or reserved address',
+        );
       }
     }
 
     // Block IPv6 loopback and private ranges
     const bare = hostname.replace(/^\[|\]$/g, '');
-    if (bare === '::1' || bare.startsWith('fc') || bare.startsWith('fd') || bare.startsWith('fe8')) {
-      throw new BadRequestException('Webhook URL cannot target a private or reserved address');
+    if (
+      bare === '::1' ||
+      bare.startsWith('fc') ||
+      bare.startsWith('fd') ||
+      bare.startsWith('fe8')
+    ) {
+      throw new BadRequestException(
+        'Webhook URL cannot target a private or reserved address',
+      );
     }
   }
 
@@ -367,7 +409,9 @@ export class WebhookService {
     if (!eventTypes || eventTypes.length === 0) {
       throw new BadRequestException('At least one event type is required');
     }
-    const invalid = eventTypes.filter((e) => !WEBHOOK_EVENT_TYPES.includes(e as WebhookEventType));
+    const invalid = eventTypes.filter(
+      (e) => !WEBHOOK_EVENT_TYPES.includes(e as WebhookEventType),
+    );
     if (invalid.length > 0) {
       throw new BadRequestException(
         `Invalid event types: ${invalid.join(', ')}. Valid types: ${WEBHOOK_EVENT_TYPES.join(', ')}`,
@@ -377,8 +421,10 @@ export class WebhookService {
 
   private async assertSubscriptionOwnership(id: string, tenantId: string) {
     const sub = await this.webhookRepository.findSubscriptionById(id);
-    if (!sub) throw new NotFoundException(`Webhook subscription ${id} not found`);
-    if (sub.tenantId !== tenantId) throw new ForbiddenException('Access denied');
+    if (!sub)
+      throw new NotFoundException(`Webhook subscription ${id} not found`);
+    if (sub.tenantId !== tenantId)
+      throw new ForbiddenException('Access denied');
     return sub;
   }
 

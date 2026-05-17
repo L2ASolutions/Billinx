@@ -1,6 +1,6 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "../../../infrastructure/database/prisma.service";
-import { InvoiceFilterParams } from "../../../../packages/types/invoice";
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { InvoiceFilterParams } from '../../../../packages/types/invoice';
 
 @Injectable()
 export class InvoiceRepository {
@@ -18,7 +18,7 @@ export class InvoiceRepository {
     return this.prisma.asAdmin(async (tx) => {
       return tx.invoice.findUnique({
         where: { id },
-        include: { stateHistory: { orderBy: { createdAt: "asc" } } },
+        include: { stateHistory: { orderBy: { createdAt: 'asc' } } },
       });
     });
   }
@@ -27,15 +27,12 @@ export class InvoiceRepository {
     return this.prisma.asAdmin(async (tx) => {
       return tx.invoice.findUnique({
         where: { platformIrn },
-        include: { stateHistory: { orderBy: { createdAt: "asc" } } },
+        include: { stateHistory: { orderBy: { createdAt: 'asc' } } },
       });
     });
   }
 
-  async findByTenant(
-    tenantId: string,
-    filters: InvoiceFilterParams,
-  ) {
+  async findByTenant(tenantId: string, filters: InvoiceFilterParams) {
     const page = filters.page ?? 1;
     const limit = Math.min(filters.limit ?? 20, 100);
     const skip = (page - 1) * limit;
@@ -43,7 +40,8 @@ export class InvoiceRepository {
     const where: any = { tenantId };
 
     if (filters.status) where.status = filters.status;
-    if (filters.invoiceTypeCode) where.invoiceTypeCode = filters.invoiceTypeCode;
+    if (filters.invoiceTypeCode)
+      where.invoiceTypeCode = filters.invoiceTypeCode;
     if (filters.sellerTin) where.sellerTin = filters.sellerTin;
     if (filters.buyerTin) where.buyerTin = filters.buyerTin;
     if (filters.from || filters.to) {
@@ -58,8 +56,8 @@ export class InvoiceRepository {
           where,
           skip,
           take: limit,
-          orderBy: { createdAt: "desc" },
-          include: { stateHistory: { orderBy: { createdAt: "asc" } } },
+          orderBy: { createdAt: 'desc' },
+          include: { stateHistory: { orderBy: { createdAt: 'asc' } } },
         }),
         tx.invoice.count({ where }),
       ]);
@@ -109,9 +107,9 @@ export class InvoiceRepository {
     return this.prisma.asAdmin(async (tx) => {
       return Promise.all([
         tx.invoice.count({ where: { tenantId } }),
-        tx.invoice.count({ where: { tenantId, status: "ACCEPTED" } }),
-        tx.invoice.count({ where: { tenantId, status: "REJECTED" } }),
-        tx.invoice.count({ where: { tenantId, status: "DRAFT" } }),
+        tx.invoice.count({ where: { tenantId, status: 'ACCEPTED' } }),
+        tx.invoice.count({ where: { tenantId, status: 'REJECTED' } }),
+        tx.invoice.count({ where: { tenantId, status: 'DRAFT' } }),
       ]);
     });
   }

@@ -67,10 +67,13 @@ function totpGenerate(secret: string, counter: number): string {
 function totpVerify(token: string, secret: string, tolerance = 1): boolean {
   const counter = Math.floor(Date.now() / 1000 / 30);
   for (let w = -tolerance; w <= tolerance; w++) {
-    if (crypto.timingSafeEqual(
-      Buffer.from(totpGenerate(secret, counter + w)),
-      Buffer.from(token.padStart(6, '0')),
-    )) return true;
+    if (
+      crypto.timingSafeEqual(
+        Buffer.from(totpGenerate(secret, counter + w)),
+        Buffer.from(token.padStart(6, '0')),
+      )
+    )
+      return true;
   }
   return false;
 }
@@ -79,17 +82,21 @@ function generateTotpSecret(): string {
   return base32Encode(crypto.randomBytes(20)); // 160 bits — RFC 4226 recommended
 }
 
-function buildOtpauthUri(email: string, issuer: string, secret: string): string {
+function buildOtpauthUri(
+  email: string,
+  issuer: string,
+  secret: string,
+): string {
   const label = encodeURIComponent(`${issuer}:${email}`);
-  const iss   = encodeURIComponent(issuer);
+  const iss = encodeURIComponent(issuer);
   return `otpauth://totp/${label}?secret=${secret}&issuer=${iss}&algorithm=SHA1&digits=6&period=30`;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MFA_ISSUER       = process.env.MFA_ISSUER ?? 'Billinx';
+const MFA_ISSUER = process.env.MFA_ISSUER ?? 'Billinx';
 const BACKUP_CODE_COUNT = 8;
-const MFA_TOKEN_TTL    = 5 * 60; // seconds
+const MFA_TOKEN_TTL = 5 * 60; // seconds
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
@@ -106,13 +113,24 @@ export class MfaService {
 
   // ─── Setup ─────────────────────────────────────────────────────────────────
 
-  async setupMfa(userId: string, email: string): Promise<{ qrCodeBase64: string; manualKey: string }> {
+  async setupMfa(
+    userId: string,
+    email: string,
+  ): Promise<{ qrCodeBase64: string; manualKey: string }> {
     const plainSecret = generateTotpSecret();
 
     const masterKey = await this.getMasterKey();
-    const { encrypted, iv } = this.credentialService.encrypt(plainSecret, masterKey, userId);
+    const { encrypted, iv } = this.credentialService.encrypt(
+      plainSecret,
+      masterKey,
+      userId,
+    );
 
-    await this.writeMfa(userId, { mfaSecret: encrypted, mfaSecretIv: iv, mfaEnabled: false });
+    await this.writeMfa(userId, {
+      mfaSecret: encrypted,
+      mfaSecretIv: iv,
+      mfaEnabled: false,
+    });
 
     const uri = buildOtpauthUri(email, MFA_ISSUER, plainSecret);
     const qrCodeBase64 = await qrcode.toDataURL(uri, { width: 256, margin: 2 });
@@ -126,17 +144,24 @@ export class MfaService {
   async verifySetupAndEnable(userId: string, code: string): Promise<void> {
     const user = await this.loadUser(userId);
     if (!(user as any)?.mfaSecret || !(user as any)?.mfaSecretIv) {
-      throw new BadRequestException('MFA setup not started. Call POST /v1/auth/mfa/setup first.');
+      throw new BadRequestException(
+        'MFA setup not started. Call POST /v1/auth/mfa/setup first.',
+      );
     }
     if ((user as any).mfaEnabled) {
       throw new BadRequestException('MFA is already enabled on this account.');
     }
 
     const secret = this.decryptSecret(user);
-    if (!secret) throw new BadRequestException('Could not read MFA secret. Please restart setup.');
+    if (!secret)
+      throw new BadRequestException(
+        'Could not read MFA secret. Please restart setup.',
+      );
 
     if (!totpVerify(code.replace(/\s/g, ''), secret)) {
-      throw new BadRequestException('Invalid OTP code. Make sure your authenticator clock is correct.');
+      throw new BadRequestException(
+        'Invalid OTP code. Make sure your authenticator clock is correct.',
+      );
     }
 
     await this.writeMfa(userId, { mfaEnabled: true });
@@ -155,7 +180,12 @@ export class MfaService {
       throw new UnauthorizedException('Invalid OTP code or backup code.');
     }
 
-    await this.writeMfa(userId, { mfaEnabled: false, mfaSecret: null, mfaSecretIv: null, mfaBackupCodes: null });
+    await this.writeMfa(userId, {
+      mfaEnabled: false,
+      mfaSecret: null,
+      mfaSecretIv: null,
+      mfaBackupCodes: null,
+    });
     this.logger.log(`MFA disabled for user ${userId}`);
   }
 
@@ -164,7 +194,9 @@ export class MfaService {
   async generateBackupCodes(userId: string): Promise<string[]> {
     const user = await this.loadUser(userId);
     if (!(user as any)?.mfaEnabled) {
-      throw new BadRequestException('Enable MFA before generating backup codes.');
+      throw new BadRequestException(
+        'Enable MFA before generating backup codes.',
+      );
     }
 
     const rawCodes = Array.from({ length: BACKUP_CODE_COUNT }, () =>
@@ -198,7 +230,10 @@ export class MfaService {
     try {
       const payload = jwt.verify(token, `${this.jwtSecret()}:mfa`) as any;
       if (!payload?.isMfaToken) throw new Error();
-      return { userId: payload.sub as string, tenantId: payload.tenantId as string };
+      return {
+        userId: payload.sub as string,
+        tenantId: payload.tenantId as string,
+      };
     } catch {
       throw new UnauthorizedException('MFA token is invalid or has expired.');
     }
@@ -220,7 +255,8 @@ export class MfaService {
     backupCodesRemaining: number;
   }> {
     const user = await this.loadUser(userId);
-    const stored: Array<{ usedAt: string | null }> = ((user as any)?.mfaBackupCodes as any) ?? [];
+    const stored: Array<{ usedAt: string | null }> =
+      (user as any)?.mfaBackupCodes ?? [];
     const remaining = stored.filter((c) => !c.usedAt).length;
     return {
       mfaEnabled: (user as any)?.mfaEnabled ?? false,
@@ -240,9 +276,13 @@ export class MfaService {
     return this.consumeBackupCode(user.id, normalised, user);
   }
 
-  private async consumeBackupCode(userId: string, code: string, user: any): Promise<boolean> {
+  private async consumeBackupCode(
+    userId: string,
+    code: string,
+    user: any,
+  ): Promise<boolean> {
     const stored: Array<{ hash: string; usedAt: string | null }> =
-      (user.mfaBackupCodes as any) ?? [];
+      user.mfaBackupCodes ?? [];
 
     for (let i = 0; i < stored.length; i++) {
       if (stored[i].usedAt) continue;
@@ -258,7 +298,8 @@ export class MfaService {
   }
 
   private decryptSecret(user: any): string | null {
-    if (!user?.mfaSecret || !user?.mfaSecretIv || !this.cachedMasterKey) return null;
+    if (!user?.mfaSecret || !user?.mfaSecretIv || !this.cachedMasterKey)
+      return null;
     try {
       return this.credentialService.decrypt(
         Buffer.from(user.mfaSecret),
@@ -280,7 +321,9 @@ export class MfaService {
 
   private async loadUser(userId: string) {
     await this.getMasterKey(); // warm cache for decryptSecret
-    return this.prisma.asAdmin(async (tx) => tx.user.findUnique({ where: { id: userId } }));
+    return this.prisma.asAdmin(async (tx) =>
+      tx.user.findUnique({ where: { id: userId } }),
+    );
   }
 
   private async writeMfa(
@@ -298,6 +341,8 @@ export class MfaService {
   }
 
   private jwtSecret(): string {
-    return process.env.JWT_SECRET ?? 'billinx-dev-secret-key-change-in-production';
+    return (
+      process.env.JWT_SECRET ?? 'billinx-dev-secret-key-change-in-production'
+    );
   }
 }

@@ -4,17 +4,21 @@ import {
   UnauthorizedException,
   NotFoundException,
   ConflictException,
-} from "@nestjs/common";
-import { PrismaService } from "../../../infrastructure/database/prisma.service";
-import { CreateApiKeyRequest, CreateApiKeyResponse, Environment } from "../../../../packages/types/identity";
-import * as bcrypt from "bcrypt";
-import * as crypto from "crypto";
+} from '@nestjs/common';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import {
+  CreateApiKeyRequest,
+  CreateApiKeyResponse,
+  Environment,
+} from '../../../../packages/types/identity';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 const BCRYPT_ROUNDS = 12;
 const KEY_PREFIX_LENGTH = 16;
 const KEY_TOTAL_LENGTH = 48;
-const PREFIX_LIVE = "blx_live_";
-const PREFIX_TEST = "blx_test_";
+const PREFIX_LIVE = 'blx_live_';
+const PREFIX_TEST = 'blx_test_';
 
 @Injectable()
 export class ApiKeyService {
@@ -23,7 +27,7 @@ export class ApiKeyService {
   constructor(private readonly prisma: PrismaService) {}
 
   private defaultExpiryDate(): Date | null {
-    const days = parseInt(process.env.API_KEY_DEFAULT_EXPIRY_DAYS ?? "365", 10);
+    const days = parseInt(process.env.API_KEY_DEFAULT_EXPIRY_DAYS ?? '365', 10);
     if (!days || days <= 0) return null;
     const d = new Date();
     d.setDate(d.getDate() + days);
@@ -36,8 +40,10 @@ export class ApiKeyService {
   ): Promise<CreateApiKeyResponse> {
     const { name, environment, expiresAt } = request;
 
-    const rawRandom = crypto.randomBytes(KEY_TOTAL_LENGTH).toString("base64url");
-    const prefix = environment === "PRODUCTION" ? PREFIX_LIVE : PREFIX_TEST;
+    const rawRandom = crypto
+      .randomBytes(KEY_TOTAL_LENGTH)
+      .toString('base64url');
+    const prefix = environment === 'PRODUCTION' ? PREFIX_LIVE : PREFIX_TEST;
     const fullKey = `${prefix}${rawRandom}`;
     const keyPrefix = fullKey.substring(0, KEY_PREFIX_LENGTH + prefix.length);
     const keyHash = await bcrypt.hash(fullKey, BCRYPT_ROUNDS);
@@ -62,7 +68,7 @@ export class ApiKeyService {
       key: fullKey,
       keyPrefix,
       name: record.name,
-      environment: record.environment as Environment,
+      environment: record.environment,
       expiresAt: record.expiresAt?.toISOString() ?? null,
       createdAt: record.createdAt.toISOString(),
     };
@@ -74,7 +80,7 @@ export class ApiKeyService {
     environment: Environment;
   }> {
     if (!rawKey || rawKey.length < 20) {
-      throw new UnauthorizedException("Invalid API key format");
+      throw new UnauthorizedException('Invalid API key format');
     }
 
     const prefixLength = rawKey.startsWith(PREFIX_LIVE)
@@ -88,10 +94,7 @@ export class ApiKeyService {
         where: {
           keyPrefix,
           isRevoked: false,
-          OR: [
-            { expiresAt: null },
-            { expiresAt: { gt: new Date() } },
-          ],
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
         },
         include: {
           tenant: {
@@ -107,7 +110,7 @@ export class ApiKeyService {
     });
 
     if (candidates.length === 0) {
-      throw new UnauthorizedException("Invalid or expired API key");
+      throw new UnauthorizedException('Invalid or expired API key');
     }
 
     let matched: (typeof candidates)[0] | null = null;
@@ -120,21 +123,23 @@ export class ApiKeyService {
     }
 
     if (!matched) {
-      throw new UnauthorizedException("Invalid API key");
+      throw new UnauthorizedException('Invalid API key');
     }
 
     if (!matched.tenant.isActive) {
-      throw new UnauthorizedException("Tenant account is suspended");
+      throw new UnauthorizedException('Tenant account is suspended');
     }
 
     this.updateLastUsed(matched.id).catch((err) =>
-      this.logger.error(`Failed to update lastUsedAt for key ${matched!.id}: ${err.message}`),
+      this.logger.error(
+        `Failed to update lastUsedAt for key ${matched.id}: ${err.message}`,
+      ),
     );
 
     return {
       tenantId: matched.tenantId,
       keyId: matched.id,
-      environment: matched.environment as Environment,
+      environment: matched.environment,
     };
   }
 
@@ -150,7 +155,7 @@ export class ApiKeyService {
     }
 
     if (key.isRevoked) {
-      throw new ConflictException("API key is already revoked");
+      throw new ConflictException('API key is already revoked');
     }
 
     await this.prisma.asAdmin(async (tx) => {
@@ -176,7 +181,7 @@ export class ApiKeyService {
           expiresAt: true,
           createdAt: true,
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
       });
     });
   }

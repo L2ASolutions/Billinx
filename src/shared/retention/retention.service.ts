@@ -34,13 +34,19 @@ export class RetentionService {
         data: { isArchived: true },
       });
     });
-    this.logger.log(`Archived ${result.count} activity events older than 2 years`);
+    this.logger.log(
+      `Archived ${result.count} activity events older than 2 years`,
+    );
     return { archived: result.count };
   }
 
   async getRetentionStats(): Promise<{
     invoices: { total: number; archived: number; archiveThreshold: string };
-    activityEvents: { total: number; archived: number; archiveThreshold: string };
+    activityEvents: {
+      total: number;
+      archived: number;
+      archiveThreshold: string;
+    };
   }> {
     const [invoiceTotal, invoiceArchived, eventTotal, eventArchived] =
       await this.prisma.asAdmin(async (tx) => {

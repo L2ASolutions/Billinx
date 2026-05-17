@@ -3,13 +3,13 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
-} from "@nestjs/common";
-import { EventEmitter2 } from "@nestjs/event-emitter";
-import { InvoiceRepository } from "../repositories/invoice.repository";
-import { IrnService } from "./irn.service";
-import { StateMachineService } from "./state-machine.service";
-import { ActivityService } from "../../activity/services/activity.service";
-import { PrismaService } from "../../../infrastructure/database/prisma.service";
+} from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { InvoiceRepository } from '../repositories/invoice.repository';
+import { IrnService } from './irn.service';
+import { StateMachineService } from './state-machine.service';
+import { ActivityService } from '../../activity/services/activity.service';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import {
   InvoiceResponse,
   InvoiceListResponse,
@@ -17,10 +17,10 @@ import {
   InvoiceFilterParams,
   CancelInvoiceRequest,
   ValidationResponse,
-} from "../../../../packages/types/invoice";
-import { XmlInvoiceBuilder } from "./xml-invoice.builder";
-import { checkRole } from "../../../shared/utils/role-checker";
-import { SubmissionService } from "../../submission/services/submission.service";
+} from '../../../../packages/types/invoice';
+import { XmlInvoiceBuilder } from './xml-invoice.builder';
+import { checkRole } from '../../../shared/utils/role-checker';
+import { SubmissionService } from '../../submission/services/submission.service';
 
 @Injectable()
 export class InvoiceService {
@@ -51,24 +51,25 @@ export class InvoiceService {
     });
 
     if (!tenant) {
-      throw new NotFoundException("Tenant not found");
+      throw new NotFoundException('Tenant not found');
     }
 
     const platformIrn = await this.irnService.generateUniqueIrn(tenant.tin);
 
     if (
-      (request.invoiceTypeCode === "381" || request.invoiceTypeCode === "383") &&
+      (request.invoiceTypeCode === '381' ||
+        request.invoiceTypeCode === '383') &&
       !request.originalIrn
     ) {
       throw new BadRequestException(
-        "Credit notes and debit notes must reference an original IRN",
+        'Credit notes and debit notes must reference an original IRN',
       );
     }
 
     const invoice = await this.invoiceRepository.create({
       tenantId,
       environment,
-      schemaVersion: request.schemaVersion ?? "2.0",
+      schemaVersion: request.schemaVersion ?? '2.0',
       invoiceTypeCode: this.mapInvoiceTypeCode(request.invoiceTypeCode),
       platformIrn,
       sourceReference: request.sourceReference ?? null,
@@ -81,11 +82,13 @@ export class InvoiceService {
       buyerName: request.buyer?.partyName,
       issueDate: new Date(request.issueDate),
       dueDate: request.dueDate ? new Date(request.dueDate) : null,
-      taxPointDate: request.taxPointDate ? new Date(request.taxPointDate) : null,
+      taxPointDate: request.taxPointDate
+        ? new Date(request.taxPointDate)
+        : null,
       actualDeliveryDate: request.actualDeliveryDate
         ? new Date(request.actualDeliveryDate)
         : null,
-      currency: request.currency ?? "NGN",
+      currency: request.currency ?? 'NGN',
       taxCurrencyCode: request.taxCurrencyCode ?? null,
       exchangeRate: request.exchangeRate ?? null,
       exchangeRateSource: request.exchangeRateSource ?? null,
@@ -125,31 +128,33 @@ export class InvoiceService {
         : null,
       paymentTermsNote: request.paymentTermsNote ?? null,
       note: request.note ?? null,
-      metadata: JSON.parse(JSON.stringify({
-        ...(request.metadata ?? {}),
-        sellerParty: request.seller ?? null,
-        buyerParty: request.buyer ?? null,
-      })),
+      metadata: JSON.parse(
+        JSON.stringify({
+          ...(request.metadata ?? {}),
+          sellerParty: request.seller ?? null,
+          buyerParty: request.buyer ?? null,
+        }),
+      ),
       invoiceKind: request.invoiceKind ?? null,
       issueTime: request.issueTime ?? null,
       paymentStatus: request.paymentStatus ?? null,
       originalIrn: request.originalIrn ?? null,
-      status: "DRAFT",
+      status: 'DRAFT',
     });
 
     await this.invoiceRepository.addStateHistory({
       invoiceId: invoice.id,
       tenantId,
-      toStatus: "DRAFT",
+      toStatus: 'DRAFT',
       actor,
-      reason: "Invoice created",
+      reason: 'Invoice created',
     });
 
     this.activityService.track({
       tenantId,
-      eventType: "INVOICE_CREATED",
+      eventType: 'INVOICE_CREATED',
       actor,
-      entityType: "Invoice",
+      entityType: 'Invoice',
       entityId: invoice.id,
       payload: {
         invoiceId: invoice.id,
@@ -163,9 +168,9 @@ export class InvoiceService {
       },
     });
 
-    this.eventEmitter.emit("invoice.created", {
+    this.eventEmitter.emit('invoice.created', {
       tenantId,
-      eventType: "invoice.created",
+      eventType: 'invoice.created',
       invoiceId: invoice.id,
       platformIrn,
       data: {
@@ -175,12 +180,12 @@ export class InvoiceService {
         sellerTin: request.seller?.tin,
         buyerTin: request.buyer?.tin,
         totalAmount: request.legalMonetaryTotal?.payableAmount,
-        currency: request.currency ?? "NGN",
+        currency: request.currency ?? 'NGN',
       },
     });
 
     this.logger.log(`Invoice created: ${platformIrn} for tenant ${tenantId}`);
-     // Queue invoice for FIRS submission
+    // Queue invoice for FIRS submission
     const tenantData = await this.prisma.asAdmin(async (tx) => {
       return tx.tenant.findUnique({
         where: { id: tenantId },
@@ -189,17 +194,14 @@ export class InvoiceService {
     });
 
     const adapterKey = tenantData?.interswitchClientId
-      ? "interswitch"
-      : (tenantData?.appAdapterKey ?? "mock");
+      ? 'interswitch'
+      : (tenantData?.appAdapterKey ?? 'mock');
 
-    this.submissionService.queueInvoice(
-      invoice.id,
-      tenantId,
-      platformIrn,
-      adapterKey as any,
-    ).catch((err) =>
-      this.logger.error(`Failed to queue invoice: ${err.message}`),
-    );
+    this.submissionService
+      .queueInvoice(invoice.id, tenantId, platformIrn, adapterKey as any)
+      .catch((err) =>
+        this.logger.error(`Failed to queue invoice: ${err.message}`),
+      );
     return this.mapToResponse(invoice);
   }
 
@@ -209,46 +211,46 @@ export class InvoiceService {
 
     if (!request.seller?.tin) {
       errors.push({
-        field: "seller.tin",
-        code: "MISSING_SELLER_TIN",
-        message: "Seller TIN is required",
-        severity: "ERROR",
+        field: 'seller.tin',
+        code: 'MISSING_SELLER_TIN',
+        message: 'Seller TIN is required',
+        severity: 'ERROR',
       });
     }
 
     if (!request.seller?.partyName) {
       errors.push({
-        field: "seller.partyName",
-        code: "MISSING_SELLER_NAME",
-        message: "Seller name is required",
-        severity: "ERROR",
+        field: 'seller.partyName',
+        code: 'MISSING_SELLER_NAME',
+        message: 'Seller name is required',
+        severity: 'ERROR',
       });
     }
 
     if (!request.buyer?.partyName) {
       errors.push({
-        field: "buyer.partyName",
-        code: "MISSING_BUYER_NAME",
-        message: "Buyer name is required",
-        severity: "ERROR",
+        field: 'buyer.partyName',
+        code: 'MISSING_BUYER_NAME',
+        message: 'Buyer name is required',
+        severity: 'ERROR',
       });
     }
 
     if (!request.issueDate) {
       errors.push({
-        field: "issueDate",
-        code: "MISSING_ISSUE_DATE",
-        message: "Invoice issue date is required",
-        severity: "ERROR",
+        field: 'issueDate',
+        code: 'MISSING_ISSUE_DATE',
+        message: 'Invoice issue date is required',
+        severity: 'ERROR',
       });
     }
 
     if (!request.lineItems || request.lineItems.length === 0) {
       errors.push({
-        field: "lineItems",
-        code: "MISSING_LINE_ITEMS",
-        message: "Invoice must have at least one line item",
-        severity: "ERROR",
+        field: 'lineItems',
+        code: 'MISSING_LINE_ITEMS',
+        message: 'Invoice must have at least one line item',
+        severity: 'ERROR',
       });
     }
 
@@ -257,23 +259,24 @@ export class InvoiceService {
         if (!item.hsnCode) {
           warnings.push({
             field: `lineItems[${index}].hsnCode`,
-            code: "MISSING_HSN_CODE",
-            message: "HSN code recommended for goods-based line items",
-            severity: "WARNING",
+            code: 'MISSING_HSN_CODE',
+            message: 'HSN code recommended for goods-based line items',
+            severity: 'WARNING',
           });
         }
       });
     }
 
     if (
-      (request.invoiceTypeCode === "381" || request.invoiceTypeCode === "383") &&
+      (request.invoiceTypeCode === '381' ||
+        request.invoiceTypeCode === '383') &&
       !request.originalIrn
     ) {
       errors.push({
-        field: "originalIrn",
-        code: "MISSING_ORIGINAL_IRN",
-        message: "Credit notes and debit notes must reference an original IRN",
-        severity: "ERROR",
+        field: 'originalIrn',
+        code: 'MISSING_ORIGINAL_IRN',
+        message: 'Credit notes and debit notes must reference an original IRN',
+        severity: 'ERROR',
       });
     }
 
@@ -301,7 +304,7 @@ export class InvoiceService {
       id: invoice.id,
       platformIrn: invoice.platformIrn,
       firsConfirmedIrn: invoice.firsConfirmedIrn ?? undefined,
-      status: invoice.status as any,
+      status: invoice.status,
       qrCodeBase64: invoice.qrCodeBase64 ?? undefined,
       history: (invoice.stateHistory ?? []).map((h: any) => ({
         fromStatus: h.fromStatus ?? undefined,
@@ -333,26 +336,26 @@ export class InvoiceService {
     request: CancelInvoiceRequest,
     actorRoles: string[] = [],
   ): Promise<InvoiceResponse> {
-    checkRole(actorRoles, "ADMIN");
+    checkRole(actorRoles, 'ADMIN');
     const invoice = await this.invoiceRepository.findById(id);
     if (!invoice || invoice.tenantId !== tenantId) {
       throw new NotFoundException(`Invoice ${id} not found`);
     }
 
-    if (invoice.status !== "ACCEPTED") {
+    if (invoice.status !== 'ACCEPTED') {
       throw new BadRequestException(
         `Only accepted invoices can be cancelled. Current status: ${invoice.status}`,
       );
     }
 
     this.stateMachine.assertValidTransition(
-      invoice.status as any,
-      "CANCELLATION_REQUESTED",
+      invoice.status,
+      'CANCELLATION_REQUESTED',
     );
 
     const updated = await this.invoiceRepository.updateStatus(
       id,
-      "CANCELLATION_REQUESTED",
+      'CANCELLATION_REQUESTED',
       { cancelledAt: new Date() },
     );
 
@@ -360,16 +363,16 @@ export class InvoiceService {
       invoiceId: id,
       tenantId,
       fromStatus: invoice.status,
-      toStatus: "CANCELLATION_REQUESTED",
+      toStatus: 'CANCELLATION_REQUESTED',
       actor,
       reason: request.reason,
     });
 
     this.activityService.track({
       tenantId,
-      eventType: "INVOICE_CANCELLED",
+      eventType: 'INVOICE_CANCELLED',
       actor,
-      entityType: "Invoice",
+      entityType: 'Invoice',
       entityId: id,
       payload: {
         invoiceId: id,
@@ -378,9 +381,9 @@ export class InvoiceService {
       },
     });
 
-    this.eventEmitter.emit("invoice.cancelled", {
+    this.eventEmitter.emit('invoice.cancelled', {
       tenantId,
-      eventType: "invoice.cancelled",
+      eventType: 'invoice.cancelled',
       invoiceId: id,
       platformIrn: invoice.platformIrn,
       data: {
@@ -410,7 +413,10 @@ export class InvoiceService {
         select: { interswitchBusinessId: true },
       }),
     );
-    return this.xmlBuilder.build(invoice, tenant?.interswitchBusinessId ?? undefined);
+    return this.xmlBuilder.build(
+      invoice,
+      tenant?.interswitchBusinessId ?? undefined,
+    );
   }
 
   async createInvoiceFromXml(
@@ -425,12 +431,12 @@ export class InvoiceService {
 
   private mapInvoiceTypeCode(code: string): string {
     const map: Record<string, string> = {
-      "380": "STANDARD",
-      "381": "CREDIT_NOTE",
-      "383": "DEBIT_NOTE",
-      "325": "PROFORMA",
+      '380': 'STANDARD',
+      '381': 'CREDIT_NOTE',
+      '383': 'DEBIT_NOTE',
+      '325': 'PROFORMA',
     };
-    return map[code] ?? "STANDARD";
+    return map[code] ?? 'STANDARD';
   }
 
   private mapToResponse(invoice: any): InvoiceResponse {

@@ -1,4 +1,9 @@
-import { Injectable, OnModuleDestroy, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleDestroy,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import Redis from 'ioredis';
 
 const LOCKOUT_THRESHOLD = 5;
@@ -47,10 +52,14 @@ export class RedisService implements OnModuleDestroy {
       }
       return { allowed: true, remaining: limit - count, retryAfter: 0 };
     } catch (err) {
-      this.logger.error(`Redis unavailable during rate-limit check for key "${key}": ${(err as Error).message}`);
+      this.logger.error(
+        `Redis unavailable during rate-limit check for key "${key}": ${(err as Error).message}`,
+      );
       if (options.failClosed) {
         // Auth endpoints must never fail open — a Redis outage blocks auth rather than allowing unlimited attempts
-        throw new ServiceUnavailableException("Authentication service temporarily unavailable. Please retry shortly.");
+        throw new ServiceUnavailableException(
+          'Authentication service temporarily unavailable. Please retry shortly.',
+        );
       }
       // Non-auth rate limits fail open to avoid an API outage during Redis downtime
       return { allowed: true, remaining: limit, retryAfter: 0 };
@@ -76,17 +85,25 @@ export class RedisService implements OnModuleDestroy {
         retryAfterSecs: count >= LOCKOUT_THRESHOLD ? Math.max(ttl, 1) : 0,
       };
     } catch (err) {
-      this.logger.error(`Redis unavailable during login failure recording: ${(err as Error).message}`);
+      this.logger.error(
+        `Redis unavailable during login failure recording: ${(err as Error).message}`,
+      );
       // Fail closed: if we cannot record the failure we cannot enforce the lockout,
       // so deny the request to prevent brute-force during a Redis outage.
-      throw new ServiceUnavailableException("Authentication service temporarily unavailable. Please retry shortly.");
+      throw new ServiceUnavailableException(
+        'Authentication service temporarily unavailable. Please retry shortly.',
+      );
     }
   }
 
   async getLockoutStatus(
     tenantId: string,
     email: string,
-  ): Promise<{ locked: boolean; retryAfterSecs: number; failedAttempts: number }> {
+  ): Promise<{
+    locked: boolean;
+    retryAfterSecs: number;
+    failedAttempts: number;
+  }> {
     const key = this.failureKey(tenantId, email);
     try {
       const [raw, ttl] = await Promise.all([
@@ -101,16 +118,22 @@ export class RedisService implements OnModuleDestroy {
         failedAttempts: count,
       };
     } catch (err) {
-      this.logger.error(`Redis unavailable during lockout status check: ${(err as Error).message}`);
+      this.logger.error(
+        `Redis unavailable during lockout status check: ${(err as Error).message}`,
+      );
       // Fail closed: cannot verify lockout state, so block the attempt
-      throw new ServiceUnavailableException("Authentication service temporarily unavailable. Please retry shortly.");
+      throw new ServiceUnavailableException(
+        'Authentication service temporarily unavailable. Please retry shortly.',
+      );
     }
   }
 
   async clearLoginFailures(tenantId: string, email: string): Promise<void> {
     try {
       await this.client.del(this.failureKey(tenantId, email));
-    } catch { /* no-op */ }
+    } catch {
+      /* no-op */
+    }
   }
 
   private failureKey(tenantId: string, email: string): string {

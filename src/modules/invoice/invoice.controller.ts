@@ -15,7 +15,7 @@ import {
   Res,
   Header,
   BadRequestException,
-} from "@nestjs/common";
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -24,19 +24,19 @@ import {
   ApiConsumes,
   ApiProduces,
   ApiHeader,
-} from "@nestjs/swagger";
-import { Request, Response } from "express";
-import { InvoiceService } from "./services/invoice.service";
-import { ApiKeyGuard } from "../identity/guards/api-key.guard";
-import { JwtGuard } from "../identity/guards/jwt.guard";
+} from '@nestjs/swagger';
+import { Request, Response } from 'express';
+import { InvoiceService } from './services/invoice.service';
+import { ApiKeyGuard } from '../identity/guards/api-key.guard';
+import { JwtGuard } from '../identity/guards/jwt.guard';
 import {
   InvoiceFilterParams,
   InvoiceStatus,
   InvoiceTypeCode,
-} from "../../../packages/types/invoice";
+} from '../../../packages/types/invoice';
 
-@ApiTags("Invoices")
-@Controller("v1/invoices")
+@ApiTags('Invoices')
+@Controller('v1/invoices')
 export class InvoiceController {
   private readonly logger = new Logger(InvoiceController.name);
 
@@ -54,11 +54,8 @@ export class InvoiceController {
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(ApiKeyGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Submit invoice for FIRS compliance" })
-  async createInvoice(
-    @Body() body: Record<string, any>,
-    @Req() req: Request,
-  ) {
+  @ApiOperation({ summary: 'Submit invoice for FIRS compliance' })
+  async createInvoice(@Body() body: Record<string, any>, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.createInvoice(
       ctx.tenantId,
@@ -68,11 +65,11 @@ export class InvoiceController {
     );
   }
 
-  @Post("validate")
+  @Post('validate')
   @HttpCode(HttpStatus.OK)
   @UseGuards(ApiKeyGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Validate invoice without submitting to FIRS" })
+  @ApiOperation({ summary: 'Validate invoice without submitting to FIRS' })
   async validateInvoice(@Body() body: Record<string, any>) {
     return this.invoiceService.validateInvoice(body);
   }
@@ -81,18 +78,17 @@ export class InvoiceController {
   // XML routes (static segments — must precede :id param routes)
   // ---------------------------------------------------------------------------
 
-  @Post("from-xml")
+  @Post('from-xml')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(ApiKeyGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Create invoice from NRS-compliant XML body" })
-  @ApiConsumes("application/xml")
-  async createInvoiceFromXml(
-    @Body() body: unknown,
-    @Req() req: Request,
-  ) {
-    if (typeof body !== "string" || !body.trim()) {
-      throw new BadRequestException("Request body must be a non-empty XML string");
+  @ApiOperation({ summary: 'Create invoice from NRS-compliant XML body' })
+  @ApiConsumes('application/xml')
+  async createInvoiceFromXml(@Body() body: unknown, @Req() req: Request) {
+    if (typeof body !== 'string' || !body.trim()) {
+      throw new BadRequestException(
+        'Request body must be a non-empty XML string',
+      );
     }
     const ctx = this.getCtx(req);
     return this.invoiceService.createInvoiceFromXml(
@@ -110,25 +106,25 @@ export class InvoiceController {
   @Get()
   @UseGuards(ApiKeyGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "List invoices for authenticated tenant" })
-  @ApiQuery({ name: "status", required: false })
-  @ApiQuery({ name: "invoiceTypeCode", required: false })
-  @ApiQuery({ name: "sellerTin", required: false })
-  @ApiQuery({ name: "buyerTin", required: false })
-  @ApiQuery({ name: "from", required: false })
-  @ApiQuery({ name: "to", required: false })
-  @ApiQuery({ name: "page", required: false, type: Number })
-  @ApiQuery({ name: "limit", required: false, type: Number })
+  @ApiOperation({ summary: 'List invoices for authenticated tenant' })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'invoiceTypeCode', required: false })
+  @ApiQuery({ name: 'sellerTin', required: false })
+  @ApiQuery({ name: 'buyerTin', required: false })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
   async listInvoices(
     @Req() req: Request,
-    @Query("status") status?: InvoiceStatus,
-    @Query("invoiceTypeCode") invoiceTypeCode?: InvoiceTypeCode,
-    @Query("sellerTin") sellerTin?: string,
-    @Query("buyerTin") buyerTin?: string,
-    @Query("from") from?: string,
-    @Query("to") to?: string,
-    @Query("page") page?: number,
-    @Query("limit") limit?: number,
+    @Query('status') status?: InvoiceStatus,
+    @Query('invoiceTypeCode') invoiceTypeCode?: InvoiceTypeCode,
+    @Query('sellerTin') sellerTin?: string,
+    @Query('buyerTin') buyerTin?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
   ) {
     const ctx = this.getCtx(req);
     const filters: InvoiceFilterParams = {
@@ -144,10 +140,10 @@ export class InvoiceController {
     return this.invoiceService.listInvoices(ctx.tenantId, filters);
   }
 
-  @Get("stats")
+  @Get('stats')
   @UseGuards(ApiKeyGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Get invoice statistics for tenant" })
+  @ApiOperation({ summary: 'Get invoice statistics for tenant' })
   async getInvoiceStats(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getInvoiceStats(ctx.tenantId);
@@ -157,60 +153,60 @@ export class InvoiceController {
   // Single-invoice routes — :id param
   // ---------------------------------------------------------------------------
 
-  @Get(":id")
+  @Get(':id')
   @UseGuards(ApiKeyGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: "Get invoice by ID (JSON or XML via Accept header)",
+    summary: 'Get invoice by ID (JSON or XML via Accept header)',
   })
   @ApiHeader({
-    name: "Accept",
+    name: 'Accept',
     required: false,
-    description: "application/json (default) or application/xml",
+    description: 'application/json (default) or application/xml',
   })
-  @ApiProduces("application/json", "application/xml")
+  @ApiProduces('application/json', 'application/xml')
   async getInvoice(
-    @Param("id") id: string,
+    @Param('id') id: string,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-    @Headers("accept") accept?: string,
+    @Headers('accept') accept?: string,
   ) {
     const ctx = this.getCtx(req);
-    if (accept?.includes("application/xml")) {
+    if (accept?.includes('application/xml')) {
       const xml = await this.invoiceService.exportAsXml(id, ctx.tenantId);
-      res.setHeader("Content-Type", "application/xml");
+      res.setHeader('Content-Type', 'application/xml');
       return xml;
     }
     return this.invoiceService.getInvoice(id, ctx.tenantId);
   }
 
-  @Get(":id/xml")
+  @Get(':id/xml')
   @UseGuards(ApiKeyGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Get invoice as NRS-compliant XML" })
-  @Header("Content-Type", "application/xml")
-  @ApiProduces("application/xml")
-  async getInvoiceXml(@Param("id") id: string, @Req() req: Request) {
+  @ApiOperation({ summary: 'Get invoice as NRS-compliant XML' })
+  @Header('Content-Type', 'application/xml')
+  @ApiProduces('application/xml')
+  async getInvoiceXml(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.exportAsXml(id, ctx.tenantId);
   }
 
-  @Get(":id/status")
+  @Get(':id/status')
   @UseGuards(ApiKeyGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Get invoice lifecycle status and history" })
-  async getInvoiceStatus(@Param("id") id: string, @Req() req: Request) {
+  @ApiOperation({ summary: 'Get invoice lifecycle status and history' })
+  async getInvoiceStatus(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getInvoiceStatus(id, ctx.tenantId);
   }
 
-  @Patch(":id/cancel")
+  @Patch(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @UseGuards(ApiKeyGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Cancel an accepted invoice" })
+  @ApiOperation({ summary: 'Cancel an accepted invoice' })
   async cancelInvoice(
-    @Param("id") id: string,
+    @Param('id') id: string,
     @Body() body: Record<string, any>,
     @Req() req: Request,
   ) {
@@ -227,11 +223,11 @@ export class InvoiceController {
   // Dashboard routes (JWT auth)
   // ---------------------------------------------------------------------------
 
-  @Post("dashboard")
+  @Post('dashboard')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Create invoice from dashboard (JWT auth)" })
+  @ApiOperation({ summary: 'Create invoice from dashboard (JWT auth)' })
   async createInvoiceDashboard(
     @Body() body: Record<string, any>,
     @Req() req: Request,
@@ -245,17 +241,17 @@ export class InvoiceController {
     );
   }
 
-  @Get("dashboard/list")
+  @Get('dashboard/list')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "List invoices from dashboard (JWT auth)" })
+  @ApiOperation({ summary: 'List invoices from dashboard (JWT auth)' })
   async listInvoicesDashboard(
     @Req() req: Request,
-    @Query("status") status?: InvoiceStatus,
-    @Query("from") from?: string,
-    @Query("to") to?: string,
-    @Query("page") page?: number,
-    @Query("limit") limit?: number,
+    @Query('status') status?: InvoiceStatus,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
   ) {
     const ctx = this.getCtx(req);
     return this.invoiceService.listInvoices(ctx.tenantId, {

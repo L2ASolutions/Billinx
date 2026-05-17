@@ -4,13 +4,17 @@ import {
   ExecutionContext,
   UnauthorizedException,
   Logger,
-} from "@nestjs/common";
-import { Request } from "express";
-import { ApiKeyService } from "../services/api-key.service";
-import { PrismaService } from "../../../infrastructure/database/prisma.service";
-import { runWithContext } from "../../../shared/context/request-context";
-import { RequestContext, Environment, RateLimitTier } from "../../../../packages/types/identity";
-import * as crypto from "crypto";
+} from '@nestjs/common';
+import { Request } from 'express';
+import { ApiKeyService } from '../services/api-key.service';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { runWithContext } from '../../../shared/context/request-context';
+import {
+  RequestContext,
+  Environment,
+  RateLimitTier,
+} from '../../../../packages/types/identity';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
@@ -23,11 +27,11 @@ export class ApiKeyGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    const authHeader = request.headers["authorization"];
+    const authHeader = request.headers['authorization'];
 
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!authHeader?.startsWith('Bearer ')) {
       throw new UnauthorizedException(
-        "Missing or malformed Authorization header. Expected: Bearer <api_key>",
+        'Missing or malformed Authorization header. Expected: Bearer <api_key>',
       );
     }
 
@@ -44,16 +48,17 @@ export class ApiKeyGuard implements CanActivate {
     });
 
     if (!tenant) {
-      throw new UnauthorizedException("Tenant not found");
+      throw new UnauthorizedException('Tenant not found');
     }
 
     const requestContext: RequestContext = {
       tenantId,
-      environment: environment as Environment,
-      tier: tenant.rateLimitTier as RateLimitTier,
+      environment: environment,
+      tier: tenant.rateLimitTier,
       actor: `apikey:${keyId}`,
-      actorType: "apikey",
-      requestId: (request.headers["x-request-id"] as string) ?? crypto.randomUUID(),
+      actorType: 'apikey',
+      requestId:
+        (request.headers['x-request-id'] as string) ?? crypto.randomUUID(),
       isAdmin: false,
     };
 

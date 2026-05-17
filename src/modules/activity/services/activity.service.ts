@@ -1,5 +1,5 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "../../../infrastructure/database/prisma.service";
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import {
   TrackEventRequest,
   ActivityEventType,
@@ -10,7 +10,7 @@ import {
   SystemErrorResponse,
   ErrorFilterParams,
   ErrorStatsResponse,
-} from "../../../../packages/types/activity";
+} from '../../../../packages/types/activity';
 
 @Injectable()
 export class ActivityService {
@@ -19,23 +19,25 @@ export class ActivityService {
   constructor(private readonly prisma: PrismaService) {}
 
   track(event: TrackEventRequest): void {
-    this.prisma.asAdmin(async (tx) => {
-      return tx.activityEvent.create({
-        data: {
-          tenantId: event.tenantId ?? null,
-          eventType: event.eventType,
-          actor: event.actor,
-          actorEmail: event.actorEmail ?? null,
-          ipAddress: event.ipAddress ?? null,
-          userAgent: event.userAgent ?? null,
-          entityType: event.entityType ?? null,
-          entityId: event.entityId ?? null,
-          payload: JSON.parse(JSON.stringify(event.payload)),
-        },
-      });
-    }).catch((err) =>
-      this.logger.error(`Activity tracking failed: ${err.message}`),
-    );
+    this.prisma
+      .asAdmin(async (tx) => {
+        return tx.activityEvent.create({
+          data: {
+            tenantId: event.tenantId ?? null,
+            eventType: event.eventType,
+            actor: event.actor,
+            actorEmail: event.actorEmail ?? null,
+            ipAddress: event.ipAddress ?? null,
+            userAgent: event.userAgent ?? null,
+            entityType: event.entityType ?? null,
+            entityId: event.entityId ?? null,
+            payload: JSON.parse(JSON.stringify(event.payload)),
+          },
+        });
+      })
+      .catch((err) =>
+        this.logger.error(`Activity tracking failed: ${err.message}`),
+      );
   }
 
   trackError(params: {
@@ -49,27 +51,31 @@ export class ActivityService {
     actor?: string;
     requestId?: string;
   }): void {
-    this.prisma.asAdmin(async (tx) => {
-      return tx.systemError.create({
-        data: {
-          tenantId: params.tenantId ?? null,
-          errorCode: params.errorCode,
-          errorMessage: params.errorMessage,
-          stackTrace: params.stackTrace ?? null,
-          endpoint: params.endpoint ?? null,
-          method: params.method ?? null,
-          severity: params.severity ?? "LOW",
-          actor: params.actor ?? null,
-          requestId: params.requestId ?? null,
-          isResolved: false,
-        },
-      });
-    }).catch((err) =>
-      this.logger.error(`Error tracking failed: ${err.message}`),
-    );
+    this.prisma
+      .asAdmin(async (tx) => {
+        return tx.systemError.create({
+          data: {
+            tenantId: params.tenantId ?? null,
+            errorCode: params.errorCode,
+            errorMessage: params.errorMessage,
+            stackTrace: params.stackTrace ?? null,
+            endpoint: params.endpoint ?? null,
+            method: params.method ?? null,
+            severity: params.severity ?? 'LOW',
+            actor: params.actor ?? null,
+            requestId: params.requestId ?? null,
+            isResolved: false,
+          },
+        });
+      })
+      .catch((err) =>
+        this.logger.error(`Error tracking failed: ${err.message}`),
+      );
   }
 
-  async getActivity(filters: ActivityFilterParams): Promise<ActivityListResponse> {
+  async getActivity(
+    filters: ActivityFilterParams,
+  ): Promise<ActivityListResponse> {
     const page = filters.page ?? 1;
     const limit = Math.min(filters.limit ?? 50, 100);
     const skip = (page - 1) * limit;
@@ -85,7 +91,12 @@ export class ActivityService {
     }
     const [data, total] = await this.prisma.asAdmin(async (tx) => {
       return Promise.all([
-        tx.activityEvent.findMany({ where, skip, take: limit, orderBy: { occurredAt: "desc" } }),
+        tx.activityEvent.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { occurredAt: 'desc' },
+        }),
         tx.activityEvent.count({ where }),
       ]);
     });
@@ -107,7 +118,9 @@ export class ActivityService {
     };
   }
 
-  async getErrors(filters: ErrorFilterParams): Promise<SystemErrorListResponse> {
+  async getErrors(
+    filters: ErrorFilterParams,
+  ): Promise<SystemErrorListResponse> {
     const page = filters.page ?? 1;
     const limit = Math.min(filters.limit ?? 50, 100);
     const skip = (page - 1) * limit;
@@ -122,7 +135,12 @@ export class ActivityService {
     }
     const [data, total] = await this.prisma.asAdmin(async (tx) => {
       return Promise.all([
-        tx.systemError.findMany({ where, skip, take: limit, orderBy: { occurredAt: "desc" } }),
+        tx.systemError.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { occurredAt: 'desc' },
+        }),
         tx.systemError.count({ where }),
       ]);
     });
@@ -135,20 +153,33 @@ export class ActivityService {
   }
 
   async getErrorStats(): Promise<ErrorStatsResponse> {
-    const [total, unresolved, critical, high, medium, low] = await this.prisma.asAdmin(async (tx) => {
-      return Promise.all([
-        tx.systemError.count(),
-        tx.systemError.count({ where: { isResolved: false } }),
-        tx.systemError.count({ where: { severity: "CRITICAL", isResolved: false } }),
-        tx.systemError.count({ where: { severity: "HIGH", isResolved: false } }),
-        tx.systemError.count({ where: { severity: "MEDIUM", isResolved: false } }),
-        tx.systemError.count({ where: { severity: "LOW", isResolved: false } }),
-      ]);
-    });
+    const [total, unresolved, critical, high, medium, low] =
+      await this.prisma.asAdmin(async (tx) => {
+        return Promise.all([
+          tx.systemError.count(),
+          tx.systemError.count({ where: { isResolved: false } }),
+          tx.systemError.count({
+            where: { severity: 'CRITICAL', isResolved: false },
+          }),
+          tx.systemError.count({
+            where: { severity: 'HIGH', isResolved: false },
+          }),
+          tx.systemError.count({
+            where: { severity: 'MEDIUM', isResolved: false },
+          }),
+          tx.systemError.count({
+            where: { severity: 'LOW', isResolved: false },
+          }),
+        ]);
+      });
     return { total, unresolved, critical, high, medium, low };
   }
 
-  async resolveError(id: string, resolvedBy: string, resolutionNote?: string): Promise<SystemErrorResponse> {
+  async resolveError(
+    id: string,
+    resolvedBy: string,
+    resolutionNote?: string,
+  ): Promise<SystemErrorResponse> {
     const updated = await this.prisma.asAdmin(async (tx) => {
       return tx.systemError.update({
         where: { id },
@@ -165,13 +196,31 @@ export class ActivityService {
 
   async exportActivityCsv(filters: ActivityFilterParams): Promise<string> {
     const result = await this.getActivity({ ...filters, limit: 10000 });
-    const headers = ["ID","Tenant ID","Event Type","Actor","Actor Email","Entity Type","Entity ID","Occurred At"].join(",");
+    const headers = [
+      'ID',
+      'Tenant ID',
+      'Event Type',
+      'Actor',
+      'Actor Email',
+      'Entity Type',
+      'Entity ID',
+      'Occurred At',
+    ].join(',');
     const rows = result.data.map((e) =>
-      [e.id, e.tenantId ?? "", e.eventType, e.actor, e.actorEmail ?? "", e.entityType ?? "", e.entityId ?? "", e.occurredAt]
+      [
+        e.id,
+        e.tenantId ?? '',
+        e.eventType,
+        e.actor,
+        e.actorEmail ?? '',
+        e.entityType ?? '',
+        e.entityId ?? '',
+        e.occurredAt,
+      ]
         .map((v) => `"${String(v).replace(/"/g, `""`)}"`)
-        .join(","),
+        .join(','),
     );
-    return [headers, ...rows].join("\n");
+    return [headers, ...rows].join('\n');
   }
 
   private mapError(e: any): SystemErrorResponse {
