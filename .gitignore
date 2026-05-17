@@ -147,3 +147,4 @@ vite.config.ts.timestamp-*
 *.pem
 *.p12
 *.pfx
+keys/

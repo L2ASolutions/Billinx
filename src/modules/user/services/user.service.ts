@@ -36,6 +36,7 @@ import {
 import * as bcrypt from "bcrypt";
 import * as crypto from "crypto";
 import * as jwt from "jsonwebtoken";
+import { checkRole } from "../../../shared/utils/role-checker";
 
 const BCRYPT_ROUNDS = 12;
 const ACCESS_TOKEN_TTL = 15 * 60;
@@ -199,6 +200,12 @@ export class UserService {
 
       if (locked) {
         const minutes = Math.ceil(retryAfterSecs / 60);
+        // Fire-and-forget lockout notification email
+        this.emailService.sendAccountLocked({
+          to: user.email,
+          firstName: user.firstName,
+          lockoutMinutes: minutes,
+        });
         throw new HttpException(
           {
             statusCode: HttpStatus.TOO_MANY_REQUESTS,
@@ -308,7 +315,9 @@ export class UserService {
     tenantId: string,
     invitedBy: string,
     request: InviteUserRequest,
+    actorRoles: string[] = [],
   ): Promise<{ message: string; invitationToken: string }> {
+    checkRole(actorRoles, "ADMIN");
     // Check if user already exists
     const existing = await this.userRepository.findByEmail(tenantId, request.email);
     if (existing) {
@@ -558,7 +567,9 @@ export class UserService {
     userId: string,
     tenantId: string,
     role: UserRoleType,
+    actorRoles: string[] = [],
   ): Promise<UserResponse> {
+    checkRole(actorRoles, "OWNER");
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundException("User not found");
 
@@ -568,7 +579,8 @@ export class UserService {
   }
 
   // â"€â"€ Remove role â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-  async removeRole(userId: string, role: UserRoleType): Promise<UserResponse> {
+  async removeRole(userId: string, role: UserRoleType, actorRoles: string[] = []): Promise<UserResponse> {
+    checkRole(actorRoles, "OWNER");
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundException("User not found");
 
