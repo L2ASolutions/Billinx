@@ -204,4 +204,31 @@ export class AdminController {
     const ctx = this.getAdminCtx(req);
     return this.adminService.rejectErasure(id, ctx.adminId, body.reviewNote);
   }
+
+  // ── Metrics ────────────────────────────────────────────────────────────────
+  @Get("metrics")
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get platform-wide invoice and webhook metrics" })
+  async getMetrics() {
+    return this.adminService.getMetrics();
+  }
+
+  // ── Queue monitoring ───────────────────────────────────────────────────────
+  @Get("queue/status")
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get submission queue job counts" })
+  async getQueueStatus() {
+    return this.adminService.getQueueStatus();
+  }
+
+  @Post("queue/retry-failed")
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Re-queue all failed submission jobs" })
+  async retryFailedJobs() {
+    return this.adminService.retryFailedJobs();
+  }
 }
