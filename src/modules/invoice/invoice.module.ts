@@ -5,6 +5,7 @@ import { InvoiceService } from "./services/invoice.service";
 import { InvoiceRepository } from "./repositories/invoice.repository";
 import { IrnService } from "./services/irn.service";
 import { StateMachineService } from "./services/state-machine.service";
+import { XmlInvoiceBuilder } from "./services/xml-invoice.builder";
 import { PrismaService } from "../../infrastructure/database/prisma.service";
 import { SecretsService } from "../../infrastructure/secrets/secrets.service";
 import { ActivityService } from "../activity/services/activity.service";
@@ -23,6 +24,7 @@ import { MockAdapter } from "../submission/adapters/mock/mock.adapter";
     InvoiceRepository,
     IrnService,
     StateMachineService,
+    XmlInvoiceBuilder,
     PrismaService,
     SecretsService,
     ActivityService,
