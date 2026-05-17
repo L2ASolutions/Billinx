@@ -15,6 +15,7 @@ import { ApiKeyGuard } from "../identity/guards/api-key.guard";
 import { JwtGuard } from "../identity/guards/jwt.guard";
 import { SubmissionService } from "../submission/services/submission.service";
 import { MockAdapter } from "../submission/adapters/mock/mock.adapter";
+import { InterswitchAdapter } from "../submission/adapters/interswitch/interswitch.adapter";
 
 @Module({
   imports: [EventEmitterModule],
@@ -34,6 +35,7 @@ import { MockAdapter } from "../submission/adapters/mock/mock.adapter";
     JwtGuard,
     SubmissionService,
     MockAdapter,
+    InterswitchAdapter,
   ],
   exports: [InvoiceService, InvoiceRepository],
 })

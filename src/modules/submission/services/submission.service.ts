@@ -212,14 +212,13 @@ export class SubmissionService {
   ): Promise<void> {
     const maxAttempts = 3;
     const isFinal = !result.retryable || attempt >= maxAttempts;
-    const newStatus = isFinal ? "REJECTED" : "SUBMISSION_FAILED";
+    const newStatus = isFinal ? "DEAD_LETTERED" : "SUBMISSION_FAILED";
 
     await this.prisma.asAdmin(async (tx) => {
       await tx.invoice.update({
         where: { id: invoiceId },
         data: {
           status: newStatus,
-          rejectedAt: isFinal ? new Date() : null,
         },
       });
 

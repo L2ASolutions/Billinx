@@ -17,7 +17,6 @@ export class PrismaService
   constructor() {
     super({
       log: [
-        { emit: "event", level: "query" },
         { emit: "event", level: "error" },
         { emit: "event", level: "warn" },
       ],
@@ -28,9 +27,7 @@ export class PrismaService
       const ctx = getOptionalRequestContext();
 
       if (ctx?.tenantId && !ctx.isAdmin) {
-        await this.$executeRawUnsafe(
-          `SET LOCAL app.current_tenant_id = '${ctx.tenantId}'`,
-        );
+        await this.$executeRaw`SET LOCAL app.current_tenant_id = ${ctx.tenantId}`;
       }
 
       return next(params);
