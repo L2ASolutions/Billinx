@@ -157,6 +157,8 @@ model IdempotencyRecord {
   acceptedAt            DateTime?
   rejectedAt            DateTime?
   cancelledAt           DateTime?
+  archivedAt            DateTime?
+  isArchived            Boolean           @default(false)
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
@@ -332,6 +334,7 @@ model ActivityEvent {
   entityId    String?
   payload     Json
   occurredAt  DateTime          @default(now())
+  isArchived  Boolean           @default(false)
 
   tenant      Tenant?           @relation(fields: [tenantId], references: [id])
 
