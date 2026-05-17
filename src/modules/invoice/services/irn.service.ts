@@ -1,6 +1,6 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "../../../infrastructure/database/prisma.service";
-import * as crypto from "crypto";
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class IrnService {
@@ -10,9 +10,9 @@ export class IrnService {
 
   async generateIrn(tenantTin: string): Promise<string> {
     const date = this.getDateString();
-    const uid = crypto.randomUUID().split("-")[0];
+    const uid = crypto.randomUUID().split('-')[0];
     const counter = await this.getNextCounter(tenantTin, date);
-    const paddedCounter = String(counter).padStart(4, "0");
+    const paddedCounter = String(counter).padStart(4, '0');
     const irn = `${tenantTin}-${date}-${uid}-${paddedCounter}`;
 
     this.logger.log(`Generated IRN: ${irn}`);
@@ -39,7 +39,7 @@ export class IrnService {
     }
 
     if (attempts >= 5) {
-      throw new Error("Failed to generate unique IRN after 5 attempts");
+      throw new Error('Failed to generate unique IRN after 5 attempts');
     }
 
     return irn;
@@ -48,8 +48,8 @@ export class IrnService {
   private getDateString(): string {
     const now = new Date();
     const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day = String(now.getDate()).padStart(2, "0");
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
     return `${year}${month}${day}`;
   }
 
@@ -64,14 +64,14 @@ export class IrnService {
         where: {
           platformIrn: { startsWith: prefix },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         select: { platformIrn: true },
       });
     });
 
     if (!latest) return 1;
 
-    const parts = latest.platformIrn.split("-");
+    const parts = latest.platformIrn.split('-');
     const lastCounter = parseInt(parts[parts.length - 1], 10);
     return isNaN(lastCounter) ? 1 : lastCounter + 1;
   }

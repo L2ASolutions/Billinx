@@ -4,23 +4,23 @@ import {
   UnauthorizedException,
   ConflictException,
   NotFoundException,
-} from "@nestjs/common";
-import { PrismaService } from "../../../infrastructure/database/prisma.service";
+} from '@nestjs/common';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import {
   AdminLoginRequest,
   AdminLoginResponse,
   AdminUserResponse,
   CreateAdminUserRequest,
   AdminDashboardStats,
-} from "../../../../packages/types/admin";
-import { RedisService } from "../../../shared/redis/redis.service";
-import { EmailService } from "../../../shared/email/email.service";
-import { ConsentService } from "../../consent/consent.service";
-import { submissionQueue } from "../../submission/queues/submission.queue";
-import { RetentionService } from "../../../shared/retention/retention.service";
-import { ExportService } from "../../export/export.service";
-import * as bcrypt from "bcrypt";
-import * as jwt from "jsonwebtoken";
+} from '../../../../packages/types/admin';
+import { RedisService } from '../../../shared/redis/redis.service';
+import { EmailService } from '../../../shared/email/email.service';
+import { ConsentService } from '../../consent/consent.service';
+import { submissionQueue } from '../../submission/queues/submission.queue';
+import { RetentionService } from '../../../shared/retention/retention.service';
+import { ExportService } from '../../export/export.service';
+import * as bcrypt from 'bcrypt';
+import * as jwt from 'jsonwebtoken';
 
 const BCRYPT_ROUNDS = 12;
 const ACCESS_TOKEN_TTL = 8 * 60 * 60; // 8 hours for admin sessions
@@ -47,9 +47,7 @@ export class AdminService {
     });
 
     if (existing) {
-      throw new ConflictException(
-        `Admin user ${request.email} already exists`,
-      );
+      throw new ConflictException(`Admin user ${request.email} already exists`);
     }
 
     const passwordHash = await bcrypt.hash(request.password, BCRYPT_ROUNDS);
@@ -61,7 +59,7 @@ export class AdminService {
           passwordHash,
           firstName: request.firstName,
           lastName: request.lastName,
-          role: request.role ?? "STAFF",
+          role: request.role ?? 'STAFF',
         },
       });
     });
@@ -77,12 +75,12 @@ export class AdminService {
     });
 
     if (!admin || !admin.isActive) {
-      throw new UnauthorizedException("Invalid email or password");
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     const valid = await bcrypt.compare(request.password, admin.passwordHash);
     if (!valid) {
-      throw new UnauthorizedException("Invalid email or password");
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     await this.prisma.asAdmin(async (tx) => {
@@ -99,7 +97,7 @@ export class AdminService {
     return {
       accessToken,
       expiresIn: ACCESS_TOKEN_TTL,
-      tokenType: "Bearer",
+      tokenType: 'Bearer',
       admin: this.mapToResponse(admin),
     };
   }
@@ -130,27 +128,30 @@ export class AdminService {
       return Promise.all([
         tx.tenant.count(),
         tx.tenant.count({ where: { isActive: true } }),
-        tx.tenant.count({ where: { environment: "SANDBOX" } }),
-        tx.tenant.count({ where: { environment: "PRODUCTION" } }),
+        tx.tenant.count({ where: { environment: 'SANDBOX' } }),
+        tx.tenant.count({ where: { environment: 'PRODUCTION' } }),
         tx.invoice.count(),
         tx.invoice.count({ where: { createdAt: { gte: today } } }),
-        tx.invoice.count({ where: { status: "ACCEPTED" } }),
-        tx.invoice.count({ where: { status: "REJECTED" } }),
-        tx.invoice.count({ where: { status: { in: ["QUEUED", "SUBMITTING"] } } }),
-        tx.accessRequest.count({ where: { status: "PENDING" } }),
+        tx.invoice.count({ where: { status: 'ACCEPTED' } }),
+        tx.invoice.count({ where: { status: 'REJECTED' } }),
+        tx.invoice.count({
+          where: { status: { in: ['QUEUED', 'SUBMITTING'] } },
+        }),
+        tx.accessRequest.count({ where: { status: 'PENDING' } }),
         tx.accessRequest.count({
-          where: { status: "APPROVED", reviewedAt: { gte: weekAgo } },
+          where: { status: 'APPROVED', reviewedAt: { gte: weekAgo } },
         }),
         tx.systemError.count({ where: { isResolved: false } }),
         tx.systemError.count({
-          where: { severity: "CRITICAL", isResolved: false },
+          where: { severity: 'CRITICAL', isResolved: false },
         }),
       ]);
     });
 
-    const acceptanceRate = totalInvoices > 0
-      ? Math.round((acceptedInvoices / totalInvoices) * 100)
-      : 0;
+    const acceptanceRate =
+      totalInvoices > 0
+        ? Math.round((acceptedInvoices / totalInvoices) * 100)
+        : 0;
 
     return {
       tenants: {
@@ -187,7 +188,7 @@ export class AdminService {
         tx.tenant.findMany({
           skip,
           take: limit,
-          orderBy: { createdAt: "desc" },
+          orderBy: { createdAt: 'desc' },
           include: {
             _count: {
               select: { invoices: true, users: true },
@@ -231,15 +232,13 @@ export class AdminService {
 
     const [accepted, rejected] = await this.prisma.asAdmin(async (tx) => {
       return Promise.all([
-        tx.invoice.count({ where: { tenantId: id, status: "ACCEPTED" } }),
-        tx.invoice.count({ where: { tenantId: id, status: "REJECTED" } }),
+        tx.invoice.count({ where: { tenantId: id, status: 'ACCEPTED' } }),
+        tx.invoice.count({ where: { tenantId: id, status: 'REJECTED' } }),
       ]);
     });
 
     const total = (tenant as any)._count.invoices;
-    const acceptanceRate = total > 0
-      ? Math.round((accepted / total) * 100)
-      : 0;
+    const acceptanceRate = total > 0 ? Math.round((accepted / total) * 100) : 0;
 
     return {
       id: tenant.id,
@@ -289,9 +288,9 @@ export class AdminService {
         data: {
           name: request.companyName,
           tin: request.tin,
-          appAdapterKey: options.appAdapterKey ?? "mock",
-          environment: (options.environment ?? "SANDBOX") as any,
-          rateLimitTier: "STANDARD",
+          appAdapterKey: options.appAdapterKey ?? 'mock',
+          environment: (options.environment ?? 'SANDBOX') as any,
+          rateLimitTier: 'STANDARD',
           registeredAddress: {},
         },
       });
@@ -302,7 +301,7 @@ export class AdminService {
       return tx.accessRequest.update({
         where: { id: requestId },
         data: {
-          status: "APPROVED",
+          status: 'APPROVED',
           reviewedBy: adminId,
           reviewedAt: new Date(),
           reviewNote: options.reviewNote ?? null,
@@ -328,11 +327,11 @@ export class AdminService {
       contactName: request.contactName,
     };
   }
-async listAccessRequests(status?: string): Promise<any[]> {
+  async listAccessRequests(status?: string): Promise<any[]> {
     const requests = await this.prisma.asAdmin((tx) =>
       tx.accessRequest.findMany({
         where: status ? { status: status as any } : undefined,
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         include: { kybVerification: true },
       }),
     );
@@ -388,7 +387,7 @@ async listAccessRequests(status?: string): Promise<any[]> {
       return tx.accessRequest.update({
         where: { id },
         data: {
-          status: "REJECTED",
+          status: 'REJECTED',
           reviewedBy,
           reviewedAt: new Date(),
           reviewNote: reviewNote ?? null,
@@ -398,16 +397,21 @@ async listAccessRequests(status?: string): Promise<any[]> {
     return { message: `Access request for ${request.companyName} rejected.` };
   }
   // ── Account unlock ────────────────────────────────────────────────────────
-  async unlockAccount(tenantId: string, email: string): Promise<{ message: string }> {
+  async unlockAccount(
+    tenantId: string,
+    email: string,
+  ): Promise<{ message: string }> {
     await this.redisService.clearLoginFailures(tenantId, email);
-    this.logger.log(`Account unlocked by admin: tenantId=${tenantId} email=${email}`);
+    this.logger.log(
+      `Account unlocked by admin: tenantId=${tenantId} email=${email}`,
+    );
     return { message: `Account for ${email} has been unlocked.` };
   }
 
   // ── List admin users ──────────────────────────────────────────────────────
   async listAdminUsers(): Promise<AdminUserResponse[]> {
     const admins = await this.prisma.asAdmin(async (tx) => {
-      return tx.adminUser.findMany({ orderBy: { createdAt: "asc" } });
+      return tx.adminUser.findMany({ orderBy: { createdAt: 'asc' } });
     });
     return admins.map((a: any) => this.mapToResponse(a));
   }
@@ -439,7 +443,7 @@ async listAccessRequests(status?: string): Promise<any[]> {
     const secret =
       process.env.ADMIN_JWT_SECRET ??
       process.env.JWT_SECRET ??
-      "billinx-admin-secret-change-in-production";
+      'billinx-admin-secret-change-in-production';
 
     return jwt.sign(
       {
@@ -470,39 +474,69 @@ async listAccessRequests(status?: string): Promise<any[]> {
     yesterday.setDate(yesterday.getDate() - 1);
 
     const [
-      todayTotal, todayAccepted,
-      weekTotal, weekAccepted,
-      monthTotal, monthAccepted,
+      todayTotal,
+      todayAccepted,
+      weekTotal,
+      weekAccepted,
+      monthTotal,
+      monthAccepted,
       activeTenants,
       recentErrors,
-      totalDeliveries24h, deliveredDeliveries24h,
+      totalDeliveries24h,
+      deliveredDeliveries24h,
     ] = await this.prisma.asAdmin(async (tx) => {
       return Promise.all([
         tx.invoice.count({ where: { createdAt: { gte: todayMidnight } } }),
-        tx.invoice.count({ where: { createdAt: { gte: todayMidnight }, status: "ACCEPTED" } }),
+        tx.invoice.count({
+          where: { createdAt: { gte: todayMidnight }, status: 'ACCEPTED' },
+        }),
         tx.invoice.count({ where: { createdAt: { gte: monday } } }),
-        tx.invoice.count({ where: { createdAt: { gte: monday }, status: "ACCEPTED" } }),
+        tx.invoice.count({
+          where: { createdAt: { gte: monday }, status: 'ACCEPTED' },
+        }),
         tx.invoice.count({ where: { createdAt: { gte: monthStart } } }),
-        tx.invoice.count({ where: { createdAt: { gte: monthStart }, status: "ACCEPTED" } }),
+        tx.invoice.count({
+          where: { createdAt: { gte: monthStart }, status: 'ACCEPTED' },
+        }),
         tx.tenant.count({ where: { isActive: true } }),
         tx.systemError.count({ where: { occurredAt: { gte: yesterday } } }),
         tx.webhookDelivery.count({ where: { createdAt: { gte: yesterday } } }),
-        tx.webhookDelivery.count({ where: { createdAt: { gte: yesterday }, status: "DELIVERED" } }),
+        tx.webhookDelivery.count({
+          where: { createdAt: { gte: yesterday }, status: 'DELIVERED' },
+        }),
       ]);
     });
 
     return {
       invoices: {
-        today: { total: todayTotal, accepted: todayAccepted, acceptanceRate: todayTotal > 0 ? Math.round((todayAccepted / todayTotal) * 100) : 0 },
-        week: { total: weekTotal, accepted: weekAccepted, acceptanceRate: weekTotal > 0 ? Math.round((weekAccepted / weekTotal) * 100) : 0 },
-        month: { total: monthTotal, accepted: monthAccepted, acceptanceRate: monthTotal > 0 ? Math.round((monthAccepted / monthTotal) * 100) : 0 },
+        today: {
+          total: todayTotal,
+          accepted: todayAccepted,
+          acceptanceRate:
+            todayTotal > 0 ? Math.round((todayAccepted / todayTotal) * 100) : 0,
+        },
+        week: {
+          total: weekTotal,
+          accepted: weekAccepted,
+          acceptanceRate:
+            weekTotal > 0 ? Math.round((weekAccepted / weekTotal) * 100) : 0,
+        },
+        month: {
+          total: monthTotal,
+          accepted: monthAccepted,
+          acceptanceRate:
+            monthTotal > 0 ? Math.round((monthAccepted / monthTotal) * 100) : 0,
+        },
       },
       activeTenants,
       errors: { last24h: recentErrors },
       webhooks: {
         deliveriesLast24h: totalDeliveries24h,
         successfulLast24h: deliveredDeliveries24h,
-        successRate: totalDeliveries24h > 0 ? Math.round((deliveredDeliveries24h / totalDeliveries24h) * 100) : 0,
+        successRate:
+          totalDeliveries24h > 0
+            ? Math.round((deliveredDeliveries24h / totalDeliveries24h) * 100)
+            : 0,
       },
       generatedAt: now.toISOString(),
     };
@@ -521,7 +555,14 @@ async listAccessRequests(status?: string): Promise<any[]> {
       };
     } catch (err: any) {
       this.logger.error(`Queue status failed: ${err.message}`);
-      return { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, error: err.message };
+      return {
+        waiting: 0,
+        active: 0,
+        completed: 0,
+        failed: 0,
+        delayed: 0,
+        error: err.message,
+      };
     }
   }
 

@@ -1,23 +1,23 @@
-import { Injectable } from "@nestjs/common";
-import { XMLBuilder, XMLParser } from "fast-xml-parser";
+import { Injectable } from '@nestjs/common';
+import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 
 // These element names can legitimately appear multiple times in one document.
 const ARRAY_TAGS = new Set([
-  "InvoiceLine",
-  "TaxTotal",
-  "TaxSubtotal",
-  "PaymentMeans",
-  "AllowanceCharge",
-  "BillingReference",
-  "AdditionalDocumentReference",
+  'InvoiceLine',
+  'TaxTotal',
+  'TaxSubtotal',
+  'PaymentMeans',
+  'AllowanceCharge',
+  'BillingReference',
+  'AdditionalDocumentReference',
 ]);
 
 // Maps the Billinx stored enum name back to the NRS/UBL numeric type code.
 const STORED_TYPE_TO_NRS: Record<string, string> = {
-  STANDARD: "380",
-  CREDIT_NOTE: "381",
-  DEBIT_NOTE: "383",
-  PROFORMA: "325",
+  STANDARD: '380',
+  CREDIT_NOTE: '381',
+  DEBIT_NOTE: '383',
+  PROFORMA: '325',
 };
 
 @Injectable()
@@ -29,7 +29,7 @@ export class XmlInvoiceBuilder {
     this.builder = new XMLBuilder({
       ignoreAttributes: false,
       format: true,
-      indentBy: "  ",
+      indentBy: '  ',
       suppressEmptyNode: true,
     });
 
@@ -71,7 +71,8 @@ export class XmlInvoiceBuilder {
     x.IssueDate = this.fmtDate(inv.issueDate);
     if (inv.issueTime) x.IssueTime = inv.issueTime;
     if (inv.dueDate) x.DueDate = this.fmtDate(inv.dueDate);
-    x.InvoiceTypeCode = STORED_TYPE_TO_NRS[inv.invoiceTypeCode] ?? inv.invoiceTypeCode;
+    x.InvoiceTypeCode =
+      STORED_TYPE_TO_NRS[inv.invoiceTypeCode] ?? inv.invoiceTypeCode;
     if (inv.invoiceKind) x.InvoiceKind = inv.invoiceKind;
     if (inv.paymentStatus) x.PaymentStatus = inv.paymentStatus;
     x.DocumentCurrencyCode = inv.currency;
@@ -81,7 +82,8 @@ export class XmlInvoiceBuilder {
     if (inv.accountingCost) x.AccountingCost = inv.accountingCost;
     if (inv.buyerReference) x.BuyerReference = inv.buyerReference;
     if (inv.orderReference) x.OrderReference = inv.orderReference;
-    if (inv.actualDeliveryDate) x.ActualDeliveryDate = this.fmtDate(inv.actualDeliveryDate);
+    if (inv.actualDeliveryDate)
+      x.ActualDeliveryDate = this.fmtDate(inv.actualDeliveryDate);
     if (inv.paymentTermsNote) x.PaymentTermsNote = inv.paymentTermsNote;
 
     if (seller) x.AccountingSupplierParty = this.buildParty(seller);
@@ -89,7 +91,10 @@ export class XmlInvoiceBuilder {
 
     if (inv.invoiceDeliveryPeriod) {
       const dp: any = inv.invoiceDeliveryPeriod;
-      x.InvoiceDeliveryPeriod = { StartDate: dp.startDate, EndDate: dp.endDate };
+      x.InvoiceDeliveryPeriod = {
+        StartDate: dp.startDate,
+        EndDate: dp.endDate,
+      };
     }
 
     const billingRef: any[] = inv.billingReference ?? [];
@@ -100,20 +105,28 @@ export class XmlInvoiceBuilder {
       }));
     }
 
-    if (docRefs.dispatch) x.DispatchDocumentReference = this.buildDocRef(docRefs.dispatch);
-    if (docRefs.receipt) x.ReceiptDocumentReference = this.buildDocRef(docRefs.receipt);
-    if (docRefs.originator) x.OriginatorDocumentReference = this.buildDocRef(docRefs.originator);
-    if (docRefs.contract) x.ContractDocumentReference = this.buildDocRef(docRefs.contract);
+    if (docRefs.dispatch)
+      x.DispatchDocumentReference = this.buildDocRef(docRefs.dispatch);
+    if (docRefs.receipt)
+      x.ReceiptDocumentReference = this.buildDocRef(docRefs.receipt);
+    if (docRefs.originator)
+      x.OriginatorDocumentReference = this.buildDocRef(docRefs.originator);
+    if (docRefs.contract)
+      x.ContractDocumentReference = this.buildDocRef(docRefs.contract);
 
     const additional: any[] = docRefs.additional ?? [];
     if (additional.length > 0) {
-      x.AdditionalDocumentReference = additional.map((d: any) => this.buildDocRef(d));
+      x.AdditionalDocumentReference = additional.map((d: any) =>
+        this.buildDocRef(d),
+      );
     }
 
     const paymentMeans: any[] = inv.paymentMeans ?? [];
     if (paymentMeans.length > 0) {
       x.PaymentMeans = paymentMeans.map((pm: any) => {
-        const p: Record<string, any> = { PaymentMeansCode: pm.paymentMeansCode };
+        const p: Record<string, any> = {
+          PaymentMeansCode: pm.paymentMeansCode,
+        };
         if (pm.paymentDueDate) p.PaymentDueDate = pm.paymentDueDate;
         return p;
       });
@@ -171,7 +184,8 @@ export class XmlInvoiceBuilder {
     };
     if (p.email) party.Email = p.email;
     if (p.telephone) party.Telephone = p.telephone;
-    if (p.businessDescription) party.BusinessDescription = p.businessDescription;
+    if (p.businessDescription)
+      party.BusinessDescription = p.businessDescription;
 
     const addr: any = p.postalAddress ?? {};
     party.PostalAddress = {
@@ -206,7 +220,8 @@ export class XmlInvoiceBuilder {
 
     const price: any = li.price ?? {};
     line.Price = { PriceAmount: price.priceAmount };
-    if (price.baseQuantity != null) line.Price.BaseQuantity = price.baseQuantity;
+    if (price.baseQuantity != null)
+      line.Price.BaseQuantity = price.baseQuantity;
     if (price.priceUnit) line.Price.PriceUnit = price.priceUnit;
 
     return line;
@@ -224,7 +239,7 @@ export class XmlInvoiceBuilder {
 
   fromXmlObject(xml: any): Record<string, any> {
     const req: Record<string, any> = {
-      invoiceTypeCode: String(xml.InvoiceTypeCode ?? ""),
+      invoiceTypeCode: String(xml.InvoiceTypeCode ?? ''),
       issueDate: xml.IssueDate,
       currency: xml.DocumentCurrencyCode,
       seller: xml.AccountingSupplierParty
@@ -316,16 +331,24 @@ export class XmlInvoiceBuilder {
     }
 
     if (xml.DispatchDocumentReference) {
-      req.dispatchDocumentReference = this.fromXmlDocRef(xml.DispatchDocumentReference);
+      req.dispatchDocumentReference = this.fromXmlDocRef(
+        xml.DispatchDocumentReference,
+      );
     }
     if (xml.ReceiptDocumentReference) {
-      req.receiptDocumentReference = this.fromXmlDocRef(xml.ReceiptDocumentReference);
+      req.receiptDocumentReference = this.fromXmlDocRef(
+        xml.ReceiptDocumentReference,
+      );
     }
     if (xml.OriginatorDocumentReference) {
-      req.originatorDocumentReference = this.fromXmlDocRef(xml.OriginatorDocumentReference);
+      req.originatorDocumentReference = this.fromXmlDocRef(
+        xml.OriginatorDocumentReference,
+      );
     }
     if (xml.ContractDocumentReference) {
-      req.contractDocumentReference = this.fromXmlDocRef(xml.ContractDocumentReference);
+      req.contractDocumentReference = this.fromXmlDocRef(
+        xml.ContractDocumentReference,
+      );
     }
     if (xml.AdditionalDocumentReference) {
       req.additionalDocumentReference = xml.AdditionalDocumentReference.map(
@@ -361,7 +384,7 @@ export class XmlInvoiceBuilder {
 
   private fmtDate(d: Date | string | null | undefined): string | undefined {
     if (!d) return undefined;
-    if (typeof d === "string") return d.substring(0, 10);
+    if (typeof d === 'string') return d.substring(0, 10);
     return d.toISOString().substring(0, 10);
   }
 }

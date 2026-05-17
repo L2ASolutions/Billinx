@@ -1,8 +1,13 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from "@nestjs/common";
-import { Worker, Job } from "bullmq";
-import { SubmissionService } from "../services/submission.service";
-import { QueueJobData } from "../../../../packages/types/submission";
-import { QUEUE_NAME, redisConnection } from "../queues/submission.queue";
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
+import { Worker, Job } from 'bullmq';
+import { SubmissionService } from '../services/submission.service';
+import { QueueJobData } from '../../../../packages/types/submission';
+import { QUEUE_NAME, redisConnection } from '../queues/submission.queue';
 
 @Injectable()
 export class SubmissionWorker implements OnModuleInit, OnModuleDestroy {
@@ -39,23 +44,23 @@ export class SubmissionWorker implements OnModuleInit, OnModuleDestroy {
         },
       );
 
-      this.worker.on("completed", (job) => {
+      this.worker.on('completed', (job) => {
         this.logger.log(
           `Job ${job.id} completed for invoice ${job.data.platformIrn}`,
         );
       });
 
-      this.worker.on("failed", (job, err) => {
+      this.worker.on('failed', (job, err) => {
         this.logger.error(
           `Job ${job?.id} failed for invoice ${job?.data?.platformIrn}: ${err.message}`,
         );
       });
 
-      this.worker.on("error", (err) => {
+      this.worker.on('error', (err) => {
         this.logger.error(`Worker error: ${err.message}`);
       });
 
-      this.logger.log("Submission worker started");
+      this.logger.log('Submission worker started');
     } catch (err: any) {
       this.logger.warn(
         `Submission worker could not start (Redis may not be available): ${err.message}`,
@@ -66,7 +71,7 @@ export class SubmissionWorker implements OnModuleInit, OnModuleDestroy {
   private async stopWorker(): Promise<void> {
     if (this.worker) {
       await this.worker.close();
-      this.logger.log("Submission worker stopped");
+      this.logger.log('Submission worker stopped');
     }
   }
 }

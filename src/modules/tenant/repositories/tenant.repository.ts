@@ -1,6 +1,9 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { PrismaService } from "../../../infrastructure/database/prisma.service";
-import { CreateTenantRequest, UpdateTenantRequest } from "../../../../packages/types/tenant";
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import {
+  CreateTenantRequest,
+  UpdateTenantRequest,
+} from '../../../../packages/types/tenant';
 
 @Injectable()
 export class TenantRepository {
@@ -30,7 +33,7 @@ export class TenantRepository {
         tx.tenant.findMany({
           skip,
           take,
-          orderBy: { createdAt: "desc" },
+          orderBy: { createdAt: 'desc' },
         }),
         tx.tenant.count(),
       ]);
@@ -52,8 +55,8 @@ export class TenantRepository {
           tin: data.tin,
           registeredAddress: data.registeredAddress as any,
           appAdapterKey: data.appAdapterKey,
-          environment: data.environment ?? "SANDBOX",
-          rateLimitTier: data.rateLimitTier ?? "STANDARD",
+          environment: data.environment ?? 'SANDBOX',
+          rateLimitTier: data.rateLimitTier ?? 'STANDARD',
           batchEnabled: data.batchEnabled ?? false,
           batchSize: data.batchSize ?? 100,
           encryptedCredential: encryptedCredential ?? null,
@@ -62,7 +65,8 @@ export class TenantRepository {
           interswitchClientSecret: interswitchClientSecret ?? null,
           interswitchSecretIv: interswitchSecretIv ?? null,
           interswitchServiceId: data.interswitchCredentials?.serviceId ?? null,
-          interswitchBusinessId: data.interswitchCredentials?.businessId ?? null,
+          interswitchBusinessId:
+            data.interswitchCredentials?.businessId ?? null,
         },
       });
     });

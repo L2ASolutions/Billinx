@@ -26,11 +26,8 @@ export class AuthRateLimitGuard implements CanActivate {
     const ip = this.extractIp(req);
     const key = `rl:auth:ip:${ip}`;
 
-    const { allowed, remaining, retryAfter } = await this.redisService.checkRateLimit(
-      key,
-      AUTH_LIMIT,
-      AUTH_WINDOW_SECS,
-    );
+    const { allowed, remaining, retryAfter } =
+      await this.redisService.checkRateLimit(key, AUTH_LIMIT, AUTH_WINDOW_SECS);
 
     res.setHeader('X-RateLimit-Limit', AUTH_LIMIT);
     res.setHeader('X-RateLimit-Remaining', remaining);
@@ -56,7 +53,10 @@ export class AuthRateLimitGuard implements CanActivate {
     const forwarded = req.headers['x-forwarded-for'];
     const raw = Array.isArray(forwarded)
       ? forwarded[0]
-      : (forwarded?.split(',')[0] ?? req.socket?.remoteAddress ?? req.ip ?? '0.0.0.0');
+      : (forwarded?.split(',')[0] ??
+        req.socket?.remoteAddress ??
+        req.ip ??
+        '0.0.0.0');
     // Normalise IPv6-mapped IPv4: ::ffff:1.2.3.4 → 1.2.3.4
     return raw.trim().replace(/^::ffff:/, '');
   }

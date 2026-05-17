@@ -53,7 +53,6 @@ export class ExportService {
     ].join(',');
 
     const rows = invoices.map((inv: any) => {
-      const lmt = inv.legalMonetaryTotal as any;
       return [
         inv.platformIrn,
         inv.issueDate.toISOString().split('T')[0],

@@ -1,12 +1,17 @@
-import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
-import { PrismaService } from "../../../infrastructure/database/prisma.service";
-import { SecretsService } from "../../../infrastructure/secrets/secrets.service";
-import { JwtPayload, TokenResponse, Environment, RateLimitTier } from "../../../../packages/types/identity";
-import * as jwt from "jsonwebtoken";
-import * as bcrypt from "bcrypt";
-import * as crypto from "crypto";
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { SecretsService } from '../../../infrastructure/secrets/secrets.service';
+import {
+  JwtPayload,
+  TokenResponse,
+  Environment,
+  RateLimitTier,
+} from '../../../../packages/types/identity';
+import * as jwt from 'jsonwebtoken';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
-const ACCESS_TOKEN_TTL  = 15 * 60;
+const ACCESS_TOKEN_TTL = 15 * 60;
 const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60;
 
 @Injectable()
@@ -23,11 +28,11 @@ export class TokenService {
     tenantId: string,
     environment: Environment,
     tier: RateLimitTier,
-    role: "admin" | "member",
+    role: 'admin' | 'member',
   ): Promise<{ tokenResponse: TokenResponse; refreshToken: string }> {
     const refreshToken = this.generateRefreshToken();
 
-    const payload: Omit<JwtPayload, "iat" | "exp"> = {
+    const payload: Omit<JwtPayload, 'iat' | 'exp'> = {
       sub: userId,
       tenantId,
       environment,
@@ -36,7 +41,8 @@ export class TokenService {
     };
 
     // Use a simple secret for development
-    const secret = process.env.JWT_SECRET ?? "billinx-dev-secret-key-change-in-production";
+    const secret =
+      process.env.JWT_SECRET ?? 'billinx-dev-secret-key-change-in-production';
 
     const accessToken = jwt.sign(payload, secret, {
       expiresIn: ACCESS_TOKEN_TTL,
@@ -58,22 +64,23 @@ export class TokenService {
       tokenResponse: {
         accessToken,
         expiresIn: ACCESS_TOKEN_TTL,
-        tokenType: "Bearer",
+        tokenType: 'Bearer',
       },
       refreshToken,
     };
   }
 
   async verifyAccessToken(token: string): Promise<JwtPayload> {
-    const secret = process.env.JWT_SECRET ?? "billinx-dev-secret-key-change-in-production";
+    const secret =
+      process.env.JWT_SECRET ?? 'billinx-dev-secret-key-change-in-production';
 
     try {
       return jwt.verify(token, secret) as JwtPayload;
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
-        throw new UnauthorizedException("Access token expired");
+        throw new UnauthorizedException('Access token expired');
       }
-      throw new UnauthorizedException("Invalid access token");
+      throw new UnauthorizedException('Invalid access token');
     }
   }
 
@@ -105,12 +112,12 @@ export class TokenService {
     }
 
     if (!matched) {
-      throw new UnauthorizedException("Invalid or expired refresh token");
+      throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
     await this.prisma.asAdmin(async (tx) => {
       return tx.refreshToken.update({
-        where: { id: matched!.id },
+        where: { id: matched.id },
         data: { isRevoked: true, revokedAt: new Date() },
       });
     });
@@ -118,9 +125,9 @@ export class TokenService {
     const result = await this.issueTokenPair(
       matched.userId,
       matched.tenantId,
-      matched.tenant.environment as Environment,
-      matched.tenant.rateLimitTier as RateLimitTier,
-      "member",
+      matched.tenant.environment,
+      matched.tenant.rateLimitTier,
+      'member',
     );
 
     return {
@@ -139,6 +146,6 @@ export class TokenService {
   }
 
   private generateRefreshToken(): string {
-    return crypto.randomBytes(64).toString("base64url");
+    return crypto.randomBytes(64).toString('base64url');
   }
 }
