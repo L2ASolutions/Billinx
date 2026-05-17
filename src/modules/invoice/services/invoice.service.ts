@@ -18,6 +18,7 @@ import {
   CancelInvoiceRequest,
   ValidationResponse,
 } from "../../../../packages/types/invoice";
+import { XmlInvoiceBuilder } from "./xml-invoice.builder";
 
 import { SubmissionService } from "../../submission/services/submission.service";
 
@@ -33,6 +34,7 @@ export class InvoiceService {
     private readonly prisma: PrismaService,
     private readonly submissionService: SubmissionService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly xmlBuilder: XmlInvoiceBuilder,
   ) {}
 
   async createInvoice(
@@ -393,6 +395,30 @@ export class InvoiceService {
     const [total, accepted, rejected, draft] =
       await this.invoiceRepository.countByTenant(tenantId);
     return { total, accepted, rejected, draft };
+  }
+
+  async exportAsXml(id: string, tenantId: string): Promise<string> {
+    const invoice = await this.invoiceRepository.findById(id);
+    if (!invoice || invoice.tenantId !== tenantId) {
+      throw new NotFoundException(`Invoice ${id} not found`);
+    }
+    const tenant = await this.prisma.asAdmin((tx) =>
+      tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { interswitchBusinessId: true },
+      }),
+    );
+    return this.xmlBuilder.build(invoice, tenant?.interswitchBusinessId ?? undefined);
+  }
+
+  async createInvoiceFromXml(
+    tenantId: string,
+    environment: string,
+    actor: string,
+    xml: string,
+  ): Promise<InvoiceResponse> {
+    const request = this.xmlBuilder.parse(xml);
+    return this.createInvoice(tenantId, environment, actor, request);
   }
 
   private mapInvoiceTypeCode(code: string): string {

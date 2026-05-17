@@ -13,6 +13,7 @@ async function bootstrap() {
 
   app.use(helmet());
   app.use(express.json());
+  app.use(express.text({ type: "application/xml" }));
   app.use(express.urlencoded({ extended: true }));
 
   app.useGlobalPipes(
