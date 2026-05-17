@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, Logger, ServiceUnavailableException } from '@nestjs/common';
 import Redis from 'ioredis';
 
 const LOCKOUT_THRESHOLD = 5;
@@ -34,6 +34,7 @@ export class RedisService implements OnModuleDestroy {
     key: string,
     limit: number,
     windowSecs: number,
+    options: { failClosed?: boolean } = {},
   ): Promise<{ allowed: boolean; remaining: number; retryAfter: number }> {
     try {
       const count = await this.client.incr(key);
@@ -45,8 +46,13 @@ export class RedisService implements OnModuleDestroy {
         return { allowed: false, remaining: 0, retryAfter: Math.max(ttl, 1) };
       }
       return { allowed: true, remaining: limit - count, retryAfter: 0 };
-    } catch {
-      // Fail open — a Redis outage should not cause an API outage
+    } catch (err) {
+      this.logger.error(`Redis unavailable during rate-limit check for key "${key}": ${(err as Error).message}`);
+      if (options.failClosed) {
+        // Auth endpoints must never fail open — a Redis outage blocks auth rather than allowing unlimited attempts
+        throw new ServiceUnavailableException("Authentication service temporarily unavailable. Please retry shortly.");
+      }
+      // Non-auth rate limits fail open to avoid an API outage during Redis downtime
       return { allowed: true, remaining: limit, retryAfter: 0 };
     }
   }
@@ -69,8 +75,11 @@ export class RedisService implements OnModuleDestroy {
         locked: count >= LOCKOUT_THRESHOLD,
         retryAfterSecs: count >= LOCKOUT_THRESHOLD ? Math.max(ttl, 1) : 0,
       };
-    } catch {
-      return { count: 0, locked: false, retryAfterSecs: 0 };
+    } catch (err) {
+      this.logger.error(`Redis unavailable during login failure recording: ${(err as Error).message}`);
+      // Fail closed: if we cannot record the failure we cannot enforce the lockout,
+      // so deny the request to prevent brute-force during a Redis outage.
+      throw new ServiceUnavailableException("Authentication service temporarily unavailable. Please retry shortly.");
     }
   }
 
@@ -91,8 +100,10 @@ export class RedisService implements OnModuleDestroy {
         retryAfterSecs: locked ? Math.max(ttl, 1) : 0,
         failedAttempts: count,
       };
-    } catch {
-      return { locked: false, retryAfterSecs: 0, failedAttempts: 0 };
+    } catch (err) {
+      this.logger.error(`Redis unavailable during lockout status check: ${(err as Error).message}`);
+      // Fail closed: cannot verify lockout state, so block the attempt
+      throw new ServiceUnavailableException("Authentication service temporarily unavailable. Please retry shortly.");
     }
   }
 
