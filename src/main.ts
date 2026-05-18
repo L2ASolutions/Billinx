@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { VersionHeaderInterceptor } from './shared/interceptors/version-header.interceptor';
 import helmet from 'helmet';
 import * as express from 'express';
 
@@ -11,6 +12,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
+
+  // Trust the first proxy hop (AWS ALB / Nginx) so req.ip and X-Forwarded-For are correct
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
   const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
@@ -28,10 +32,24 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.use(helmet());
-  app.use(express.json());
+  app.use(
+    helmet({
+      strictTransportSecurity: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
+      contentSecurityPolicy: false, // managed at ALB/CDN level
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+    }),
+  );
+
+  app.use(express.json({ limit: '10mb' }));
   app.use(express.text({ type: 'application/xml' }));
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  app.useGlobalInterceptors(new VersionHeaderInterceptor());
 
   app.useGlobalPipes(
     new ValidationPipe({
