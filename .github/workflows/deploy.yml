@@ -221,6 +221,7 @@ jobs:
           echo "Service is stable."
 
       - name: Verify /health endpoint
+        id: health-check
         run: |
           ALB_DNS="${{ secrets.ALB_DNS_NAME }}"
           MAX_RETRIES=10
@@ -240,6 +241,28 @@ jobs:
           done
 
           echo "::error::/health returned non-200 after ${MAX_RETRIES} attempts"
+          exit 1
+
+      - name: Rollback on health check failure
+        if: failure() && steps.health-check.outcome == 'failure'
+        run: |
+          echo "::warning::Health check failed — rolling back to previous task definition"
+          PREVIOUS_TASK_DEF=$(aws ecs describe-services \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --services "${{ secrets.ECS_SERVICE }}" \
+            --query "services[0].deployments[1].taskDefinition" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -n "${PREVIOUS_TASK_DEF}" ] && [ "${PREVIOUS_TASK_DEF}" != "None" ]; then
+            aws ecs update-service \
+              --cluster "${{ secrets.ECS_CLUSTER }}" \
+              --service "${{ secrets.ECS_SERVICE }}" \
+              --task-definition "${PREVIOUS_TASK_DEF}" \
+              --force-new-deployment
+            echo "::error::Rolled back to ${PREVIOUS_TASK_DEF}"
+          else
+            echo "::error::No previous task definition found for rollback"
+          fi
           exit 1
 
       - name: Deployment summary
