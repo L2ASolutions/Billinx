@@ -249,6 +249,16 @@ export class AdminController {
     return this.adminService.retryFailedJobs();
   }
 
+  @Get('queue/bulk/status')
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get bulk submission queue depth and processing stats',
+  })
+  async getBulkQueueStatus() {
+    return this.adminService.getBulkQueueStatus();
+  }
+
   // ── Data retention ────────────────────────────────────────────────────────
   @Get('retention/stats')
   @UseGuards(AdminJwtGuard)
