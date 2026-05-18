@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { InvoiceController } from './invoice.controller';
+import { BulkInvoiceController } from './bulk/bulk-invoice.controller';
+import { BulkInvoiceService } from './bulk/bulk-invoice.service';
 import { InvoiceService } from './services/invoice.service';
 import { InvoiceRepository } from './repositories/invoice.repository';
 import { IrnService } from './services/irn.service';
@@ -21,9 +23,10 @@ import { RedisService } from '../../shared/redis/redis.service';
 
 @Module({
   imports: [EventEmitterModule],
-  controllers: [InvoiceController],
+  controllers: [InvoiceController, BulkInvoiceController],
   providers: [
     InvoiceService,
+    BulkInvoiceService,
     InvoiceRepository,
     IrnService,
     StateMachineService,

@@ -54,4 +54,5 @@ export interface QueueJobData {
   platformIrn: string;
   adapterKey: AppAdapterKey;
   attempt: number;
+  batchId?: string;
 }

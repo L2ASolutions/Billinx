@@ -41,6 +41,7 @@ model Tenant {
 systemErrors   SystemError[]
 users         User[]
   productCatalog   ProductCatalog[]
+  bulkBatches      BulkBatch[]
 
   @@map("tenants")
 }
@@ -648,6 +649,35 @@ enum ErrorSeverity {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+// ── BULK BATCHES ──────────────────────────────────────────────────────────────
+model BulkBatch {
+  id           String            @id @default(uuid())
+  tenantId     String
+  environment  TenantEnvironment
+  actor        String
+  source       BulkBatchSource   @default(JSON)
+  fileName     String?
+  total        Int
+  queued       Int               @default(0)
+  invalidCount Int               @default(0)
+  processing   Int               @default(0)
+  accepted     Int               @default(0)
+  rejected     Int               @default(0)
+  failed       Int               @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  tenant       Tenant            @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("bulk_batches")
+}
+
+enum BulkBatchSource {
+  JSON
+  CSV
 }
 
 enum UserRoleType {
