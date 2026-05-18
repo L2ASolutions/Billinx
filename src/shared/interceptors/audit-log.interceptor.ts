@@ -11,6 +11,7 @@ import { throwError } from 'rxjs';
 import { Request } from 'express';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { getOptionalRequestContext } from '../context/request-context';
+import { sanitize } from '../utils/log-sanitizer';
 
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {
@@ -48,7 +49,7 @@ export class AuditLogInterceptor implements NestInterceptor {
         path: request.path,
         statusCode: error ? 500 : 200,
         durationMs,
-        body: this.sanitiseBody(request.body),
+        body: sanitize(request.body),
         error: error ? { message: error.message, name: error.name } : null,
       }),
     );
@@ -69,27 +70,5 @@ export class AuditLogInterceptor implements NestInterceptor {
       .catch((err) =>
         this.logger.error(`Failed to write audit log: ${err.message}`),
       );
-  }
-
-  private sanitiseBody(body: unknown): unknown {
-    if (!body || typeof body !== 'object') return body;
-
-    const REDACTED_FIELDS = new Set([
-      'password',
-      'apiKey',
-      'key',
-      'secret',
-      'token',
-      'credential',
-      'privateKey',
-      'authorization',
-    ]);
-
-    return Object.fromEntries(
-      Object.entries(body as Record<string, unknown>).map(([k, v]) => [
-        k,
-        REDACTED_FIELDS.has(k.toLowerCase()) ? '[REDACTED]' : v,
-      ]),
-    );
   }
 }

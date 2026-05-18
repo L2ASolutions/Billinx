@@ -44,8 +44,11 @@ export class TenantRateLimitInterceptor implements NestInterceptor {
     const { allowed, remaining, retryAfter } =
       await this.redisService.checkRateLimit(key, limit, WINDOW_SECS);
 
+    const resetAt = (hourBucket + 1) * WINDOW_SECS;
+
     res.setHeader('X-RateLimit-Limit', limit);
     res.setHeader('X-RateLimit-Remaining', remaining);
+    res.setHeader('X-RateLimit-Reset', resetAt);
     res.setHeader('X-RateLimit-Tier', tier);
 
     if (!allowed) {
