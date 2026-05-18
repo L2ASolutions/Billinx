@@ -5,7 +5,9 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { EmailService } from '../../../shared/email/email.service';
 import {
   CreateApiKeyRequest,
   CreateApiKeyResponse,
@@ -19,12 +21,16 @@ const KEY_PREFIX_LENGTH = 16;
 const KEY_TOTAL_LENGTH = 48;
 const PREFIX_LIVE = 'blx_live_';
 const PREFIX_TEST = 'blx_test_';
+const KEY_FORMAT_RE = /^blx_(live|test)_[A-Za-z0-9_-]{20,}$/;
 
 @Injectable()
 export class ApiKeyService {
   private readonly logger = new Logger(ApiKeyService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   private defaultExpiryDate(): Date | null {
     const days = parseInt(process.env.API_KEY_DEFAULT_EXPIRY_DAYS ?? '365', 10);
@@ -74,12 +80,15 @@ export class ApiKeyService {
     };
   }
 
-  async verifyApiKey(rawKey: string): Promise<{
+  async verifyApiKey(
+    rawKey: string,
+    clientIp?: string,
+  ): Promise<{
     tenantId: string;
     keyId: string;
     environment: Environment;
   }> {
-    if (!rawKey || rawKey.length < 20) {
+    if (!rawKey || !KEY_FORMAT_RE.test(rawKey)) {
       throw new UnauthorizedException('Invalid API key format');
     }
 
@@ -130,9 +139,9 @@ export class ApiKeyService {
       throw new UnauthorizedException('Tenant account is suspended');
     }
 
-    this.updateLastUsed(matched.id).catch((err) =>
+    this.updateLastUsed(matched.id, clientIp).catch((err) =>
       this.logger.error(
-        `Failed to update lastUsedAt for key ${matched.id}: ${err.message}`,
+        `Failed to update usage for key ${matched.id}: ${err.message}`,
       ),
     );
 
@@ -168,6 +177,69 @@ export class ApiKeyService {
     this.logger.log(`API key ${keyId} revoked for tenant ${tenantId}`);
   }
 
+  async rotateApiKey(
+    tenantId: string,
+    keyId: string,
+  ): Promise<CreateApiKeyResponse> {
+    const existing = await this.prisma.asAdmin(async (tx) => {
+      return tx.apiKey.findFirst({
+        where: { id: keyId, tenantId, isRevoked: false },
+      });
+    });
+
+    if (!existing) {
+      throw new NotFoundException(`API key ${keyId} not found`);
+    }
+
+    const rawRandom = crypto
+      .randomBytes(KEY_TOTAL_LENGTH)
+      .toString('base64url');
+    const prefix =
+      existing.environment === 'PRODUCTION' ? PREFIX_LIVE : PREFIX_TEST;
+    const fullKey = `${prefix}${rawRandom}`;
+    const newKeyPrefix = fullKey.substring(
+      0,
+      KEY_PREFIX_LENGTH + prefix.length,
+    );
+    const keyHash = await bcrypt.hash(fullKey, BCRYPT_ROUNDS);
+
+    // 24-hour grace period on old key
+    const gracePeriodExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    const [newRecord] = await this.prisma.asAdmin(async (tx) => {
+      return Promise.all([
+        tx.apiKey.create({
+          data: {
+            tenantId,
+            keyHash,
+            keyPrefix: newKeyPrefix,
+            environment: existing.environment,
+            name: existing.name,
+            expiresAt: existing.expiresAt,
+          },
+        }),
+        tx.apiKey.update({
+          where: { id: keyId },
+          data: { expiresAt: gracePeriodExpiry },
+        }),
+      ]);
+    });
+
+    this.logger.log(
+      `API key rotated for tenant ${tenantId}: old=${keyId} new=${newRecord.id}`,
+    );
+
+    return {
+      id: newRecord.id,
+      key: fullKey,
+      keyPrefix: newKeyPrefix,
+      name: newRecord.name,
+      environment: newRecord.environment,
+      expiresAt: newRecord.expiresAt?.toISOString() ?? null,
+      createdAt: newRecord.createdAt.toISOString(),
+    };
+  }
+
   async listApiKeys(tenantId: string) {
     return this.prisma.asAdmin(async (tx) => {
       return tx.apiKey.findMany({
@@ -178,6 +250,8 @@ export class ApiKeyService {
           name: true,
           environment: true,
           lastUsedAt: true,
+          lastUsedIp: true,
+          requestCount: true,
           expiresAt: true,
           createdAt: true,
         },
@@ -186,11 +260,75 @@ export class ApiKeyService {
     });
   }
 
-  private async updateLastUsed(keyId: string): Promise<void> {
+  @Cron('0 9 * * *', { name: 'api-key-expiry-check' })
+  async checkExpiringKeys(): Promise<void> {
+    const now = new Date();
+    const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const in1Day = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    const expiringKeys = await this.prisma.asAdmin(async (tx) => {
+      return tx.apiKey.findMany({
+        where: {
+          isRevoked: false,
+          expiresAt: { gte: now, lte: in7Days },
+        },
+        include: {
+          tenant: {
+            include: {
+              users: {
+                include: { roles: true },
+                where: { isActive: true },
+              },
+            },
+          },
+        },
+      });
+    });
+
+    for (const key of expiringKeys) {
+      const expiresAt = key.expiresAt!;
+      const daysLeft = Math.ceil(
+        (expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      const isUrgent = expiresAt <= in1Day;
+
+      const ownerRoles = (key.tenant as any).users?.filter((u: any) =>
+        u.roles?.some((r: any) => r.role === 'OWNER'),
+      );
+
+      for (const owner of ownerRoles ?? []) {
+        this.emailService.sendApiKeyExpiryWarning({
+          to: owner.email,
+          firstName: owner.firstName,
+          tenantName: key.tenant.name,
+          keyName: key.name,
+          keyPrefix: key.keyPrefix,
+          daysLeft,
+          isUrgent,
+          expiresAt: expiresAt.toISOString(),
+        });
+      }
+    }
+
+    if (expiringKeys.length > 0) {
+      this.logger.log(
+        `API key expiry check: ${expiringKeys.length} keys expiring within 7 days`,
+      );
+    }
+  }
+
+  private async updateLastUsed(
+    keyId: string,
+    clientIp?: string,
+  ): Promise<void> {
     await this.prisma.asAdmin(async (tx) => {
       return tx.apiKey.update({
         where: { id: keyId },
-        data: { lastUsedAt: new Date() },
+        data: {
+          lastUsedAt: new Date(),
+          lastUsedIp: clientIp ?? null,
+          requestCount: { increment: 1 },
+        },
       });
     });
   }

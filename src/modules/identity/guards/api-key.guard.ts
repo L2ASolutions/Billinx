@@ -32,6 +32,9 @@ export class ApiKeyGuard implements CanActivate {
     }
 
     const rawKey = authHeader.substring(7).trim();
+    const clientIp =
+      (request.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ??
+      request.ip;
 
     const KEY_FORMAT_RE = /^blx_(live|test)_[A-Za-z0-9_-]{20,}$/;
     if (!KEY_FORMAT_RE.test(rawKey)) {
@@ -39,7 +42,7 @@ export class ApiKeyGuard implements CanActivate {
     }
 
     const { tenantId, keyId, environment } =
-      await this.apiKeyService.verifyApiKey(rawKey);
+      await this.apiKeyService.verifyApiKey(rawKey, clientIp);
 
     const tenant = await this.prisma.asAdmin(async (tx) => {
       return tx.tenant.findUnique({
