@@ -11,8 +11,28 @@ import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
-const ACCESS_TOKEN_TTL = 15 * 60;
-const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60;
+function parseDuration(value: string | undefined, defaultSecs: number): number {
+  if (!value) return defaultSecs;
+  const match = /^(\d+)(s|m|h|d)$/.exec(value);
+  if (!match) return defaultSecs;
+  const n = parseInt(match[1], 10);
+  const multipliers: Record<string, number> = {
+    s: 1,
+    m: 60,
+    h: 3600,
+    d: 86400,
+  };
+  return n * (multipliers[match[2]] ?? 1);
+}
+
+const ACCESS_TOKEN_TTL = parseDuration(
+  process.env.JWT_ACCESS_TOKEN_EXPIRY,
+  15 * 60,
+);
+const REFRESH_TOKEN_TTL = parseDuration(
+  process.env.JWT_REFRESH_TOKEN_EXPIRY,
+  7 * 24 * 60 * 60,
+);
 
 @Injectable()
 export class TokenService {

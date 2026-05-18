@@ -28,10 +28,22 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.use(helmet());
-  app.use(express.json());
+  app.use(
+    helmet({
+      strictTransportSecurity: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
+      contentSecurityPolicy: false,
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+    }),
+  );
+
+  app.use(express.json({ limit: '10mb' }));
   app.use(express.text({ type: 'application/xml' }));
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   app.useGlobalPipes(
     new ValidationPipe({

@@ -33,6 +33,11 @@ export class ApiKeyGuard implements CanActivate {
 
     const rawKey = authHeader.substring(7).trim();
 
+    const KEY_FORMAT_RE = /^blx_(live|test)_[A-Za-z0-9_-]{20,}$/;
+    if (!KEY_FORMAT_RE.test(rawKey)) {
+      throw new UnauthorizedException('Invalid API key format');
+    }
+
     const { tenantId, keyId, environment } =
       await this.apiKeyService.verifyApiKey(rawKey);
 

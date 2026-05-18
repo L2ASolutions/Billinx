@@ -70,12 +70,13 @@ billinx/
 ## Modules
 
 ### identity
-- **ApiKeyGuard** — Bearer token; validates hashed key in DB; injects `RequestContext`
+- **ApiKeyGuard** — Bearer token; validates format (`/^blx_(live|test)_[A-Za-z0-9_-]{20,}$/`) before bcrypt; injects `RequestContext`; extracts `clientIp` from `X-Forwarded-For`
 - **JwtGuard** — Bearer JWT; verifies RS256 signature; injects `RequestContext`
 - **AdminKeyGuard** — `X-Admin-Key` header; bcrypt compare to stored hash
-- **TokenService** — Issue/rotate access (15 min) + refresh (7 day) token pairs
-- **ApiKeyService** — Create, list, revoke tenant API keys
-- Endpoints: `POST /v1/auth/token`, `/auth/refresh`, `/auth/revoke`, `/v1/api-keys` CRUD
+- **TokenService** — Issue/rotate access + refresh token pairs; lifetimes configurable via `JWT_ACCESS_TOKEN_EXPIRY` / `JWT_REFRESH_TOKEN_EXPIRY` env vars (e.g. `15m`, `7d`; defaults: 15 min / 7 days)
+- **ApiKeyService** — Create, list, revoke, rotate tenant API keys; tracks `requestCount` and `lastUsedIp` per key; daily cron sends 7-day and 1-day expiry warnings by email
+- Rotation: `POST /v1/api-keys/:keyId/rotate` — zero-downtime rotation with 24h grace period on old key
+- Endpoints: `POST /v1/auth/token`, `/auth/refresh`, `/auth/revoke`, `/v1/api-keys` CRUD + rotate
 
 ### tenant
 - Multi-tenant provisioning; every resource is scoped to a `Tenant`
@@ -189,6 +190,8 @@ billinx/
 20260517130000_add_data_retention_fields
 20260517140000_add_audit_hash_chaining
 20260517150000_add_product_catalog
+20260517160000_add_bulk_batches         # feat/bulk-processing — BulkBatch model + BulkBatchSource enum
+20260517170000_add_api_key_usage_tracking  # feat/tenant-api-improvements — lastUsedIp, requestCount, expiresAt index
 ```
 
 Run pending migrations: `npx prisma migrate deploy`
@@ -206,8 +209,12 @@ Populated by guards. Read anywhere via `getRequestContext()`. Never pass tenantI
 
 ### Interceptors (applied globally)
 1. **IdempotencyInterceptor** — SHA256 hash of body; replay response if `Idempotency-Key` header reused (24h TTL)
-2. **TenantRateLimitInterceptor** — Redis fixed-window counter per tenant/tier; 429 on breach
-3. **AuditLogInterceptor** — Async DB write of every request/response; redacts sensitive fields
+2. **TenantRateLimitInterceptor** — Redis fixed-window counter per tenant/tier; 429 on breach; sets `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `X-RateLimit-Tier` on every response
+3. **AuditLogInterceptor** — Async DB write of every request/response; uses shared `sanitize()` to recursively redact 16 sensitive keys before writing
+
+### Log sanitizer (`src/shared/utils/log-sanitizer.ts`)
+- `sanitize(obj)` — recursive (depth ≤5); redacts: `password`, `apikey`, `secret`, `token`, `authorization`, `x-api-key`, `x-api-secret`, `x-admin-key`, `privatekey`, `credential`, `mastersecret`, `refreshtoken`, and more
+- Used by AuditLogInterceptor; import wherever logs touch user-supplied data
 
 ### Encryption pattern
 - Master key from AWS Secrets Manager → `SecretsService.getMasterEncryptionKey()`
@@ -229,6 +236,8 @@ PORT=3000
 
 # Database
 DATABASE_URL=postgresql://...
+# For production: append ?connection_limit=10&pool_timeout=20
+DB_POOL_SIZE=10
 
 # Redis
 REDIS_HOST=localhost
@@ -239,6 +248,9 @@ REDIS_URL=                        # takes precedence over HOST/PORT
 # JWT (dev only — prod uses Secrets Manager)
 JWT_SECRET=
 ADMIN_JWT_SECRET=
+# Token lifetimes — units: s, m, h, d (defaults: 15m / 7d)
+JWT_ACCESS_TOKEN_EXPIRY=15m
+JWT_REFRESH_TOKEN_EXPIRY=7d
 
 # AWS
 AWS_REGION=af-south-1
@@ -258,6 +270,10 @@ APP_BASE_URL=https://app.billinx.ng
 
 # MFA
 MFA_ISSUER=Billinx
+
+# BullMQ worker concurrency
+WORKER_CONCURRENCY=10        # individual submission worker
+BULK_WORKER_CONCURRENCY=5    # bulk submission worker (lower priority)
 
 # External APIs
 INTERSWITCH_SANDBOX_URL=
@@ -307,14 +323,14 @@ terraform apply
 
 ---
 
-## GitHub Actions (pending — branch `feat/github-actions`)
-
-Two workflows (requires `workflow` scope on PAT to push):
+## GitHub Actions
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| `deploy.yml` | Push to `main` | Build Docker image → push ECR → deploy ECS |
-| `pr-checks.yml` | Pull request | Lint + type-check + tests |
+| `deploy.yml` | Push to `main` | Build Docker image → push ECR → Prisma migrate → ECS deploy → health check → auto-rollback on failure |
+| `pr-checks.yml` | Pull request | Lint + type-check + unit tests |
+
+Deployment pipeline: test → build-and-push → migrate → deploy (needs both build-and-push AND migrate). Auto-rollback: if `/health` fails after 10 retries × 15s, previous ECS task definition is restored.
 
 ---
 
@@ -380,4 +396,24 @@ Two workflows (requires `workflow` scope on PAT to push):
 ### Monitoring endpoints
 - `GET /v1/admin/metrics` — invoice counts (today/week/month), acceptance rates, active tenants, system errors, webhook delivery rates
 - `GET /v1/admin/queue/status` — BullMQ job counts (waiting, active, completed, failed, delayed)
+- `GET /v1/admin/queue/bulk/status` — bulk queue job counts (separate BullMQ queue)
 - `POST /v1/admin/queue/retry-failed` — re-queues all failed submission jobs
+
+### Bulk invoice ingestion (`src/modules/invoice/bulk/`)
+- `POST /v1/invoices/bulk` — up to 500 invoices per JSON request; per-invoice results with `invoiceId`, `platformIrn`, `status`, `errors`
+- `POST /v1/invoices/bulk/csv` — multipart upload; 5 MB / 500-row limits; flat CSV mapped to invoice format
+- `GET /v1/invoices/bulk/:batchId/status` — batch progress (`total`, `queued`, `processing`, `accepted`, `rejected`, `failed`, `percentComplete`)
+- Separate BullMQ queue `billinx-bulk-submission` at priority 10 (lower than individual invoices); concurrency via `BULK_WORKER_CONCURRENCY` (default 5)
+- Rate limit: 3 bulk requests per minute per tenant (Redis key `bulk:rl:${tenantId}`)
+- `BulkBatch` Prisma model tracks batch lifecycle; migration: `20260517160000_add_bulk_batches`
+
+### Startup environment validation (`src/config/config.validation.ts`)
+- `validateEnvironment()` called before app creation; exits with a clear list of all missing vars
+- Always required: `DATABASE_URL`
+- Production required: `JWT_PRIVATE_KEY_SECRET_ID`, `JWT_PUBLIC_KEY_SECRET_ID`, `MASTER_KEY_SECRET_ID`, `ADMIN_KEY_SECRET_ID`, `REDIS_URL`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+- Development required: `JWT_SECRET`
+
+### API versioning header (`src/shared/interceptors/version-header.interceptor.ts`)
+- `VersionHeaderInterceptor` — appends `X-API-Version: 1.0.0` to all responses
+- Applied globally in `main.ts`
+- See `docs/api-versioning.md` for deprecation policy
