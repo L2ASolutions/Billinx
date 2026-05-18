@@ -17,6 +17,7 @@ import { RedisService } from '../../../shared/redis/redis.service';
 import { EmailService } from '../../../shared/email/email.service';
 import { ConsentService } from '../../consent/consent.service';
 import { submissionQueue } from '../../submission/queues/submission.queue';
+import { bulkSubmissionQueue } from '../../submission/queues/bulk-submission.queue';
 import { RetentionService } from '../../../shared/retention/retention.service';
 import { ExportService } from '../../export/export.service';
 import * as bcrypt from 'bcrypt';
@@ -583,6 +584,30 @@ export class AdminService {
     }
   }
 
+  // ── Bulk queue monitoring ─────────────────────────────────────────────────
+  async getBulkQueueStatus() {
+    try {
+      const counts = await bulkSubmissionQueue.getJobCounts();
+      return {
+        waiting: counts.waiting ?? 0,
+        active: counts.active ?? 0,
+        completed: counts.completed ?? 0,
+        failed: counts.failed ?? 0,
+        delayed: counts.delayed ?? 0,
+      };
+    } catch (err: any) {
+      this.logger.error(`Bulk queue status failed: ${err.message}`);
+      return {
+        waiting: 0,
+        active: 0,
+        completed: 0,
+        failed: 0,
+        delayed: 0,
+        error: err.message,
+      };
+    }
+  }
+
   // ── Data retention ────────────────────────────────────────────────────────
   async getRetentionStats() {
     return this.retentionService.getRetentionStats();
@@ -606,7 +631,11 @@ export class AdminService {
   }
 
   // ── Audit chain verification ──────────────────────────────────────────────
-  async verifyAuditChain(): Promise<{ valid: boolean; totalEvents: number; brokenAt: string | null }> {
+  async verifyAuditChain(): Promise<{
+    valid: boolean;
+    totalEvents: number;
+    brokenAt: string | null;
+  }> {
     const events = await this.prisma.asAdmin(async (tx) => {
       return (tx as any).activityEvent.findMany({
         orderBy: { occurredAt: 'asc' },
@@ -632,7 +661,10 @@ export class AdminService {
       const previousHash = event.previousHash ?? 'GENESIS';
       const payloadStr = JSON.stringify(event.payload);
       const hashInput = `${event.tenantId}|${event.eventType}|${event.actor}|${new Date(event.occurredAt).toISOString()}|${payloadStr}|${previousHash}`;
-      const expectedHash = crypto.createHash('sha256').update(hashInput).digest('hex');
+      const expectedHash = crypto
+        .createHash('sha256')
+        .update(hashInput)
+        .digest('hex');
 
       if (expectedHash !== event.entryHash) {
         brokenAt = event.id;

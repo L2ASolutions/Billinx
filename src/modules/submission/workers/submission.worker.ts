@@ -25,6 +25,8 @@ export class SubmissionWorker implements OnModuleInit, OnModuleDestroy {
   }
 
   private startWorker(): void {
+    const concurrency = parseInt(process.env.WORKER_CONCURRENCY ?? '10', 10);
+
     try {
       this.worker = new Worker<QueueJobData>(
         QUEUE_NAME,
@@ -36,9 +38,9 @@ export class SubmissionWorker implements OnModuleInit, OnModuleDestroy {
         },
         {
           connection: redisConnection,
-          concurrency: 5,
+          concurrency,
           limiter: {
-            max: 10,
+            max: 50,
             duration: 1000,
           },
         },
@@ -60,7 +62,9 @@ export class SubmissionWorker implements OnModuleInit, OnModuleDestroy {
         this.logger.error(`Worker error: ${err.message}`);
       });
 
-      this.logger.log('Submission worker started');
+      this.logger.log(
+        `Submission worker started (concurrency: ${concurrency})`,
+      );
     } catch (err: any) {
       this.logger.warn(
         `Submission worker could not start (Redis may not be available): ${err.message}`,
