@@ -415,7 +415,68 @@ export class EmailService {
     this.send(opts.to, `Invoice rejected by FIRS — ${opts.platformIrn}`, html);
   }
 
-  // ─── 8. Account locked ───────────────────────────────────────────────────────
+  // ─── 8. API key expiry warning ───────────────────────────────────────────────
+
+  sendApiKeyExpiryWarning(opts: {
+    to: string;
+    firstName: string;
+    tenantName: string;
+    keyName: string;
+    keyPrefix: string;
+    daysLeft: number;
+    isUrgent: boolean;
+    expiresAt: string;
+  }): void {
+    const dashboardLink = `${APP_BASE_URL}/api-keys`;
+    const urgentBadge = opts.isUrgent
+      ? `<div style="display:inline-block;background:#fdf0ef;border:1px solid #e74c3c;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
+          <span style="font-size:12px;font-weight:600;color:#c0392b;text-transform:uppercase;letter-spacing:0.5px;">&#9888; Expires in ${opts.daysLeft} day${opts.daysLeft !== 1 ? 's' : ''}</span>
+        </div>`
+      : `<div style="display:inline-block;background:#fff3cd;border:1px solid #ffc107;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
+          <span style="font-size:12px;font-weight:600;color:#856404;text-transform:uppercase;letter-spacing:0.5px;">&#8987; Expires in ${opts.daysLeft} days</span>
+        </div>`;
+
+    const subject = opts.isUrgent
+      ? `Urgent: API key "${opts.keyName}" expires tomorrow — Billinx`
+      : `Action required: API key "${opts.keyName}" expires in ${opts.daysLeft} days`;
+
+    const html = baseLayout(
+      subject,
+      urgentBadge +
+        h1(
+          opts.isUrgent
+            ? 'Your API key expires tomorrow'
+            : `Your API key expires in ${opts.daysLeft} days`,
+        ) +
+        p(`Hi ${opts.firstName},`) +
+        p(
+          `An API key for <strong>${opts.tenantName}</strong> is about to expire. ` +
+            `Once it expires, any integrations using this key will stop working.`,
+        ) +
+        `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+              style="background:#f8faf9;border:1px solid #dde3ec;border-radius:6px;margin:0 0 20px;">
+          <tr><td style="padding:20px;">
+            <div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Key Name</span><br /><strong style="color:${BRAND_DARK};">${opts.keyName}</strong></div>
+            <div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Key Prefix</span><br /><code style="font-size:13px;color:${BRAND_DARK};">${opts.keyPrefix}...</code></div>
+            <div><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Expires At</span><br /><strong style="color:#c0392b;">${new Date(opts.expiresAt).toUTCString()}</strong></div>
+          </td></tr>
+        </table>` +
+        p(
+          'Rotate this key now to create a new key and give yourself a 24-hour grace period on the old one. ' +
+            'This ensures zero downtime for your integration.',
+        ) +
+        ctaButton(dashboardLink, 'Rotate API Key') +
+        divider() +
+        p(
+          'You can also rotate this key via the API: ' +
+            `<code>POST /v1/api-keys/{keyId}/rotate</code>`,
+        ),
+    );
+
+    this.send(opts.to, subject, html);
+  }
+
+  // ─── 9. Account locked ───────────────────────────────────────────────────────
 
   sendAccountLocked(opts: {
     to: string;
