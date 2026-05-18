@@ -47,21 +47,24 @@ users         User[]
 }
 
 model ApiKey {
-  id          String            @id @default(uuid())
-  tenantId    String
-  keyHash     String            @unique
-  keyPrefix   String
-  environment TenantEnvironment
-  name        String
-  lastUsedAt  DateTime?
-  expiresAt   DateTime?
-  isRevoked   Boolean           @default(false)
-  createdAt   DateTime          @default(now())
+  id           String            @id @default(uuid())
+  tenantId     String
+  keyHash      String            @unique
+  keyPrefix    String
+  environment  TenantEnvironment
+  name         String
+  lastUsedAt   DateTime?
+  lastUsedIp   String?
+  requestCount Int               @default(0)
+  expiresAt    DateTime?
+  isRevoked    Boolean           @default(false)
+  createdAt    DateTime          @default(now())
 
-  tenant      Tenant            @relation(fields: [tenantId], references: [id])
+  tenant       Tenant            @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([keyPrefix])
+  @@index([expiresAt])
   @@map("api_keys")
 }
 
