@@ -606,7 +606,11 @@ export class AdminService {
   }
 
   // ── Audit chain verification ──────────────────────────────────────────────
-  async verifyAuditChain(): Promise<{ valid: boolean; totalEvents: number; brokenAt: string | null }> {
+  async verifyAuditChain(): Promise<{
+    valid: boolean;
+    totalEvents: number;
+    brokenAt: string | null;
+  }> {
     const events = await this.prisma.asAdmin(async (tx) => {
       return (tx as any).activityEvent.findMany({
         orderBy: { occurredAt: 'asc' },
@@ -632,7 +636,10 @@ export class AdminService {
       const previousHash = event.previousHash ?? 'GENESIS';
       const payloadStr = JSON.stringify(event.payload);
       const hashInput = `${event.tenantId}|${event.eventType}|${event.actor}|${new Date(event.occurredAt).toISOString()}|${payloadStr}|${previousHash}`;
-      const expectedHash = crypto.createHash('sha256').update(hashInput).digest('hex');
+      const expectedHash = crypto
+        .createHash('sha256')
+        .update(hashInput)
+        .digest('hex');
 
       if (expectedHash !== event.entryHash) {
         brokenAt = event.id;
