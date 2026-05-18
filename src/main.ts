@@ -4,6 +4,7 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { validateEnvironment } from './config/config.validation';
+import { VersionHeaderInterceptor } from './shared/interceptors/version-header.interceptor';
 import helmet from 'helmet';
 import * as express from 'express';
 
@@ -41,7 +42,7 @@ async function bootstrap() {
         includeSubDomains: true,
         preload: true,
       },
-      contentSecurityPolicy: false,
+      contentSecurityPolicy: false, // managed at ALB/CDN level
       referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
       permittedCrossDomainPolicies: { permittedPolicies: 'none' },
     }),
@@ -50,6 +51,8 @@ async function bootstrap() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.text({ type: 'application/xml' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  app.useGlobalInterceptors(new VersionHeaderInterceptor());
 
   app.useGlobalPipes(
     new ValidationPipe({

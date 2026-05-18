@@ -135,6 +135,22 @@ export class IdentityController {
     return this.apiKeyService.listApiKeys(ctx.tenantId);
   }
 
+  @Post('api-keys/:keyId/rotate')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(ApiKeyGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Rotate an API key — creates new key, old key gets 24h grace period',
+    description:
+      'Returns the new key value (only shown once). The old key remains valid for 24 hours ' +
+      'to allow zero-downtime rotation. An email is sent to the tenant OWNER.',
+  })
+  async rotateApiKey(@Param('keyId') keyId: string) {
+    const ctx = getRequestContext();
+    return this.apiKeyService.rotateApiKey(ctx.tenantId, keyId);
+  }
+
   @Delete('api-keys/:keyId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(ApiKeyGuard)
