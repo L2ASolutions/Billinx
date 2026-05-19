@@ -20,40 +20,45 @@ export class ActivityService {
   constructor(private readonly prisma: PrismaService) {}
 
   track(event: TrackEventRequest): void {
-    this.prisma.asAdmin(async (tx) => {
-      const tenantId = event.tenantId ?? null;
-      const occurredAt = new Date();
+    this.prisma
+      .asAdmin(async (tx) => {
+        const tenantId = event.tenantId ?? null;
+        const occurredAt = new Date();
 
-      const prior = await (tx as any).activityEvent.findFirst({
-        where: tenantId ? { tenantId } : {},
-        orderBy: { occurredAt: 'desc' },
-        select: { entryHash: true },
-      });
+        const prior = await (tx as any).activityEvent.findFirst({
+          where: tenantId ? { tenantId } : {},
+          orderBy: { occurredAt: 'desc' },
+          select: { entryHash: true },
+        });
 
-      const previousHash: string = prior?.entryHash ?? 'GENESIS';
-      const payloadStr = JSON.stringify(event.payload);
-      const hashInput = `${tenantId}|${event.eventType}|${event.actor}|${occurredAt.toISOString()}|${payloadStr}|${previousHash}`;
-      const entryHash = crypto.createHash('sha256').update(hashInput).digest('hex');
+        const previousHash: string = prior?.entryHash ?? 'GENESIS';
+        const payloadStr = JSON.stringify(event.payload);
+        const hashInput = `${tenantId}|${event.eventType}|${event.actor}|${occurredAt.toISOString()}|${payloadStr}|${previousHash}`;
+        const entryHash = crypto
+          .createHash('sha256')
+          .update(hashInput)
+          .digest('hex');
 
-      return (tx as any).activityEvent.create({
-        data: {
-          tenantId,
-          eventType: event.eventType,
-          actor: event.actor,
-          actorEmail: event.actorEmail ?? null,
-          ipAddress: event.ipAddress ?? null,
-          userAgent: event.userAgent ?? null,
-          entityType: event.entityType ?? null,
-          entityId: event.entityId ?? null,
-          payload: JSON.parse(payloadStr),
-          occurredAt,
-          entryHash,
-          previousHash,
-        },
-      });
-    }).catch((err) =>
-      this.logger.error(`Activity tracking failed: ${err.message}`),
-    );
+        return (tx as any).activityEvent.create({
+          data: {
+            tenantId,
+            eventType: event.eventType,
+            actor: event.actor,
+            actorEmail: event.actorEmail ?? null,
+            ipAddress: event.ipAddress ?? null,
+            userAgent: event.userAgent ?? null,
+            entityType: event.entityType ?? null,
+            entityId: event.entityId ?? null,
+            payload: JSON.parse(payloadStr),
+            occurredAt,
+            entryHash,
+            previousHash,
+          },
+        });
+      })
+      .catch((err) =>
+        this.logger.error(`Activity tracking failed: ${err.message}`),
+      );
   }
 
   trackError(params: {

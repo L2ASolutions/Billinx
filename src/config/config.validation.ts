@@ -1,6 +1,4 @@
-const REQUIRED_VARS: string[] = [
-  'DATABASE_URL',
-];
+const REQUIRED_VARS: string[] = ['DATABASE_URL'];
 
 const PRODUCTION_REQUIRED_VARS: string[] = [
   'JWT_PRIVATE_KEY_SECRET_ID',
@@ -13,9 +11,7 @@ const PRODUCTION_REQUIRED_VARS: string[] = [
   'AWS_SECRET_ACCESS_KEY',
 ];
 
-const DEVELOPMENT_REQUIRED_VARS: string[] = [
-  'JWT_SECRET',
-];
+const DEVELOPMENT_REQUIRED_VARS: string[] = ['JWT_SECRET'];
 
 export function validateEnvironment(): void {
   const missing: string[] = [];

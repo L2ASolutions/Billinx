@@ -12,8 +12,10 @@ import { EmailService } from '../../shared/email/email.service';
 import { ConsentService } from '../consent/consent.service';
 import { RetentionService } from '../../shared/retention/retention.service';
 import { ExportService } from '../export/export.service';
+import { RecoveryModule } from '../../shared/recovery/recovery.module';
 
 @Module({
+  imports: [RecoveryModule],
   controllers: [AdminController],
   providers: [
     AdminService,

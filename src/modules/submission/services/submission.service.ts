@@ -131,6 +131,16 @@ export class SubmissionService {
       };
     }
 
+    // IRN duplicate recovery: check FIRS for real status instead of dead-lettering immediately
+    if (!result.success && result.errorCode === 'IRN_DUPLICATE') {
+      result = await this.recoverIrnDuplicate(
+        adapter,
+        platformIrn,
+        tenantId,
+        invoiceId,
+      );
+    }
+
     if (result.success) {
       await this.handleSuccess(
         invoiceId,
@@ -146,6 +156,53 @@ export class SubmissionService {
         result,
         attempt,
       );
+    }
+  }
+
+  private async recoverIrnDuplicate(
+    adapter: AppAdapter,
+    platformIrn: string,
+    tenantId: string,
+    invoiceId: string,
+  ): Promise<SubmissionResult> {
+    this.logger.warn(
+      `IRN duplicate detected for ${platformIrn} — checking FIRS for real status`,
+    );
+    try {
+      const statusResult = await adapter.checkStatus(platformIrn, { tenantId });
+      if (statusResult.success) {
+        this.logger.log(
+          `IRN duplicate recovered — already accepted by FIRS: ${platformIrn}`,
+        );
+      } else {
+        this.logger.warn(
+          `IRN duplicate status check: FIRS returned non-success for ${platformIrn}`,
+        );
+      }
+      return statusResult;
+    } catch (err: any) {
+      this.logger.error(
+        `IRN duplicate status check failed for ${platformIrn}: ${err.message}`,
+      );
+      this.activityService.track({
+        tenantId,
+        eventType: 'SYSTEM_ERROR',
+        actor: 'system:submission-service',
+        entityType: 'Invoice',
+        entityId: invoiceId,
+        payload: {
+          invoiceId,
+          platformIrn,
+          reason: 'IRN duplicate — status check failed, manual review required',
+          error: err.message,
+        },
+      });
+      return {
+        success: false,
+        errorCode: 'IRN_DUPLICATE',
+        errorMessage: 'IRN duplicate — manual review required',
+        retryable: false,
+      };
     }
   }
 
