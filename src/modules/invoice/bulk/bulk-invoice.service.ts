@@ -170,22 +170,25 @@ export class BulkInvoiceService {
     for (let i = 0; i < invoices.length; i++) {
       const inv = invoices[i];
       try {
-        const created = await this.invoiceService.createInvoice(
-          tenantId,
-          environment,
-          actor,
-          inv,
-        );
+        const { invoice: created, isDuplicate } =
+          await this.invoiceService.createInvoice(
+            tenantId,
+            environment,
+            actor,
+            inv,
+          );
 
-        // Queue to bulk queue (lower priority than individual invoices)
-        await addToBulkQueue({
-          invoiceId: created.id,
-          tenantId,
-          platformIrn: created.platformIrn,
-          adapterKey: (created as any).adapterKey ?? 'mock',
-          attempt: 1,
-          batchId: batch.id,
-        });
+        if (!isDuplicate) {
+          // Queue to bulk queue (lower priority than individual invoices)
+          await addToBulkQueue({
+            invoiceId: created.id,
+            tenantId,
+            platformIrn: created.platformIrn,
+            adapterKey: (created as any).adapterKey ?? 'mock',
+            attempt: 1,
+            batchId: batch.id,
+          });
+        }
 
         queued++;
         results.push({
