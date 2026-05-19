@@ -129,6 +129,8 @@ export class InterswitchAdapter implements AppAdapter {
   }
 
   async ping(): Promise<boolean> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
     try {
       const resp = await fetch(
         `${this.sandboxBaseUrl}/Api/SwitchTax/postInvoice`,
@@ -136,11 +138,14 @@ export class InterswitchAdapter implements AppAdapter {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: '{}',
+          signal: controller.signal,
         },
       );
       return resp.status < 500;
     } catch {
       return false;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

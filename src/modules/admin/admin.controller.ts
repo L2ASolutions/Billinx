@@ -24,6 +24,7 @@ import { Request } from 'express';
 import { AdminService } from './services/admin.service';
 import { AdminKeyGuard } from '../identity/guards/admin-key.guard';
 import { AdminJwtGuard } from './guards/admin-jwt.guard';
+import { AdminIpGuard } from '../../shared/guards/admin-ip.guard';
 import {
   AdminLoginRequest,
   CreateAdminUserRequest,
@@ -31,6 +32,7 @@ import {
 
 @ApiTags('Admin')
 @Controller('v1/admin')
+@UseGuards(AdminIpGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
