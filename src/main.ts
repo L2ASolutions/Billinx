@@ -56,9 +56,10 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: false,
-      forbidNonWhitelisted: false,
-      transform: false,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      disableErrorMessages: false,
     }),
   );
 
@@ -101,7 +102,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err) => {
-  // eslint-disable-next-line no-console
   console.error('Fatal startup error:', err);
   process.exit(1);
 });
