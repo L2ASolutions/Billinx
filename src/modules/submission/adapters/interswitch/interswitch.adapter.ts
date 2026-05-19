@@ -117,15 +117,113 @@ export class InterswitchAdapter implements AppAdapter {
   }
 
   async checkStatus(
-    _platformIrn: string,
-    _tenantCredential: Record<string, unknown>,
+    platformIrn: string,
+    tenantCredential: Record<string, unknown>,
   ): Promise<SubmissionResult> {
-    return {
-      success: false,
-      errorCode: 'NOT_IMPLEMENTED',
-      errorMessage: 'Status check not supported by this adapter',
-      retryable: false,
-    };
+    const tenantId = tenantCredential.tenantId as string | undefined;
+    if (!tenantId) {
+      return {
+        success: false,
+        errorCode: 'MISSING_TENANT_ID',
+        errorMessage: 'tenantId required for status check',
+        retryable: false,
+      };
+    }
+
+    const tenant = await this.loadTenant(tenantId);
+    if (
+      !tenant.nrsApiKey ||
+      !tenant.nrsApiKeyIv ||
+      !tenant.nrsApiSecret ||
+      !tenant.nrsApiSecretIv
+    ) {
+      return {
+        success: false,
+        errorCode: 'MISSING_CREDENTIALS',
+        errorMessage: 'NRS credentials not configured for this tenant',
+        retryable: false,
+      };
+    }
+
+    const masterKey = await this.secretsService.getMasterEncryptionKey();
+    const apiKey = this.credentialService.decrypt(
+      Buffer.from(tenant.nrsApiKey),
+      Buffer.from(tenant.nrsApiKeyIv),
+      masterKey,
+      tenantId,
+    );
+    const apiSecret = this.credentialService.decrypt(
+      Buffer.from(tenant.nrsApiSecret),
+      Buffer.from(tenant.nrsApiSecretIv),
+      masterKey,
+      tenantId,
+    );
+
+    const baseUrl =
+      tenant.environment === 'PRODUCTION'
+        ? this.productionBaseUrl
+        : this.sandboxBaseUrl;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    try {
+      const response = await fetch(
+        `${baseUrl}/Api/SwitchTax/transmit/${encodeURIComponent(platformIrn)}`,
+        {
+          method: 'GET',
+          headers: {
+            'x-api-key': apiKey,
+            'x-api-secret': apiSecret,
+          },
+          signal: controller.signal,
+        },
+      );
+
+      const body = await response.text();
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        /* raw text */
+      }
+
+      if (
+        (response.status === 200 || response.status === 201) &&
+        parsed.data?.IRN
+      ) {
+        return {
+          success: true,
+          firsConfirmedIrn: parsed.data.IRN,
+          qrCodeBase64: parsed.data.QRCodeData ?? undefined,
+          rawResponse: parsed.data,
+        };
+      }
+
+      return {
+        success: false,
+        errorCode: 'STATUS_CHECK_FAILED',
+        errorMessage: `FIRS status check returned ${response.status}`,
+        retryable: response.status >= 500,
+      };
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        return {
+          success: false,
+          errorCode: 'TIMEOUT',
+          errorMessage: 'Status check timed out',
+          retryable: true,
+        };
+      }
+      return {
+        success: false,
+        errorCode: 'STATUS_CHECK_ERROR',
+        errorMessage: err.message,
+        retryable: false,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   async ping(): Promise<boolean> {
