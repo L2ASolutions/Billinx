@@ -17,6 +17,7 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ActivityService } from '../../activity/services/activity.service';
 import { SubmissionResult } from '../../../../packages/types/submission';
 import { RecoveryService } from '../../../shared/recovery/recovery.service';
+import { InvoiceService } from './invoice.service';
 
 // ── Mock BullMQ queue so tests never hit Redis ────────────────────────────────
 jest.mock('../../submission/queues/submission.queue', () => ({
@@ -528,17 +529,15 @@ describe('Source-reference deduplication', () => {
       create: jest.fn(),
       addStateHistory: jest.fn().mockResolvedValue({}),
     };
-    // Direct instantiation avoids NestJS DI token resolution in unit tests
-    const { InvoiceService } = require('./invoice.service');
     return new InvoiceService(
-      repo,
-      { generateUniqueIrn: jest.fn() },
-      {},
-      { track: jest.fn() },
-      { asAdmin: jest.fn() },
-      { queueInvoice: jest.fn() },
-      { emit: jest.fn() },
-      {},
+      repo as any,
+      { generateUniqueIrn: jest.fn() } as any,
+      {} as any,
+      { track: jest.fn() } as any,
+      { asAdmin: jest.fn() } as any,
+      { queueInvoice: jest.fn() } as any,
+      { emit: jest.fn() } as any,
+      {} as any,
     );
   }
 
@@ -559,12 +558,23 @@ describe('Source-reference deduplication', () => {
       'tenant-uuid-001',
       'SANDBOX',
       'apikey:test',
-      { sourceReference: 'ERP-001', seller: { tin: '12345', partyName: 'Seller' }, buyer: { partyName: 'Buyer' }, issueDate: new Date().toISOString(), lineItems: [], taxTotal: [], legalMonetaryTotal: {} },
+      {
+        sourceReference: 'ERP-001',
+        seller: { tin: '12345', partyName: 'Seller' },
+        buyer: { partyName: 'Buyer' },
+        issueDate: new Date().toISOString(),
+        lineItems: [],
+        taxTotal: [],
+        legalMonetaryTotal: {},
+      },
     );
 
     expect(result.isDuplicate).toBe(true);
     expect(result.message).toContain('accepted');
-    expect(svc['invoiceRepository'].findBySourceReference).toHaveBeenCalledWith('tenant-uuid-001', 'ERP-001');
+    expect(svc['invoiceRepository'].findBySourceReference).toHaveBeenCalledWith(
+      'tenant-uuid-001',
+      'ERP-001',
+    );
   });
 
   it('returns isDuplicate=true and "already processing" for SUBMITTING status', async () => {
@@ -583,7 +593,15 @@ describe('Source-reference deduplication', () => {
       'tenant-uuid-001',
       'SANDBOX',
       'apikey:test',
-      { sourceReference: 'ERP-002', seller: { tin: '12345', partyName: 'Seller' }, buyer: { partyName: 'Buyer' }, issueDate: new Date().toISOString(), lineItems: [], taxTotal: [], legalMonetaryTotal: {} },
+      {
+        sourceReference: 'ERP-002',
+        seller: { tin: '12345', partyName: 'Seller' },
+        buyer: { partyName: 'Buyer' },
+        issueDate: new Date().toISOString(),
+        lineItems: [],
+        taxTotal: [],
+        legalMonetaryTotal: {},
+      },
     );
 
     expect(result.isDuplicate).toBe(true);
