@@ -6,6 +6,7 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { SecretsService } from '../../infrastructure/secrets/secrets.service';
 import { ApiKeyService } from '../identity/services/api-key.service';
 import { AdminKeyGuard } from '../identity/guards/admin-key.guard';
+import { AdminIpGuard } from '../../shared/guards/admin-ip.guard';
 import { RedisService } from '../../shared/redis/redis.service';
 import { EmailService } from '../../shared/email/email.service';
 import { ConsentService } from '../consent/consent.service';
@@ -21,6 +22,7 @@ import { ExportService } from '../export/export.service';
     SecretsService,
     ApiKeyService,
     AdminKeyGuard,
+    AdminIpGuard,
     RedisService,
     EmailService,
     ConsentService,
