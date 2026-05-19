@@ -5,6 +5,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { RedisService } from './shared/redis/redis.service';
 import { RetentionModule } from './shared/retention/retention.module';
+import { RecoveryModule } from './shared/recovery/recovery.module';
 import { TenantRateLimitInterceptor } from './shared/interceptors/tenant-rate-limit.interceptor';
 import { IdentityModule } from './modules/identity/identity.module';
 import { TenantModule } from './modules/tenant/tenant.module';
@@ -31,6 +32,7 @@ import { GlobalExceptionFilter } from './shared/filters/global-exception.filter'
     EventEmitterModule.forRoot({ wildcard: false, delimiter: '.' }),
     ScheduleModule.forRoot(),
     RetentionModule,
+    RecoveryModule,
     IdentityModule,
     TenantModule,
     ActivityModule,

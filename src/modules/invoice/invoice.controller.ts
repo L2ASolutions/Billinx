@@ -55,18 +55,29 @@ export class InvoiceController {
   // ---------------------------------------------------------------------------
 
   @Post()
-  @HttpCode(HttpStatus.CREATED)
   @UseGuards(ApiKeyGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Submit invoice for FIRS compliance' })
-  async createInvoice(@Body() body: Record<string, any>, @Req() req: Request) {
+  async createInvoice(
+    @Body() body: Record<string, any>,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const ctx = this.getCtx(req);
-    return this.invoiceService.createInvoice(
+    const result = await this.invoiceService.createInvoice(
       ctx.tenantId,
       ctx.environment,
       ctx.actor,
       body as any,
     );
+    if (result.isDuplicate) {
+      res.status(HttpStatus.OK);
+      res.setHeader('X-Duplicate', 'true');
+      if (result.message) res.setHeader('X-Duplicate-Message', result.message);
+    } else {
+      res.status(HttpStatus.CREATED);
+    }
+    return result.invoice;
   }
 
   @Post('validate')
@@ -83,24 +94,35 @@ export class InvoiceController {
   // ---------------------------------------------------------------------------
 
   @Post('from-xml')
-  @HttpCode(HttpStatus.CREATED)
   @UseGuards(ApiKeyGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create invoice from NRS-compliant XML body' })
   @ApiConsumes('application/xml')
-  async createInvoiceFromXml(@Body() body: unknown, @Req() req: Request) {
+  async createInvoiceFromXml(
+    @Body() body: unknown,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     if (typeof body !== 'string' || !body.trim()) {
       throw new BadRequestException(
         'Request body must be a non-empty XML string',
       );
     }
     const ctx = this.getCtx(req);
-    return this.invoiceService.createInvoiceFromXml(
+    const result = await this.invoiceService.createInvoiceFromXml(
       ctx.tenantId,
       ctx.environment,
       ctx.actor,
       body,
     );
+    if (result.isDuplicate) {
+      res.status(HttpStatus.OK);
+      res.setHeader('X-Duplicate', 'true');
+      if (result.message) res.setHeader('X-Duplicate-Message', result.message);
+    } else {
+      res.status(HttpStatus.CREATED);
+    }
+    return result.invoice;
   }
 
   // ---------------------------------------------------------------------------
@@ -151,6 +173,28 @@ export class InvoiceController {
   async getInvoiceStats(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getInvoiceStats(ctx.tenantId);
+  }
+
+  @Get('check')
+  @UseGuards(ApiKeyGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Check if invoice exists by sourceReference — for ERP recovery after power failure',
+  })
+  @ApiQuery({ name: 'sourceReference', required: true })
+  async checkBySourceReference(
+    @Req() req: Request,
+    @Query('sourceReference') sourceReference: string,
+  ) {
+    if (!sourceReference) {
+      throw new BadRequestException('sourceReference query param is required');
+    }
+    const ctx = this.getCtx(req);
+    return this.invoiceService.checkBySourceReference(
+      ctx.tenantId,
+      sourceReference,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -299,21 +343,29 @@ export class InvoiceController {
   // ---------------------------------------------------------------------------
 
   @Post('dashboard')
-  @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create invoice from dashboard (JWT auth)' })
   async createInvoiceDashboard(
     @Body() body: Record<string, any>,
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
     const ctx = this.getCtx(req);
-    return this.invoiceService.createInvoice(
+    const result = await this.invoiceService.createInvoice(
       ctx.tenantId,
       ctx.environment,
       ctx.actor,
       body as any,
     );
+    if (result.isDuplicate) {
+      res.status(HttpStatus.OK);
+      res.setHeader('X-Duplicate', 'true');
+      if (result.message) res.setHeader('X-Duplicate-Message', result.message);
+    } else {
+      res.status(HttpStatus.CREATED);
+    }
+    return result.invoice;
   }
 
   @Get('dashboard/list')

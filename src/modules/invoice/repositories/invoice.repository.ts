@@ -32,6 +32,16 @@ export class InvoiceRepository {
     });
   }
 
+  async findBySourceReference(tenantId: string, sourceReference: string) {
+    return this.prisma.asAdmin(async (tx) => {
+      return tx.invoice.findFirst({
+        where: { tenantId, sourceReference },
+        orderBy: { createdAt: 'desc' },
+        include: { stateHistory: { orderBy: { createdAt: 'asc' } } },
+      });
+    });
+  }
+
   async findByTenant(tenantId: string, filters: InvoiceFilterParams) {
     const page = filters.page ?? 1;
     const limit = Math.min(filters.limit ?? 20, 100);

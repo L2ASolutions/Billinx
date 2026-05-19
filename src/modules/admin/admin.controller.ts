@@ -25,6 +25,7 @@ import { AdminService } from './services/admin.service';
 import { AdminKeyGuard } from '../identity/guards/admin-key.guard';
 import { AdminJwtGuard } from './guards/admin-jwt.guard';
 import { AdminIpGuard } from '../../shared/guards/admin-ip.guard';
+import { RecoveryService } from '../../shared/recovery/recovery.service';
 import {
   AdminLoginRequest,
   CreateAdminUserRequest,
@@ -34,7 +35,10 @@ import {
 @Controller('v1/admin')
 @UseGuards(AdminIpGuard)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly recoveryService: RecoveryService,
+  ) {}
 
   private getAdminCtx(req: Request): any {
     return (req as any)._adminContext;
@@ -305,5 +309,18 @@ export class AdminController {
   })
   async verifyAuditChain() {
     return this.adminService.verifyAuditChain();
+  }
+
+  // ── Power-failure recovery ─────────────────────────────────────────────────
+  @Post('recovery/run')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Manually trigger startup reconciliation — resets stuck SUBMITTING invoices',
+  })
+  async runRecovery() {
+    return this.recoveryService.reconcileStuckInvoices();
   }
 }

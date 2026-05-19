@@ -172,6 +172,7 @@ model IdempotencyRecord {
 
   @@index([tenantId, status])
   @@index([tenantId, environment])
+  @@index([tenantId, sourceReference])
   @@index([sellerTin])
   @@index([platformIrn])
   @@index([issueDate])

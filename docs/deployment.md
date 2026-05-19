@@ -7,6 +7,56 @@
 
 ---
 
+## Redis Persistence Configuration
+
+### Why it is required
+
+Billinx uses BullMQ for async FIRS submission. BullMQ stores pending and in-progress jobs in Redis. Without persistence, a Redis restart (power failure, ECS task replacement, ElastiCache failover) drops all queued jobs. Invoices that were `QUEUED` or `SUBMITTING` are left stranded — no jobs exist to process them.
+
+With AOF (Append-Only File) persistence enabled, Redis writes every command to disk before acknowledging it (`appendfsync everysec` writes at most 1 second behind). On restart, the AOF log is replayed and all jobs are restored exactly.
+
+### Local development (docker-compose)
+
+Redis is already configured with `--appendonly yes --appendfsync everysec` in `docker-compose.yml`. The `redis_data` Docker volume persists the AOF file across container restarts. No action needed.
+
+### AWS ElastiCache (production)
+
+ElastiCache does not support arbitrary `redis.conf` flags via the command line. Persistence must be enabled via a **parameter group**:
+
+1. In the AWS Console → ElastiCache → Parameter Groups, create a new group based on `redis7`.
+2. Set `appendonly = yes`.
+3. Set `appendfsync = everysec`.
+4. Attach the parameter group to your ElastiCache cluster (requires a cluster reboot on first attach).
+5. Verify with: `redis-cli CONFIG GET appendonly` → should return `yes`.
+
+**Important**: ElastiCache AOF is node-local. For cluster-mode disabled (single-node), AOF ensures job durability across node restarts. For Multi-AZ with auto-failover, the replica is promoted and data is replicated — AOF on the replica also applies.
+
+### Verifying persistence is enabled
+
+```bash
+redis-cli -h <host> -p 6379 CONFIG GET appendonly
+# Expected: appendonly → yes
+
+redis-cli -h <host> -p 6379 CONFIG GET appendfsync
+# Expected: appendfsync → everysec
+```
+
+### What happens if Redis loses data mid-processing
+
+| Scenario | Effect | Recovery |
+|----------|--------|----------|
+| Redis restart with AOF enabled | Jobs replayed from AOF log; in-flight jobs re-queued after visibility timeout | Automatic — no action needed |
+| Redis restart without AOF | All `QUEUED` jobs lost; invoices stay `QUEUED` in DB with no worker | Run `POST /v1/admin/recovery/run` to re-queue stuck invoices |
+| Invoice stuck in `SUBMITTING` > 5 min | Recovery service resets to `QUEUED` automatically (cron every 30 min) | Automatic — or trigger manually via admin endpoint |
+| ECS task killed mid-submission | Invoice left in `SUBMITTING`; recovery service detects and re-queues | Automatic within 30 min, or immediately via `POST /v1/admin/recovery/run` |
+
+### Power failure recovery endpoints
+
+- `POST /v1/admin/recovery/run` — immediately reset all stuck `SUBMITTING` invoices to `QUEUED` and re-queue them
+- `GET /v1/invoices/check?sourceReference=INV001` — ERP systems call this after power returns to check if an invoice was already received
+
+---
+
 ## Required GitHub Secrets
 
 Configure these in GitHub → Settings → Secrets and variables → Actions:

@@ -22,6 +22,12 @@ import { XmlInvoiceBuilder } from './xml-invoice.builder';
 import { checkRole } from '../../../shared/utils/role-checker';
 import { SubmissionService } from '../../submission/services/submission.service';
 
+export interface CreateInvoiceResult {
+  invoice: InvoiceResponse;
+  isDuplicate: boolean;
+  message?: string;
+}
+
 @Injectable()
 export class InvoiceService {
   private readonly logger = new Logger(InvoiceService.name);
@@ -42,7 +48,36 @@ export class InvoiceService {
     environment: string,
     actor: string,
     request: any,
-  ): Promise<InvoiceResponse> {
+  ): Promise<CreateInvoiceResult> {
+    // ── Source-reference duplicate check ──────────────────────────────────────
+    if (request.sourceReference) {
+      const existing = await this.invoiceRepository.findBySourceReference(
+        tenantId,
+        request.sourceReference,
+      );
+      if (existing) {
+        const allowResubmit =
+          existing.status === 'REJECTED' || existing.status === 'DEAD_LETTERED';
+        if (!allowResubmit) {
+          const message =
+            existing.status === 'ACCEPTED'
+              ? 'Invoice already accepted by FIRS'
+              : 'Invoice already processing';
+          this.logger.log(
+            `Duplicate sourceReference=${request.sourceReference} tenant=${tenantId} status=${existing.status}`,
+          );
+          return {
+            invoice: this.mapToResponse(existing),
+            isDuplicate: true,
+            message,
+          };
+        }
+        this.logger.log(
+          `Resubmitting rejected/dead-lettered invoice for sourceReference=${request.sourceReference}`,
+        );
+      }
+    }
+
     const tenant = await this.prisma.asAdmin(async (tx) => {
       return tx.tenant.findUnique({
         where: { id: tenantId },
@@ -202,7 +237,7 @@ export class InvoiceService {
       .catch((err) =>
         this.logger.error(`Failed to queue invoice: ${err.message}`),
       );
-    return this.mapToResponse(invoice);
+    return { invoice: this.mapToResponse(invoice), isDuplicate: false };
   }
 
   async validateInvoice(request: any): Promise<ValidationResponse> {
@@ -424,9 +459,40 @@ export class InvoiceService {
     environment: string,
     actor: string,
     xml: string,
-  ): Promise<InvoiceResponse> {
+  ): Promise<CreateInvoiceResult> {
     const request = this.xmlBuilder.parse(xml);
     return this.createInvoice(tenantId, environment, actor, request);
+  }
+
+  async checkBySourceReference(
+    tenantId: string,
+    sourceReference: string,
+  ): Promise<{
+    exists: boolean;
+    invoice?: Partial<InvoiceResponse>;
+    message: string;
+  }> {
+    const existing = await this.invoiceRepository.findBySourceReference(
+      tenantId,
+      sourceReference,
+    );
+    if (!existing) {
+      return {
+        exists: false,
+        message: 'No invoice found with this source reference',
+      };
+    }
+    return {
+      exists: true,
+      invoice: {
+        id: existing.id,
+        platformIrn: existing.platformIrn,
+        firsConfirmedIrn: existing.firsConfirmedIrn ?? undefined,
+        status: existing.status,
+        createdAt: existing.createdAt.toISOString(),
+      },
+      message: `Invoice found with status: ${existing.status}`,
+    };
   }
 
   private mapInvoiceTypeCode(code: string): string {
