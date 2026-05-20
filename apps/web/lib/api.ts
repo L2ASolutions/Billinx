@@ -48,7 +48,7 @@ export const authApi = {
       refreshToken?: string;
       mfaRequired?: boolean;
       mfaToken?: string;
-    }>("/v1/auth/token", { email, password }),
+    }>("/v1/auth/login", { email, password }),
   refresh: (refreshToken: string) =>
     api.post<{ accessToken: string; refreshToken: string }>("/v1/auth/refresh", { refreshToken }),
   revoke: (refreshToken: string) =>
