@@ -20,9 +20,10 @@ import { MockAdapter } from '../submission/adapters/mock/mock.adapter';
 import { InterswitchAdapter } from '../submission/adapters/interswitch/interswitch.adapter';
 import { ExportService } from '../export/export.service';
 import { RedisService } from '../../shared/redis/redis.service';
+import { EmailModule } from '../../shared/email/email.module';
 
 @Module({
-  imports: [EventEmitterModule],
+  imports: [EventEmitterModule, EmailModule],
   controllers: [InvoiceController, BulkInvoiceController],
   providers: [
     InvoiceService,
