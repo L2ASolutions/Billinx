@@ -7,8 +7,10 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { SecretsService } from '../../infrastructure/secrets/secrets.service';
 import { CredentialService } from '../tenant/services/credential.service';
 import { ApiKeyService } from '../identity/services/api-key.service';
+import { EmailModule } from '../../shared/email/email.module';
 
 @Module({
+  imports: [EmailModule],
   controllers: [WebhookController],
   providers: [
     WebhookService,
