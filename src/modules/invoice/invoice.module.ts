@@ -21,9 +21,10 @@ import { InterswitchAdapter } from '../submission/adapters/interswitch/interswit
 import { ExportService } from '../export/export.service';
 import { RedisService } from '../../shared/redis/redis.service';
 import { EmailModule } from '../../shared/email/email.module';
+import { TenantModule } from '../tenant/tenant.module';
 
 @Module({
-  imports: [EventEmitterModule, EmailModule],
+  imports: [EventEmitterModule, EmailModule, TenantModule],
   controllers: [InvoiceController, BulkInvoiceController],
   providers: [
     InvoiceService,
