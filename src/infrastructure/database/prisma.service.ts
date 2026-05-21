@@ -26,7 +26,10 @@ export class PrismaService
     this.$use(async (params, next) => {
       const ctx = getOptionalRequestContext();
 
-      if (ctx?.tenantId && !ctx.isAdmin) {
+      // Skip when inside a transaction — asAdmin() already handles RLS there,
+      // and calling this.$executeRaw from within a tx runs on a different
+      // connection (a no-op for RLS and risks connection-pool contention).
+      if (ctx?.tenantId && !ctx.isAdmin && !params.runInTransaction) {
         await this
           .$executeRaw`SET LOCAL app.current_tenant_id = ${ctx.tenantId}`;
       }
