@@ -4,6 +4,7 @@ import { InvoiceController } from './invoice.controller';
 import { BulkInvoiceController } from './bulk/bulk-invoice.controller';
 import { BulkInvoiceService } from './bulk/bulk-invoice.service';
 import { InvoiceService } from './services/invoice.service';
+import { PaymentService } from './services/payment.service';
 import { InvoiceRepository } from './repositories/invoice.repository';
 import { IrnService } from './services/irn.service';
 import { StateMachineService } from './services/state-machine.service';
@@ -28,6 +29,7 @@ import { TenantModule } from '../tenant/tenant.module';
   controllers: [InvoiceController, BulkInvoiceController],
   providers: [
     InvoiceService,
+    PaymentService,
     BulkInvoiceService,
     InvoiceRepository,
     IrnService,
