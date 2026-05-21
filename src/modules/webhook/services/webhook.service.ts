@@ -177,6 +177,26 @@ export class WebhookService {
     await this.dispatchEvent(event);
   }
 
+  @OnEvent('invoice.overdue')
+  async onInvoiceOverdue(event: WebhookInvoiceEvent) {
+    await this.dispatchEvent(event);
+  }
+
+  @OnEvent('invoice.reminder_sent')
+  async onInvoiceReminderSent(event: WebhookInvoiceEvent) {
+    await this.dispatchEvent(event);
+  }
+
+  @OnEvent('payment.confirmed')
+  async onPaymentConfirmed(event: WebhookInvoiceEvent) {
+    await this.dispatchEvent(event);
+  }
+
+  @OnEvent('payment.partial')
+  async onPaymentPartial(event: WebhookInvoiceEvent) {
+    await this.dispatchEvent(event);
+  }
+
   private async dispatchEvent(event: WebhookInvoiceEvent): Promise<void> {
     try {
       const subscriptions =

@@ -163,12 +163,19 @@ model IdempotencyRecord {
   cancelledAt           DateTime?
   archivedAt            DateTime?
   isArchived            Boolean           @default(false)
+  amountPaid            Decimal           @default(0)
+  paymentDueDate        DateTime?
+  isOverdue             Boolean           @default(false)
+  overdueAt             DateTime?
+  reminderCount         Int               @default(0)
+  lastReminderAt        DateTime?
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
   tenant                Tenant            @relation(fields: [tenantId], references: [id])
   stateHistory          InvoiceStateHistory[]
   submissionAttempts    SubmissionAttempt[]
+  paymentRecords        PaymentRecord[]
 
   @@index([tenantId, status])
   @@index([tenantId, environment])
@@ -177,6 +184,7 @@ model IdempotencyRecord {
   @@index([platformIrn])
   @@index([issueDate])
   @@index([userId])
+  @@index([paymentDueDate])
   @@map("invoices")
 }
 
@@ -646,6 +654,8 @@ enum ActivityEventType {
   USER_DEACTIVATED
   PASSWORD_RESET
   SYSTEM_ERROR
+  PAYMENT_RECORDED
+  INVOICE_OVERDUE
 }
 
 enum ErrorSeverity {
@@ -682,6 +692,31 @@ model BulkBatch {
 enum BulkBatchSource {
   JSON
   CSV
+}
+
+// ── PAYMENT RECORDS ───────────────────────────────────────────────────────────
+model PaymentRecord {
+  id               String   @id @default(uuid())
+  invoiceId        String
+  tenantId         String
+  amount           Decimal
+  currency         String   @default("NGN")
+  paymentReference String
+  provider         String
+  paidAt           DateTime
+  confirmedAt      DateTime?
+  confirmedBy      String?
+  notes            String?
+  metadata         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  invoice          Invoice  @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@index([tenantId])
+  @@index([tenantId, paidAt])
+  @@map("payment_records")
 }
 
 enum UserRoleType {

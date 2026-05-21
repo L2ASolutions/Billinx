@@ -22,7 +22,9 @@ export type ActivityEventType =
   | "USER_CREATED"
   | "USER_DEACTIVATED"
   | "PASSWORD_RESET"
-  | "SYSTEM_ERROR";
+  | "SYSTEM_ERROR"
+  | "PAYMENT_RECORDED"
+  | "INVOICE_OVERDUE";
 
 export type ErrorSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
