@@ -13,6 +13,7 @@ import {
 import { ApiTags, ApiOperation, ApiHeader, ApiQuery } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ActivityService } from './services/activity.service';
+import { AdminJwtGuard } from '../admin/guards/admin-jwt.guard';
 import { AdminKeyGuard } from '../identity/guards/admin-key.guard';
 import { ApiKeyGuard } from '../identity/guards/api-key.guard';
 import {
@@ -88,9 +89,9 @@ export class ActivityController {
   // ── Admin activity endpoints (platform-wide) ──────────────────────────────
 
   @Get('admin/activity')
-  @UseGuards(AdminKeyGuard)
+  @UseGuards(AdminJwtGuard)
   @ApiOperation({ summary: 'Admin: list all activity across all tenants' })
-  @ApiHeader({ name: 'X-Admin-Key', required: true })
+  @ApiHeader({ name: 'Authorization', required: true })
   @ApiQuery({ name: 'tenantId', required: false })
   @ApiQuery({ name: 'eventType', required: false })
   @ApiQuery({ name: 'from', required: false })
@@ -118,9 +119,9 @@ export class ActivityController {
   // ── Admin error endpoints ─────────────────────────────────────────────────
 
   @Get('admin/errors')
-  @UseGuards(AdminKeyGuard)
+  @UseGuards(AdminJwtGuard)
   @ApiOperation({ summary: 'Admin: list system errors' })
-  @ApiHeader({ name: 'X-Admin-Key', required: true })
+  @ApiHeader({ name: 'Authorization', required: true })
   @ApiQuery({ name: 'severity', required: false })
   @ApiQuery({ name: 'isResolved', required: false, type: Boolean })
   @ApiQuery({ name: 'tenantId', required: false })
@@ -149,18 +150,18 @@ export class ActivityController {
   }
 
   @Get('admin/errors/stats')
-  @UseGuards(AdminKeyGuard)
+  @UseGuards(AdminJwtGuard)
   @ApiOperation({ summary: 'Admin: get error statistics' })
-  @ApiHeader({ name: 'X-Admin-Key', required: true })
+  @ApiHeader({ name: 'Authorization', required: true })
   async getErrorStats() {
     return this.activityService.getErrorStats();
   }
 
   @Patch('admin/errors/:id/resolve')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(AdminKeyGuard)
+  @UseGuards(AdminJwtGuard)
   @ApiOperation({ summary: 'Admin: mark an error as resolved' })
-  @ApiHeader({ name: 'X-Admin-Key', required: true })
+  @ApiHeader({ name: 'Authorization', required: true })
   async resolveError(
     @Param('id') id: string,
     @Body() body: { resolvedBy: string; resolutionNote?: string },
