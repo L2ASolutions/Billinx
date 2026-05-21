@@ -60,7 +60,7 @@ export const authApi = {
     api.post("/v1/auth/revoke", { all: true }),
   verifyMfa: (mfaToken: string, code: string) =>
     api.post<{ accessToken: string }>("/v1/auth/mfa/challenge", { mfaToken, code }),
-  setupMfa: () => api.post<{ qrCode: string; secret: string }>("/v1/auth/mfa/setup"),
+  setupMfa: () => api.post<{ qrCodeBase64: string; manualKey: string }>("/v1/auth/mfa/setup"),
   enableMfa: (code: string) => api.post("/v1/auth/mfa/verify-setup", { code }),
   forgotPassword: (email: string) => api.post("/v1/auth/forgot-password", { email }),
   resetPassword: (token: string, password: string) =>
