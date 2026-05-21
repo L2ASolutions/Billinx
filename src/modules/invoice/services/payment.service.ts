@@ -10,13 +10,18 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ActivityService } from '../../activity/services/activity.service';
 import { InterswitchAdapter } from '../../submission/adapters/interswitch/interswitch.adapter';
 
-const VALID_PROVIDERS = ['MANUAL', 'PAYSTACK', 'FLUTTERWAVE', 'BANK_TRANSFER'] as const;
+const VALID_PROVIDERS = [
+  'MANUAL',
+  'PAYSTACK',
+  'FLUTTERWAVE',
+  'BANK_TRANSFER',
+] as const;
 type PaymentProvider = (typeof VALID_PROVIDERS)[number];
 
 export interface RecordPaymentRequest {
   amount: number;
   reference: string;
-  provider: PaymentProvider | string;
+  provider: string;
   paidAt: string;
   notes?: string;
   metadata?: Record<string, unknown>;
@@ -87,7 +92,7 @@ export class PaymentService {
             invoiceId,
             tenantId,
             amount: body.amount,
-            currency: (invoice.currency as string) ?? 'NGN',
+            currency: invoice.currency ?? 'NGN',
             paymentReference: body.reference,
             provider: body.provider,
             paidAt,
@@ -107,7 +112,8 @@ export class PaymentService {
 
     const eventData = {
       tenantId,
-      eventType: newPaymentStatus === 'PAID' ? 'payment.confirmed' : 'payment.partial',
+      eventType:
+        newPaymentStatus === 'PAID' ? 'payment.confirmed' : 'payment.partial',
       invoiceId,
       platformIrn: invoice.platformIrn,
       data: {
@@ -164,7 +170,13 @@ export class PaymentService {
     const invoice = await this.prisma.asAdmin((tx) =>
       tx.invoice.findUnique({
         where: { id: invoiceId },
-        select: { id: true, tenantId: true, totalAmount: true, amountPaid: true, paymentStatus: true },
+        select: {
+          id: true,
+          tenantId: true,
+          totalAmount: true,
+          amountPaid: true,
+          paymentStatus: true,
+        },
       }),
     );
 
@@ -180,7 +192,10 @@ export class PaymentService {
     );
 
     const amountPaid = Number(invoice.amountPaid);
-    const amountOutstanding = Math.max(0, Number(invoice.totalAmount) - amountPaid);
+    const amountOutstanding = Math.max(
+      0,
+      Number(invoice.totalAmount) - amountPaid,
+    );
 
     return {
       data: records.map((r) => this.mapPayment(r)),
@@ -277,11 +292,15 @@ export class PaymentService {
       paymentReference: p.paymentReference,
       provider: p.provider,
       paidAt: p.paidAt instanceof Date ? p.paidAt.toISOString() : p.paidAt,
-      confirmedAt: p.confirmedAt instanceof Date ? p.confirmedAt.toISOString() : (p.confirmedAt ?? null),
+      confirmedAt:
+        p.confirmedAt instanceof Date
+          ? p.confirmedAt.toISOString()
+          : (p.confirmedAt ?? null),
       confirmedBy: p.confirmedBy ?? null,
       notes: p.notes ?? null,
       metadata: p.metadata ?? null,
-      createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
+      createdAt:
+        p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
     };
   }
 }
