@@ -21,15 +21,13 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
-  login: (email: string, password: string) => Promise<{ mfaRequired: boolean; mfaToken?: string }>;
-  verifyMfa: (mfaToken: string, code: string) => Promise<void>;
   logout: () => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function decodeJwt(token: string): { sub: string; email: string; name?: string; role?: string; tenantId?: string; tenantName?: string } | null {
+function decodeJwt(token: string): Record<string, unknown> | null {
   try {
     const payload = token.split(".")[1];
     return JSON.parse(atob(payload));
@@ -39,7 +37,6 @@ function decodeJwt(token: string): { sub: string; email: string; name?: string; 
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const [state, setState] = useState<AuthState>({
     user: null,
     accessToken: null,
@@ -49,15 +46,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hydrateFromToken = useCallback((token: string) => {
     const decoded = decodeJwt(token);
-    if (!decoded) return;
+    if (!decoded) {
+      setState({ user: null, accessToken: null, isLoading: false, isAuthenticated: false });
+      return;
+    }
     setState({
       user: {
-        id: decoded.sub,
-        email: decoded.email,
-        name: decoded.name ?? decoded.email,
-        role: decoded.role ?? "VIEWER",
-        tenantId: decoded.tenantId ?? "",
-        tenantName: decoded.tenantName,
+        id: decoded.sub as string,
+        email: decoded.email as string,
+        name: (decoded.name as string) ?? (decoded.email as string),
+        role: (decoded.role as string) ?? "VIEWER",
+        tenantId: (decoded.tenantId as string) ?? "",
+        tenantName: decoded.tenantName as string | undefined,
       },
       accessToken: token,
       isLoading: false,
@@ -80,22 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hydrateFromToken(accessToken);
   }, [hydrateFromToken]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await authApi.login(email, password);
-    if (res.mfaRequired) {
-      return { mfaRequired: true, mfaToken: res.mfaToken };
-    }
-    if (res.accessToken && res.refreshToken) {
-      setTokens(res.accessToken, res.refreshToken);
-    }
-    return { mfaRequired: false };
-  }, [setTokens]);
-
-  const verifyMfa = useCallback(async (mfaToken: string, code: string) => {
-    const res = await authApi.verifyMfa(mfaToken, code);
-    setTokens(res.accessToken, res.refreshToken);
-  }, [setTokens]);
-
   const logout = useCallback(() => {
     const refreshToken = localStorage.getItem("refreshToken");
     if (refreshToken) {
@@ -104,11 +88,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     setState({ user: null, accessToken: null, isLoading: false, isAuthenticated: false });
-    router.push("/login");
-  }, [router]);
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ ...state, login, verifyMfa, logout, setTokens }}>
+    <AuthContext.Provider value={{ ...state, logout, setTokens }}>
       {children}
     </AuthContext.Provider>
   );
@@ -120,6 +103,7 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
+// Redirect to /login if not authenticated — use in page components, not layouts
 export function useRequireAuth() {
   const auth = useAuth();
   const router = useRouter();

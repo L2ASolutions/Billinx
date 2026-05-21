@@ -1,4 +1,9 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+// Server-side: call backend directly. Client-side: use relative URL so Next.js
+// rewrites proxy the request (avoids CORS — browser calls :3001, Next proxies to :3000).
+const API_BASE =
+  typeof window === "undefined"
+    ? (process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000")
+    : "";
 
 function getToken(admin = false): string | null {
   if (typeof window === "undefined") return null;
