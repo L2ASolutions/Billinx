@@ -476,7 +476,104 @@ export class EmailService {
     this.send(opts.to, subject, html);
   }
 
-  // ─── 9. Account locked ───────────────────────────────────────────────────────
+  // ─── 9. Payment reminder ─────────────────────────────────────────────────────
+
+  sendPaymentReminder(opts: {
+    to: string;
+    invoiceIrn: string;
+    invoiceId: string;
+    buyerName: string;
+    totalAmount: number;
+    amountOutstanding: number;
+    currency: string;
+    dueDate: Date;
+    daysOverdue: number;
+    daysUntilDue: number;
+    customMessage?: string;
+  }): void {
+    const isOverdue = opts.daysOverdue > 0;
+    const formattedDue = opts.dueDate.toLocaleDateString('en-NG', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    const formattedTotal = `${opts.currency} ${opts.totalAmount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+    const formattedOutstanding = `${opts.currency} ${opts.amountOutstanding.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+
+    const subject = isOverdue
+      ? `Payment overdue — Invoice ${opts.invoiceIrn} (${opts.daysOverdue} day${opts.daysOverdue !== 1 ? 's' : ''} past due)`
+      : opts.daysUntilDue === 0
+        ? `Payment due today — Invoice ${opts.invoiceIrn}`
+        : `Payment reminder — Invoice ${opts.invoiceIrn} (due in ${opts.daysUntilDue} day${opts.daysUntilDue !== 1 ? 's' : ''})`;
+
+    const statusBadge = isOverdue
+      ? `<div style="display:inline-block;background:#fdf0ef;border:1px solid #e74c3c;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
+          <span style="font-size:12px;font-weight:600;color:#c0392b;text-transform:uppercase;letter-spacing:0.5px;">&#9888; ${opts.daysOverdue} Day${opts.daysOverdue !== 1 ? 's' : ''} Overdue</span>
+        </div>`
+      : opts.daysUntilDue === 0
+        ? `<div style="display:inline-block;background:#fff3cd;border:1px solid #ffc107;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
+            <span style="font-size:12px;font-weight:600;color:#856404;text-transform:uppercase;letter-spacing:0.5px;">&#8987; Due Today</span>
+          </div>`
+        : `<div style="display:inline-block;background:#e6f9f3;border:1px solid #1D9E75;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
+            <span style="font-size:12px;font-weight:600;color:${BRAND_GREEN};text-transform:uppercase;letter-spacing:0.5px;">&#128197; Due in ${opts.daysUntilDue} Day${opts.daysUntilDue !== 1 ? 's' : ''}</span>
+          </div>`;
+
+    const headline = isOverdue
+      ? `Payment is ${opts.daysOverdue} day${opts.daysOverdue !== 1 ? 's' : ''} overdue`
+      : opts.daysUntilDue === 0
+        ? 'Payment is due today'
+        : `Payment due in ${opts.daysUntilDue} day${opts.daysUntilDue !== 1 ? 's' : ''}`;
+
+    const invoiceLink = `${APP_BASE_URL}/invoices/${opts.invoiceId}`;
+
+    const html = baseLayout(
+      subject,
+      statusBadge +
+        h1(headline) +
+        p(`This is a payment reminder for an outstanding FIRS-accepted invoice.`) +
+        (opts.customMessage
+          ? `<div style="background:#f4f6f8;border-left:4px solid ${BRAND_GREEN};border-radius:0 6px 6px 0;padding:12px 16px;margin:0 0 16px;font-size:14px;color:#444;line-height:1.6;">${opts.customMessage}</div>`
+          : '') +
+        `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+              style="background:#f8faf9;border:1px solid #dde3ec;border-radius:6px;margin:0 0 20px;">
+          <tr><td style="padding:20px;">
+            <div style="margin-bottom:12px;">
+              <span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Invoice Reference (IRN)</span><br />
+              <code style="font-size:13px;color:${BRAND_DARK};font-weight:600;">${opts.invoiceIrn}</code>
+            </div>
+            <div style="margin-bottom:12px;">
+              <span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Buyer</span><br />
+              <strong style="color:${BRAND_DARK};">${opts.buyerName}</strong>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+              <div>
+                <span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Total Invoice Amount</span><br />
+                <strong style="font-size:15px;color:${BRAND_DARK};">${formattedTotal}</strong>
+              </div>
+              <div>
+                <span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Amount Outstanding</span><br />
+                <strong style="font-size:15px;color:${isOverdue ? '#c0392b' : BRAND_GREEN};">${formattedOutstanding}</strong>
+              </div>
+            </div>
+            <div>
+              <span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Payment Due Date</span><br />
+              <strong style="color:${isOverdue ? '#c0392b' : BRAND_DARK};">${formattedDue}${isOverdue ? ` (${opts.daysOverdue} day${opts.daysOverdue !== 1 ? 's' : ''} ago)` : ''}</strong>
+            </div>
+          </td></tr>
+        </table>` +
+        ctaButton(invoiceLink, 'View Invoice & Record Payment') +
+        divider() +
+        p(
+          isOverdue
+            ? `Please arrange payment as soon as possible. If payment has already been made, you can log it in your Billinx dashboard to update the invoice status. Contact <a href="mailto:support@billinx.ng" style="color:${BRAND_GREEN};">support@billinx.ng</a> if you need assistance.`
+            : `Ensure payment is arranged before the due date. You can record received payments in your Billinx dashboard once funds are received. Contact <a href="mailto:support@billinx.ng" style="color:${BRAND_GREEN};">support@billinx.ng</a> if you have questions.`,
+        ),
+    );
+
+    this.send(opts.to, subject, html);
+  }
+
+  // ─── 10. Account locked ─────────────────────────────────────────────────────
 
   sendAccountLocked(opts: {
     to: string;

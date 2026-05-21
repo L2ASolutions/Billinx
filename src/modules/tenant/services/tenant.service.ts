@@ -8,6 +8,7 @@ import {
 import { TenantRepository } from '../repositories/tenant.repository';
 import { CredentialService } from './credential.service';
 import { SecretsService } from '../../../infrastructure/secrets/secrets.service';
+import { ReminderService } from '../../reminder/services/reminder.service';
 import {
   CreateTenantRequest,
   UpdateTenantRequest,
@@ -23,6 +24,7 @@ export class TenantService {
     private readonly tenantRepository: TenantRepository,
     private readonly credentialService: CredentialService,
     private readonly secrets: SecretsService,
+    private readonly reminderService: ReminderService,
   ) {}
 
   async createTenant(request: CreateTenantRequest): Promise<TenantResponse> {
@@ -76,6 +78,14 @@ export class TenantService {
     this.logger.log(
       `Tenant created: ${tenant.id} [${tenant.name}] TIN: ${tenant.tin}`,
     );
+
+    this.reminderService
+      .createDefaultRules(tenant.id)
+      .catch((err) =>
+        this.logger.warn(
+          `Failed to create default reminder rules for tenant ${tenant.id}: ${err.message}`,
+        ),
+      );
 
     return this.mapToResponse(tenant);
   }

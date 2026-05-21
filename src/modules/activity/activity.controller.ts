@@ -14,7 +14,6 @@ import { ApiTags, ApiOperation, ApiHeader, ApiQuery } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ActivityService } from './services/activity.service';
 import { AdminJwtGuard } from '../admin/guards/admin-jwt.guard';
-import { AdminKeyGuard } from '../identity/guards/admin-key.guard';
 import { ApiKeyGuard } from '../identity/guards/api-key.guard';
 import {
   ActivityEventType,
