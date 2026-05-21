@@ -22,7 +22,7 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   logout: () => void;
-  setTokens: (accessToken: string, refreshToken: string) => void;
+  setTokens: (accessToken: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -74,19 +74,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [hydrateFromToken]);
 
-  const setTokens = useCallback((accessToken: string, refreshToken: string) => {
+  const setTokens = useCallback((accessToken: string) => {
     localStorage.setItem("accessToken", accessToken);
-    localStorage.setItem("refreshToken", refreshToken);
     hydrateFromToken(accessToken);
   }, [hydrateFromToken]);
 
   const logout = useCallback(() => {
-    const refreshToken = localStorage.getItem("refreshToken");
-    if (refreshToken) {
-      authApi.revoke(refreshToken).catch(() => {});
-    }
+    authApi.revoke().catch(() => {});
     localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
     setState({ user: null, accessToken: null, isLoading: false, isAuthenticated: false });
   }, []);
 

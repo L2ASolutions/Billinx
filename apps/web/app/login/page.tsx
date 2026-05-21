@@ -27,9 +27,14 @@ export default function LoginPage() {
         return;
       }
 
-      if (res.accessToken && res.refreshToken) {
+      if (res.mfaSetupRequired && res.accessToken) {
         localStorage.setItem("accessToken", res.accessToken);
-        localStorage.setItem("refreshToken", res.refreshToken);
+        router.push("/mfa/setup");
+        return;
+      }
+
+      if (res.accessToken) {
+        localStorage.setItem("accessToken", res.accessToken);
         router.push("/dashboard");
       } else {
         setError("Login succeeded but no token received. Contact support.");
