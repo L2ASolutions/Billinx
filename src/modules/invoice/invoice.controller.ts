@@ -389,4 +389,13 @@ export class InvoiceController {
       limit: limit ? Number(limit) : 20,
     });
   }
+
+  @Get('dashboard/stats')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get invoice stats for dashboard (JWT auth)' })
+  async getDashboardStats(@Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.getDashboardStats(ctx.tenantId);
+  }
 }
