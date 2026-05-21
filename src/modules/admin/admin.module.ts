@@ -13,9 +13,10 @@ import { ConsentService } from '../consent/consent.service';
 import { RetentionService } from '../../shared/retention/retention.service';
 import { ExportService } from '../export/export.service';
 import { RecoveryModule } from '../../shared/recovery/recovery.module';
+import { ReminderModule } from '../reminder/reminder.module';
 
 @Module({
-  imports: [RecoveryModule],
+  imports: [RecoveryModule, ReminderModule],
   controllers: [AdminController],
   providers: [
     AdminService,

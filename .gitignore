@@ -148,3 +148,6 @@ vite.config.ts.timestamp-*
 *.p12
 *.pfx
 keys/
+
+# Claude Code local settings
+.claude/settings.local.json
