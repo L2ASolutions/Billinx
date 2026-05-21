@@ -437,6 +437,50 @@ export class InvoiceService {
     return { total, accepted, rejected, draft };
   }
 
+  async getDashboardStats(tenantId: string) {
+    const PENDING_STATUSES = [
+      'QUEUED', 'SUBMITTING', 'VALIDATING', 'VALIDATION_FAILED', 'SUBMISSION_FAILED',
+    ] as const;
+
+    const [total, accepted, rejected, pending, amountAgg, recentInvoices] =
+      await this.prisma.asAdmin(async (tx) =>
+        Promise.all([
+          tx.invoice.count({ where: { tenantId } }),
+          tx.invoice.count({ where: { tenantId, status: 'ACCEPTED' } }),
+          tx.invoice.count({ where: { tenantId, status: 'REJECTED' } }),
+          tx.invoice.count({ where: { tenantId, status: { in: PENDING_STATUSES as any } } }),
+          tx.invoice.aggregate({ where: { tenantId }, _sum: { totalAmount: true } }),
+          tx.invoice.findMany({
+            where: { tenantId },
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+            select: {
+              id: true,
+              platformIrn: true,
+              buyerName: true,
+              totalAmount: true,
+              currency: true,
+              status: true,
+              createdAt: true,
+            },
+          }),
+        ]),
+      );
+
+    return {
+      total,
+      accepted,
+      rejected,
+      pending,
+      totalAmount: Number(amountAgg._sum.totalAmount ?? 0),
+      recentInvoices: recentInvoices.map((inv) => ({
+        ...inv,
+        totalAmount: Number(inv.totalAmount),
+        createdAt: inv.createdAt.toISOString(),
+      })),
+    };
+  }
+
   async exportAsXml(id: string, tenantId: string): Promise<string> {
     const invoice = await this.invoiceRepository.findById(id);
     if (!invoice || invoice.tenantId !== tenantId) {
