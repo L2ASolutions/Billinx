@@ -20,6 +20,15 @@ export class UserRepository {
     });
   }
 
+  async findByEmailGlobal(email: string) {
+    return this.prisma.asAdmin(async (tx) => {
+      return tx.user.findFirst({
+        where: { email, isActive: true },
+        include: { roles: true },
+      });
+    });
+  }
+
   async findByTenantId(tenantId: string) {
     return this.prisma.asAdmin(async (tx) => {
       return tx.user.findMany({

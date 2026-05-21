@@ -143,6 +143,11 @@ export class UserService {
     };
   }
 
+  // ── Global email lookup (used by login when tenantId not provided) ────────
+  async findUserByEmail(email: string) {
+    return this.userRepository.findByEmailGlobal(email);
+  }
+
   // ── Login ─────────────────────────────────────────────────────────────────
   async login(
     tenantId: string,

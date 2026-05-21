@@ -33,11 +33,9 @@ function AcceptForm() {
     try {
       const res = await authApi.acceptInvitation(token, password, name) as {
         accessToken?: string;
-        refreshToken?: string;
       };
-      if (res.accessToken && res.refreshToken) {
+      if (res.accessToken) {
         localStorage.setItem("accessToken", res.accessToken);
-        localStorage.setItem("refreshToken", res.refreshToken);
         router.push("/dashboard");
       } else {
         router.push("/login");
