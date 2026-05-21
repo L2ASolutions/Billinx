@@ -3,6 +3,7 @@
 import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -10,7 +11,7 @@ import { authApi } from "@/lib/api";
 
 export default function MfaSetupPage() {
   const router = useRouter();
-  const [setup, setSetup] = useState<{ qrCode: string; secret: string } | null>(null);
+  const [setup, setSetup] = useState<{ qrCodeBase64: string; manualKey: string } | null>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,13 +47,13 @@ export default function MfaSetupPage() {
           <>
             <div className="flex justify-center">
               <div className="p-3 bg-white border border-border rounded-xl">
-                <Image src={setup.qrCode} alt="MFA QR Code" width={180} height={180} />
+                <Image src={setup.qrCodeBase64} alt="MFA QR Code" width={180} height={180} />
               </div>
             </div>
 
             <div className="p-3 bg-surface rounded-lg border border-border">
               <p className="text-xs text-muted mb-1">Or enter code manually:</p>
-              <p className="font-mono text-sm text-dark tracking-widest">{setup.secret}</p>
+              <p className="font-mono text-sm text-dark tracking-widest">{setup.manualKey}</p>
             </div>
 
             <form onSubmit={handleEnable} className="space-y-4">
@@ -93,6 +94,12 @@ export default function MfaSetupPage() {
             <div className="w-8 h-8 border-2 border-green border-t-transparent rounded-full animate-spin" />
           </div>
         )}
+
+        <div className="text-center">
+          <Link href="/dashboard" className="text-sm text-muted hover:text-dark underline">
+            Skip for now
+          </Link>
+        </div>
       </div>
     </AuthCard>
   );
