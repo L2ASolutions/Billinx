@@ -42,6 +42,8 @@ systemErrors   SystemError[]
 users         User[]
   productCatalog   ProductCatalog[]
   bulkBatches      BulkBatch[]
+  reminderRules    ReminderRule[]
+  reminderLogs     ReminderLog[]
 
   @@map("tenants")
 }
@@ -176,6 +178,7 @@ model IdempotencyRecord {
   stateHistory          InvoiceStateHistory[]
   submissionAttempts    SubmissionAttempt[]
   paymentRecords        PaymentRecord[]
+  reminderLogs          ReminderLog[]
 
   @@index([tenantId, status])
   @@index([tenantId, environment])
@@ -656,6 +659,13 @@ enum ActivityEventType {
   SYSTEM_ERROR
   PAYMENT_RECORDED
   INVOICE_OVERDUE
+  REMINDER_SENT
+}
+
+enum ReminderTriggerType {
+  DAYS_BEFORE_DUE
+  ON_DUE_DATE
+  DAYS_AFTER_DUE
 }
 
 enum ErrorSeverity {
@@ -725,4 +735,44 @@ enum UserRoleType {
   ACCOUNTANT
   VIEWER
   API_MANAGER
+}
+
+// ── REMINDER RULES ────────────────────────────────────────────────────────────
+model ReminderRule {
+  id              String              @id @default(uuid())
+  tenantId        String
+  name            String
+  triggerType     ReminderTriggerType
+  triggerDays     Int
+  isActive        Boolean             @default(true)
+  reminderMessage String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  tenant          Tenant              @relation(fields: [tenantId], references: [id])
+  reminderLogs    ReminderLog[]
+
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@map("reminder_rules")
+}
+
+// ── REMINDER LOGS ─────────────────────────────────────────────────────────────
+model ReminderLog {
+  id               String   @id @default(uuid())
+  invoiceId        String
+  tenantId         String
+  ruleId           String
+  sentAt           DateTime @default(now())
+  emailSentTo      String
+  webhookDelivered Boolean  @default(false)
+
+  invoice          Invoice      @relation(fields: [invoiceId], references: [id])
+  tenant           Tenant       @relation(fields: [tenantId], references: [id])
+  rule             ReminderRule @relation(fields: [ruleId], references: [id])
+
+  @@unique([invoiceId, ruleId])
+  @@index([tenantId])
+  @@index([invoiceId])
+  @@map("reminder_logs")
 }

@@ -26,6 +26,7 @@ import { AdminKeyGuard } from '../identity/guards/admin-key.guard';
 import { AdminJwtGuard } from './guards/admin-jwt.guard';
 import { AdminIpGuard } from '../../shared/guards/admin-ip.guard';
 import { RecoveryService } from '../../shared/recovery/recovery.service';
+import { ReminderService } from '../reminder/services/reminder.service';
 import {
   AdminLoginRequest,
   CreateAdminUserRequest,
@@ -38,6 +39,7 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly recoveryService: RecoveryService,
+    private readonly reminderService: ReminderService,
   ) {}
 
   private getAdminCtx(req: Request): any {
@@ -322,5 +324,18 @@ export class AdminController {
   })
   async runRecovery() {
     return this.recoveryService.reconcileStuckInvoices();
+  }
+
+  // ── Reminder engine ────────────────────────────────────────────────────────
+  @Post('reminders/run')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Manually trigger the payment reminder check across all tenants',
+  })
+  @ApiQuery({ name: 'tenantId', required: false, description: 'Scope to a single tenant' })
+  async runReminders(@Query('tenantId') tenantId?: string) {
+    return this.reminderService.runReminderCheck(tenantId);
   }
 }
