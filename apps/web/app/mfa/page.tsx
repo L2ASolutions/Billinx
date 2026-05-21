@@ -40,7 +40,6 @@ function MfaForm() {
     try {
       const res = await authApi.verifyMfa(mfaToken, code);
       localStorage.setItem("accessToken", res.accessToken);
-      localStorage.setItem("refreshToken", res.refreshToken);
       router.push("/dashboard");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Invalid code";

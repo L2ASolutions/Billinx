@@ -11,6 +11,7 @@ import {
   HttpStatus,
   UseGuards,
   Req,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -61,9 +62,13 @@ export class UserController {
   @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Login with email and password' })
   async login(@Body() body: Record<string, any>, @Req() req: Request) {
-    const tenantId = body.tenantId;
+    let tenantId = body.tenantId;
     if (!tenantId) {
-      return { error: 'tenantId is required' };
+      const found = await this.userService.findUserByEmail(body.email);
+      if (!found) {
+        throw new UnauthorizedException('Invalid email or password');
+      }
+      tenantId = found.tenantId;
     }
     return this.userService.login(
       tenantId,

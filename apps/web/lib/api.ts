@@ -50,30 +50,32 @@ export const authApi = {
   login: (email: string, password: string) =>
     api.post<{
       accessToken?: string;
-      refreshToken?: string;
       mfaRequired?: boolean;
       mfaToken?: string;
+      mfaSetupRequired?: boolean;
     }>("/v1/auth/login", { email, password }),
-  refresh: (refreshToken: string) =>
-    api.post<{ accessToken: string; refreshToken: string }>("/v1/auth/refresh", { refreshToken }),
-  revoke: (refreshToken: string) =>
-    api.post("/v1/auth/revoke", { refreshToken }),
+  refresh: () =>
+    api.post<{ accessToken: string }>("/v1/auth/refresh"),
+  revoke: () =>
+    api.post("/v1/auth/revoke", { all: true }),
   verifyMfa: (mfaToken: string, code: string) =>
-    api.post<{ accessToken: string; refreshToken: string }>("/v1/users/mfa/verify", { mfaToken, code }),
-  setupMfa: () => api.get<{ qrCode: string; secret: string }>("/v1/users/mfa/setup"),
-  enableMfa: (code: string) => api.post("/v1/users/mfa/enable", { code }),
-  forgotPassword: (email: string) => api.post("/v1/users/forgot-password", { email }),
+    api.post<{ accessToken: string }>("/v1/auth/mfa/challenge", { mfaToken, code }),
+  setupMfa: () => api.post<{ qrCode: string; secret: string }>("/v1/auth/mfa/setup"),
+  enableMfa: (code: string) => api.post("/v1/auth/mfa/verify-setup", { code }),
+  forgotPassword: (email: string) => api.post("/v1/auth/forgot-password", { email }),
   resetPassword: (token: string, password: string) =>
-    api.post("/v1/users/reset-password", { token, password }),
+    api.post("/v1/auth/reset-password", { token, newPassword: password }),
   requestAccess: (data: {
     companyName: string;
+    tin: string;
     contactName: string;
     email: string;
     phone?: string;
+    estimatedVolume?: string;
     useCase?: string;
-  }) => api.post("/v1/users/access-request", data),
-  acceptInvitation: (token: string, password: string, name: string) =>
-    api.post("/v1/users/accept-invitation", { token, password, name }),
+  }) => api.post("/v1/request-access", data),
+  acceptInvitation: (token: string, password: string, firstName: string) =>
+    api.post("/v1/auth/accept-invitation", { token, password, firstName }),
 };
 
 // Invoices
