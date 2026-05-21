@@ -7,12 +7,13 @@ import { formatDate } from "@/lib/utils";
 interface Tenant {
   id: string;
   name: string;
-  email: string;
-  adapter: string;
+  tin: string;
+  appAdapterKey: string;
   environment: string;
-  tier: string;
+  rateLimitTier: string;
   isActive: boolean;
   invoiceCount: number;
+  userCount: number;
   createdAt: string;
 }
 
@@ -20,6 +21,11 @@ const TIER_COLORS: Record<string, string> = {
   STANDARD: "bg-gray-100 text-gray-600",
   PREMIUM: "bg-blue-50 text-blue-700",
   ENTERPRISE: "bg-purple-50 text-purple-700",
+};
+
+const ENV_COLORS: Record<string, string> = {
+  SANDBOX: "bg-yellow-50 text-yellow-700",
+  PRODUCTION: "bg-green-50 text-green-700",
 };
 
 export default function TenantsPage() {
@@ -35,7 +41,7 @@ export default function TenantsPage() {
 
   const filtered = tenants.filter((t) =>
     t.name?.toLowerCase().includes(search.toLowerCase()) ||
-    t.email?.toLowerCase().includes(search.toLowerCase())
+    t.tin?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -45,7 +51,7 @@ export default function TenantsPage() {
       <div className="flex gap-3">
         <input
           className="px-3 py-2.5 rounded-lg border border-border bg-white text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green flex-1 max-w-xs placeholder:text-muted"
-          placeholder="Search by name or email..."
+          placeholder="Search by name or TIN..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -75,15 +81,17 @@ export default function TenantsPage() {
                 <tr key={t.id} className="border-b border-border last:border-0 hover:bg-surface transition-colors">
                   <td className="px-6 py-3">
                     <p className="text-sm font-medium text-dark">{t.name}</p>
-                    <p className="text-xs text-muted">{t.email}</p>
+                    <p className="text-xs text-muted">TIN: {t.tin}</p>
                   </td>
                   <td className="px-6 py-3">
-                    <span className="text-sm text-dark">{t.adapter}</span>
-                    <span className="text-xs text-muted ml-1">({t.environment})</span>
+                    <span className="text-sm text-dark">{t.appAdapterKey}</span>
+                    <span className={`inline-flex items-center ml-2 px-1.5 py-0.5 rounded text-xs font-medium ${ENV_COLORS[t.environment] ?? "bg-gray-100 text-gray-600"}`}>
+                      {t.environment}
+                    </span>
                   </td>
                   <td className="px-6 py-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TIER_COLORS[t.tier] ?? "bg-gray-100 text-gray-600"}`}>
-                      {t.tier}
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TIER_COLORS[t.rateLimitTier] ?? "bg-gray-100 text-gray-600"}`}>
+                      {t.rateLimitTier}
                     </span>
                   </td>
                   <td className="px-6 py-3 text-sm text-dark">{t.invoiceCount?.toLocaleString() ?? "—"}</td>
