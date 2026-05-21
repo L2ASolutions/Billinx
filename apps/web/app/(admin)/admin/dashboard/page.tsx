@@ -4,17 +4,10 @@ import { useEffect, useState } from "react";
 import { adminApi } from "@/lib/api";
 
 interface AdminStats {
-  totalTenants: number;
-  activeTenants: number;
-  totalInvoices: number;
-  invoicesToday: number;
-  invoicesThisWeek: number;
-  invoicesThisMonth: number;
-  acceptanceRate: number;
-  totalRevenue: number;
-  openAccessRequests: number;
-  systemErrors: number;
-  webhookDeliveryRate: number;
+  tenants: { total: number; active: number; sandbox: number; production: number };
+  invoices: { total: number; today: number; accepted: number; rejected: number; pending: number; acceptanceRate: number };
+  accessRequests: { pending: number; approvedThisWeek: number };
+  errors: { unresolved: number; critical: number };
 }
 
 function StatCard({ label, value, sub, accent }: {
@@ -59,17 +52,17 @@ export default function AdminDashboardPage() {
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="Active Tenants" value={stats.activeTenants} sub={`${stats.totalTenants} total`} accent />
-            <StatCard label="Invoices Today" value={stats.invoicesToday} sub={`${stats.invoicesThisWeek} this week`} />
-            <StatCard label="Acceptance Rate" value={`${stats.acceptanceRate?.toFixed(1)}%`} />
-            <StatCard label="Open Access Requests" value={stats.openAccessRequests} />
+            <StatCard label="Active Tenants" value={stats.tenants.active} sub={`${stats.tenants.total} total`} accent />
+            <StatCard label="Invoices Today" value={stats.invoices.today} sub={`${stats.invoices.total.toLocaleString()} total`} />
+            <StatCard label="Acceptance Rate" value={`${stats.invoices.acceptanceRate}%`} />
+            <StatCard label="Pending Requests" value={stats.accessRequests.pending} />
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="Total Invoices" value={stats.totalInvoices?.toLocaleString()} />
-            <StatCard label="This Month" value={stats.invoicesThisMonth?.toLocaleString()} />
-            <StatCard label="System Errors" value={stats.systemErrors ?? 0} />
-            <StatCard label="Webhook Delivery Rate" value={`${stats.webhookDeliveryRate?.toFixed(1) ?? "—"}%`} />
+            <StatCard label="Total Invoices" value={stats.invoices.total.toLocaleString()} />
+            <StatCard label="Accepted" value={stats.invoices.accepted.toLocaleString()} />
+            <StatCard label="System Errors" value={stats.errors.unresolved} />
+            <StatCard label="Critical Errors" value={stats.errors.critical} />
           </div>
         </>
       )}

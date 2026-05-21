@@ -185,21 +185,20 @@ export class AdminService {
   async listTenants(page = 1, limit = 20) {
     const skip = (page - 1) * limit;
 
-    const [tenants, total] = await this.prisma.asAdmin(async (tx) => {
-      return Promise.all([
-        tx.tenant.findMany({
-          skip,
-          take: limit,
-          orderBy: { createdAt: 'desc' },
-          include: {
-            _count: {
-              select: { invoices: true, users: true },
-            },
+    const tenants = await this.prisma.asAdmin((tx) =>
+      tx.tenant.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          _count: {
+            select: { invoices: true, users: true },
           },
-        }),
-        tx.tenant.count(),
-      ]);
-    });
+        },
+      }),
+    );
+
+    const total = await this.prisma.asAdmin((tx) => tx.tenant.count());
 
     return {
       data: tenants.map((t: any) => ({
@@ -207,6 +206,8 @@ export class AdminService {
         name: t.name,
         tin: t.tin,
         environment: t.environment,
+        rateLimitTier: t.rateLimitTier,
+        appAdapterKey: t.appAdapterKey,
         isActive: t.isActive,
         invoiceCount: t._count.invoices,
         userCount: t._count.users,

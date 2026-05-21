@@ -136,12 +136,12 @@ export const adminApi = {
     return aApi.get<{ data: unknown[]; total: number }>(`/v1/admin/access-requests${qs}`);
   },
   approveRequest: (id: string, data: unknown) =>
-    aApi.post(`/v1/admin/access-requests/${id}/approve`, data),
+    aApi.post(`/v1/admin/access-requests/${id}/provision`, data),
   rejectRequest: (id: string, reason: string) =>
-    aApi.post(`/v1/admin/access-requests/${id}/reject`, { reason }),
+    adminRequest(`/v1/admin/access-requests/${id}/reject`, { method: "PATCH", body: JSON.stringify({ reviewNote: reason }) }),
   tenants: () => aApi.get<{ data: unknown[]; total: number }>("/v1/admin/tenants"),
   activity: (params?: Record<string, string>) => {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-    return aApi.get<{ data: unknown[]; total: number }>(`/v1/activity${qs}`);
+    return aApi.get<{ data: unknown[]; total: number }>(`/v1/admin/activity${qs}`);
   },
 };
