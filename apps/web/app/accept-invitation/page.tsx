@@ -1,19 +1,16 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { authApi } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
-import { Suspense } from "react";
 
 function AcceptForm() {
   const router = useRouter();
   const params = useSearchParams();
   const token = params.get("token") ?? "";
-  const { setTokens } = useAuth();
 
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -21,7 +18,7 @@ function AcceptForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (password !== confirm) {
       setError("Passwords do not match");
@@ -35,11 +32,12 @@ function AcceptForm() {
     setLoading(true);
     try {
       const res = await authApi.acceptInvitation(token, password, name) as {
-        accessToken: string;
-        refreshToken: string;
+        accessToken?: string;
+        refreshToken?: string;
       };
       if (res.accessToken && res.refreshToken) {
-        setTokens(res.accessToken, res.refreshToken);
+        localStorage.setItem("accessToken", res.accessToken);
+        localStorage.setItem("refreshToken", res.refreshToken);
         router.push("/dashboard");
       } else {
         router.push("/login");
