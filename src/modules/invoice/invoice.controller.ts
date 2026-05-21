@@ -27,6 +27,7 @@ import {
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { InvoiceService } from './services/invoice.service';
+import { PaymentService } from './services/payment.service';
 import { ExportService } from '../export/export.service';
 import { ApiKeyGuard } from '../identity/guards/api-key.guard';
 import { JwtGuard } from '../identity/guards/jwt.guard';
@@ -43,6 +44,7 @@ export class InvoiceController {
 
   constructor(
     private readonly invoiceService: InvoiceService,
+    private readonly paymentService: PaymentService,
     private readonly exportService: ExportService,
   ) {}
 
@@ -336,6 +338,40 @@ export class InvoiceController {
       ctx.actor,
       body as any,
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Payment routes (API key auth — callable by ERPs)
+  // ---------------------------------------------------------------------------
+
+  @Post(':id/payments')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(ApiKeyGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Record a payment against an accepted invoice' })
+  async recordPayment(
+    @Param('id') id: string,
+    @Body() body: Record<string, any>,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.paymentService.recordPayment(id, ctx.tenantId, ctx.actor, {
+      amount: body.amount,
+      reference: body.reference,
+      provider: body.provider,
+      paidAt: body.paidAt,
+      notes: body.notes,
+      metadata: body.metadata,
+    });
+  }
+
+  @Get(':id/payments')
+  @UseGuards(ApiKeyGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List payment records for an invoice' })
+  async listPayments(@Param('id') id: string, @Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.paymentService.listPayments(id, ctx.tenantId);
   }
 
   // ---------------------------------------------------------------------------

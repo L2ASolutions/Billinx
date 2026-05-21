@@ -2,13 +2,21 @@ export type WebhookEventType =
   | 'invoice.created'
   | 'invoice.accepted'
   | 'invoice.rejected'
-  | 'invoice.cancelled';
+  | 'invoice.cancelled'
+  | 'invoice.overdue'
+  | 'invoice.reminder_sent'
+  | 'payment.confirmed'
+  | 'payment.partial';
 
 export const WEBHOOK_EVENT_TYPES: WebhookEventType[] = [
   'invoice.created',
   'invoice.accepted',
   'invoice.rejected',
   'invoice.cancelled',
+  'invoice.overdue',
+  'invoice.reminder_sent',
+  'payment.confirmed',
+  'payment.partial',
 ];
 
 export type WebhookDeliveryStatus = 'PENDING' | 'DELIVERED' | 'FAILED' | 'DEAD_LETTERED';

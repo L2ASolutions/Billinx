@@ -226,6 +226,77 @@ export class InterswitchAdapter implements AppAdapter {
     }
   }
 
+  async updatePaymentStatus(
+    irn: string,
+    tenantId: string,
+    status: string,
+  ): Promise<void> {
+    const tenant = await this.loadTenant(tenantId);
+    if (
+      !tenant.nrsApiKey ||
+      !tenant.nrsApiKeyIv ||
+      !tenant.nrsApiSecret ||
+      !tenant.nrsApiSecretIv
+    ) {
+      this.logger.warn(
+        `Cannot update payment status for IRN ${irn}: NRS credentials not configured`,
+      );
+      return;
+    }
+
+    const masterKey = await this.secretsService.getMasterEncryptionKey();
+    const apiKey = this.credentialService.decrypt(
+      Buffer.from(tenant.nrsApiKey),
+      Buffer.from(tenant.nrsApiKeyIv),
+      masterKey,
+      tenantId,
+    );
+    const apiSecret = this.credentialService.decrypt(
+      Buffer.from(tenant.nrsApiSecret),
+      Buffer.from(tenant.nrsApiSecretIv),
+      masterKey,
+      tenantId,
+    );
+
+    const baseUrl =
+      tenant.environment === 'PRODUCTION'
+        ? this.productionBaseUrl
+        : this.sandboxBaseUrl;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    try {
+      const response = await fetch(`${baseUrl}/Api/SwitchTax/UpdateStatus`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'x-api-secret': apiSecret,
+        },
+        body: JSON.stringify({ irn, payment_status: status }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        this.logger.warn(
+          `UpdateStatus for IRN ${irn} returned ${response.status}: ${body.slice(0, 200)}`,
+        );
+      } else {
+        this.logger.log(
+          `Payment status updated on NRS for IRN ${irn}: ${status}`,
+        );
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `UpdateStatus call failed for IRN ${irn}: ${err.message}`,
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   async ping(): Promise<boolean> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
