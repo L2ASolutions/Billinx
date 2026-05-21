@@ -77,12 +77,15 @@ export class ReminderService {
         orderBy: [{ triggerType: 'asc' }, { triggerDays: 'asc' }],
       }),
     );
-    return { data: rules.map(this.mapRule), total: rules.length };
+    return { data: rules.map((r) => this.mapRule(r)), total: rules.length };
   }
 
   async createRule(tenantId: string, dto: CreateReminderRuleDto) {
     this.validateTriggerType(dto.triggerType);
-    this.validateTriggerDays(dto.triggerType as ReminderTriggerType, dto.triggerDays);
+    this.validateTriggerDays(
+      dto.triggerType as ReminderTriggerType,
+      dto.triggerDays,
+    );
 
     const rule = await this.prisma.asAdmin((tx) =>
       tx.reminderRule.create({
@@ -99,10 +102,15 @@ export class ReminderService {
     return this.mapRule(rule);
   }
 
-  async updateRule(tenantId: string, ruleId: string, dto: UpdateReminderRuleDto) {
+  async updateRule(
+    tenantId: string,
+    ruleId: string,
+    dto: UpdateReminderRuleDto,
+  ) {
     const existing = await this.findRuleOrThrow(tenantId, ruleId);
 
-    const triggerType = (dto.triggerType ?? existing.triggerType) as ReminderTriggerType;
+    const triggerType = (dto.triggerType ??
+      existing.triggerType) as ReminderTriggerType;
     const triggerDays = dto.triggerDays ?? existing.triggerDays;
 
     if (dto.triggerType) this.validateTriggerType(dto.triggerType);
@@ -113,10 +121,16 @@ export class ReminderService {
         where: { id: ruleId },
         data: {
           ...(dto.name !== undefined && { name: dto.name.trim() }),
-          ...(dto.triggerType !== undefined && { triggerType: dto.triggerType as ReminderTriggerType }),
-          ...(dto.triggerDays !== undefined && { triggerDays: dto.triggerDays }),
+          ...(dto.triggerType !== undefined && {
+            triggerType: dto.triggerType as ReminderTriggerType,
+          }),
+          ...(dto.triggerDays !== undefined && {
+            triggerDays: dto.triggerDays,
+          }),
           ...(dto.isActive !== undefined && { isActive: dto.isActive }),
-          ...(dto.reminderMessage !== undefined && { reminderMessage: dto.reminderMessage?.trim() ?? null }),
+          ...(dto.reminderMessage !== undefined && {
+            reminderMessage: dto.reminderMessage?.trim() ?? null,
+          }),
         },
       }),
     );
@@ -147,7 +161,9 @@ export class ReminderService {
   }> {
     const today = this.startOfDay(new Date());
 
-    const tenantFilter = targetTenantId ? { id: targetTenantId } : { isActive: true };
+    const tenantFilter = targetTenantId
+      ? { id: targetTenantId }
+      : { isActive: true };
 
     const tenants = await this.prisma.asAdmin((tx) =>
       tx.tenant.findMany({
@@ -161,7 +177,10 @@ export class ReminderService {
     let totalSkipped = 0;
 
     for (const tenant of tenants) {
-      const { sent, skipped } = await this.processTenanReminders(tenant.id, today);
+      const { sent, skipped } = await this.processTenanReminders(
+        tenant.id,
+        today,
+      );
       totalProcessed++;
       totalSent += sent;
       totalSkipped += skipped;
@@ -171,7 +190,11 @@ export class ReminderService {
       `Reminder check complete — ${totalProcessed} tenants, ${totalSent} sent, ${totalSkipped} skipped`,
     );
 
-    return { processed: totalProcessed, sent: totalSent, skipped: totalSkipped };
+    return {
+      processed: totalProcessed,
+      sent: totalSent,
+      skipped: totalSkipped,
+    };
   }
 
   // ─── Per-tenant reminder processing ─────────────────────────────────────────
@@ -263,7 +286,8 @@ export class ReminderService {
     daysOverdue: number;
     daysUntilDue: number;
   }): Promise<void> {
-    const { tenantId, invoice, rule, ownerEmail, daysOverdue, daysUntilDue } = opts;
+    const { tenantId, invoice, rule, ownerEmail, daysOverdue, daysUntilDue } =
+      opts;
     const amountOutstanding = Math.max(
       0,
       Number(invoice.totalAmount) - Number(invoice.amountPaid),
@@ -402,12 +426,23 @@ export class ReminderService {
     }
   }
 
-  private validateTriggerDays(triggerType: ReminderTriggerType, triggerDays: number): void {
-    if (typeof triggerDays !== 'number' || !Number.isInteger(triggerDays) || triggerDays < 0) {
-      throw new BadRequestException('triggerDays must be a non-negative integer');
+  private validateTriggerDays(
+    triggerType: ReminderTriggerType,
+    triggerDays: number,
+  ): void {
+    if (
+      typeof triggerDays !== 'number' ||
+      !Number.isInteger(triggerDays) ||
+      triggerDays < 0
+    ) {
+      throw new BadRequestException(
+        'triggerDays must be a non-negative integer',
+      );
     }
     if (triggerType === 'ON_DUE_DATE' && triggerDays !== 0) {
-      throw new BadRequestException('triggerDays must be 0 for ON_DUE_DATE rules');
+      throw new BadRequestException(
+        'triggerDays must be 0 for ON_DUE_DATE rules',
+      );
     }
     if (triggerType !== 'ON_DUE_DATE' && triggerDays === 0) {
       throw new BadRequestException(
@@ -425,8 +460,14 @@ export class ReminderService {
       triggerDays: rule.triggerDays,
       isActive: rule.isActive,
       reminderMessage: rule.reminderMessage ?? null,
-      createdAt: rule.createdAt instanceof Date ? rule.createdAt.toISOString() : rule.createdAt,
-      updatedAt: rule.updatedAt instanceof Date ? rule.updatedAt.toISOString() : rule.updatedAt,
+      createdAt:
+        rule.createdAt instanceof Date
+          ? rule.createdAt.toISOString()
+          : rule.createdAt,
+      updatedAt:
+        rule.updatedAt instanceof Date
+          ? rule.updatedAt.toISOString()
+          : rule.updatedAt,
     };
   }
 }
