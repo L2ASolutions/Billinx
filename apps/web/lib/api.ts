@@ -82,13 +82,13 @@ export const authApi = {
 export const invoiceApi = {
   list: (params?: Record<string, string | number>) => {
     const qs = params ? "?" + new URLSearchParams(params as Record<string, string>).toString() : "";
-    return api.get<{ data: unknown[]; total: number; page: number; limit: number }>(`/v1/invoices${qs}`);
+    return api.get<{ data: unknown[]; total: number; page: number; limit: number }>(`/v1/invoices/dashboard/list${qs}`);
   },
   get: (id: string) => api.get<unknown>(`/v1/invoices/${id}`),
   create: (data: unknown) => api.post<unknown>("/v1/invoices/dashboard", data),
   cancel: (id: string, reason: string) =>
     api.post(`/v1/invoices/${id}/cancel`, { reason }),
-  stats: () => api.get<unknown>("/v1/invoices/stats"),
+  stats: () => api.get<unknown>("/v1/invoices/dashboard/stats"),
 };
 
 // Team / Users

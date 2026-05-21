@@ -2,6 +2,7 @@
 
 import { useState, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -15,6 +16,8 @@ function AcceptForm() {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [consentTerms, setConsentTerms] = useState(false);
+  const [consentNdpr, setConsentNdpr] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -26,6 +29,10 @@ function AcceptForm() {
     }
     if (password.length < 8) {
       setError("Password must be at least 8 characters");
+      return;
+    }
+    if (!consentTerms || !consentNdpr) {
+      setError("You must agree to both consent statements before activating your account.");
       return;
     }
     setError("");
@@ -85,6 +92,42 @@ function AcceptForm() {
           onChange={(e) => setConfirm(e.target.value)}
           required
         />
+
+        {/* Consent checkboxes */}
+        <div className="space-y-3 pt-2 border-t border-border">
+          <label className="flex items-start gap-3 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={consentTerms}
+              onChange={(e) => setConsentTerms(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-border text-green focus:ring-green/30 cursor-pointer"
+            />
+            <span className="text-sm text-dark leading-snug">
+              I agree to the{" "}
+              <Link href="/terms" className="text-green font-medium hover:underline">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="text-green font-medium hover:underline">
+                Privacy Policy
+              </Link>{" "}
+              of Billinx
+            </span>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={consentNdpr}
+              onChange={(e) => setConsentNdpr(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-border text-green focus:ring-green/30 cursor-pointer"
+            />
+            <span className="text-sm text-dark leading-snug">
+              I consent to Billinx processing my business data in accordance with the Nigeria Data
+              Protection Regulation (NDPR) and NDPA 2023
+            </span>
+          </label>
+        </div>
 
         {error && (
           <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
