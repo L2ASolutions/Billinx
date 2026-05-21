@@ -17,47 +17,47 @@
 
 ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON api_keys
-  USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+  USING ("tenantId"::text = current_setting('app.current_tenant_id', true));
 
 ALTER TABLE refresh_tokens ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON refresh_tokens
-  USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+  USING ("tenantId"::text = current_setting('app.current_tenant_id', true));
 
 ALTER TABLE idempotency_records ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON idempotency_records
-  USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+  USING ("tenantId"::text = current_setting('app.current_tenant_id', true));
 
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON invoices
-  USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+  USING ("tenantId"::text = current_setting('app.current_tenant_id', true));
 
 ALTER TABLE invoice_state_history ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON invoice_state_history
-  USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+  USING ("tenantId"::text = current_setting('app.current_tenant_id', true));
 
 ALTER TABLE submission_attempts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON submission_attempts
-  USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+  USING ("tenantId"::text = current_setting('app.current_tenant_id', true));
 
 ALTER TABLE webhook_subscriptions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON webhook_subscriptions
-  USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+  USING ("tenantId"::text = current_setting('app.current_tenant_id', true));
 
 ALTER TABLE webhook_deliveries ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON webhook_deliveries
-  USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+  USING ("tenantId"::text = current_setting('app.current_tenant_id', true));
 
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON users
-  USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+  USING ("tenantId"::text = current_setting('app.current_tenant_id', true));
 
 ALTER TABLE user_roles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON user_roles
-  USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+  USING ("tenantId"::text = current_setting('app.current_tenant_id', true));
 
 ALTER TABLE user_invitations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON user_invitations
-  USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+  USING ("tenantId"::text = current_setting('app.current_tenant_id', true));
 
 -- ── Tables with nullable tenantId (cross-tenant admin records allowed) ───────
 -- Rows with NULL tenant_id are always visible to admin queries (which bypass
@@ -66,22 +66,22 @@ CREATE POLICY tenant_isolation ON user_invitations
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON audit_logs
   USING (
-    tenant_id IS NULL OR
-    tenant_id::text = current_setting('app.current_tenant_id', true)
+    "tenantId" IS NULL OR
+    "tenantId"::text = current_setting('app.current_tenant_id', true)
   );
 
 ALTER TABLE activity_events ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON activity_events
   USING (
-    tenant_id IS NULL OR
-    tenant_id::text = current_setting('app.current_tenant_id', true)
+    "tenantId" IS NULL OR
+    "tenantId"::text = current_setting('app.current_tenant_id', true)
   );
 
 ALTER TABLE system_errors ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON system_errors
   USING (
-    tenant_id IS NULL OR
-    tenant_id::text = current_setting('app.current_tenant_id', true)
+    "tenantId" IS NULL OR
+    "tenantId"::text = current_setting('app.current_tenant_id', true)
   );
 
 -- ── Tables that are NOT tenant-scoped (no RLS needed) ───────────────────────
