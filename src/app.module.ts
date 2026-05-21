@@ -25,6 +25,7 @@ import { PrismaService } from './infrastructure/database/prisma.service';
 import { SecretsService } from './infrastructure/secrets/secrets.service';
 import { IdempotencyInterceptor } from './shared/interceptors/idempotency.interceptor';
 import { AuditLogInterceptor } from './shared/interceptors/audit-log.interceptor';
+import { RequestContextInterceptor } from './shared/interceptors/request-context.interceptor';
 import { GlobalExceptionFilter } from './shared/filters/global-exception.filter';
 
 @Module({
@@ -55,6 +56,10 @@ import { GlobalExceptionFilter } from './shared/filters/global-exception.filter'
     {
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: RequestContextInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,
