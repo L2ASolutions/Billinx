@@ -24,7 +24,8 @@ export type ActivityEventType =
   | "PASSWORD_RESET"
   | "SYSTEM_ERROR"
   | "PAYMENT_RECORDED"
-  | "INVOICE_OVERDUE";
+  | "INVOICE_OVERDUE"
+  | "REMINDER_SENT";
 
 export type ErrorSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
