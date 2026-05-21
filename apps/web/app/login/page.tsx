@@ -6,29 +6,36 @@ import Link from "next/link";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { useAuth } from "@/lib/auth";
+import { authApi } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      const result = await login(email, password);
-      if (result.mfaRequired && result.mfaToken) {
-        router.push(`/mfa?token=${encodeURIComponent(result.mfaToken)}`);
-      } else {
+      const res = await authApi.login(email, password);
+
+      if (res.mfaRequired && res.mfaToken) {
+        router.push(`/mfa?token=${encodeURIComponent(res.mfaToken)}`);
+        return;
+      }
+
+      if (res.accessToken && res.refreshToken) {
+        localStorage.setItem("accessToken", res.accessToken);
+        localStorage.setItem("refreshToken", res.refreshToken);
         router.push("/dashboard");
+      } else {
+        setError("Login succeeded but no token received. Contact support.");
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Login failed";
+      const msg = err instanceof Error ? err.message : "Login failed. Check your credentials.";
       setError(msg);
     } finally {
       setLoading(false);

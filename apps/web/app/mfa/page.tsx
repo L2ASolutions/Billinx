@@ -1,17 +1,15 @@
 "use client";
 
-import { useState, FormEvent, useRef, useEffect } from "react";
+import { useState, FormEvent, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { Button } from "@/components/ui/Button";
-import { useAuth } from "@/lib/auth";
-import { Suspense } from "react";
+import { authApi } from "@/lib/api";
 
 function MfaForm() {
   const router = useRouter();
   const params = useSearchParams();
   const mfaToken = params.get("token") ?? "";
-  const { verifyMfa } = useAuth();
 
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState("");
@@ -34,13 +32,15 @@ function MfaForm() {
     }
   }
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (code.length !== 6) return;
     setError("");
     setLoading(true);
     try {
-      await verifyMfa(mfaToken, code);
+      const res = await authApi.verifyMfa(mfaToken, code);
+      localStorage.setItem("accessToken", res.accessToken);
+      localStorage.setItem("refreshToken", res.refreshToken);
       router.push("/dashboard");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Invalid code";

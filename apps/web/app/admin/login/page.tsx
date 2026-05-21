@@ -5,25 +5,26 @@ import { useRouter } from "next/navigation";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { AdminAuthProvider, useAdminAuth } from "@/lib/adminAuth";
+import { adminApi } from "@/lib/api";
 
-function LoginForm() {
+export default function AdminLoginPage() {
   const router = useRouter();
-  const { login } = useAdminAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await login(email, password);
+      const res = await adminApi.login(email, password);
+      localStorage.setItem("adminToken", res.accessToken);
       router.push("/admin/dashboard");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      const msg = err instanceof Error ? err.message : "Login failed. Check your credentials.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -49,23 +50,17 @@ function LoginForm() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
+
         {error && (
           <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
             {error}
           </div>
         )}
+
         <Button type="submit" className="w-full" loading={loading} size="lg">
           Sign in to admin
         </Button>
       </form>
     </AuthCard>
-  );
-}
-
-export default function AdminLoginPage() {
-  return (
-    <AdminAuthProvider>
-      <LoginForm />
-    </AdminAuthProvider>
   );
 }
