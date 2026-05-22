@@ -530,7 +530,9 @@ export class EmailService {
       subject,
       statusBadge +
         h1(headline) +
-        p(`This is a payment reminder for an outstanding FIRS-accepted invoice.`) +
+        p(
+          `This is a payment reminder for an outstanding FIRS-accepted invoice.`,
+        ) +
         (opts.customMessage
           ? `<div style="background:#f4f6f8;border-left:4px solid ${BRAND_GREEN};border-radius:0 6px 6px 0;padding:12px 16px;margin:0 0 16px;font-size:14px;color:#444;line-height:1.6;">${opts.customMessage}</div>`
           : '') +

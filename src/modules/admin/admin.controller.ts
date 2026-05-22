@@ -334,7 +334,11 @@ export class AdminController {
   @ApiOperation({
     summary: 'Manually trigger the payment reminder check across all tenants',
   })
-  @ApiQuery({ name: 'tenantId', required: false, description: 'Scope to a single tenant' })
+  @ApiQuery({
+    name: 'tenantId',
+    required: false,
+    description: 'Scope to a single tenant',
+  })
   async runReminders(@Query('tenantId') tenantId?: string) {
     return this.reminderService.runReminderCheck(tenantId);
   }
