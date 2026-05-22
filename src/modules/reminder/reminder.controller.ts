@@ -11,13 +11,13 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
-import { ReminderService, CreateReminderRuleDto, UpdateReminderRuleDto } from './services/reminder.service';
+import {
+  ReminderService,
+  CreateReminderRuleDto,
+  UpdateReminderRuleDto,
+} from './services/reminder.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';
 
 @ApiTags('Reminder Rules')
@@ -47,7 +47,9 @@ export class ReminderController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a reminder rule (toggle active, change days, etc.)' })
+  @ApiOperation({
+    summary: 'Update a reminder rule (toggle active, change days, etc.)',
+  })
   async updateRule(
     @Req() req: Request,
     @Param('id') id: string,
