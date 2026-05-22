@@ -439,7 +439,11 @@ export class InvoiceService {
 
   async getDashboardStats(tenantId: string) {
     const PENDING_STATUSES = [
-      'QUEUED', 'SUBMITTING', 'VALIDATING', 'VALIDATION_FAILED', 'SUBMISSION_FAILED',
+      'QUEUED',
+      'SUBMITTING',
+      'VALIDATING',
+      'VALIDATION_FAILED',
+      'SUBMISSION_FAILED',
     ] as const;
 
     const [total, accepted, rejected, pending, amountAgg, recentInvoices] =
@@ -448,8 +452,13 @@ export class InvoiceService {
           tx.invoice.count({ where: { tenantId } }),
           tx.invoice.count({ where: { tenantId, status: 'ACCEPTED' } }),
           tx.invoice.count({ where: { tenantId, status: 'REJECTED' } }),
-          tx.invoice.count({ where: { tenantId, status: { in: PENDING_STATUSES as any } } }),
-          tx.invoice.aggregate({ where: { tenantId }, _sum: { totalAmount: true } }),
+          tx.invoice.count({
+            where: { tenantId, status: { in: PENDING_STATUSES as any } },
+          }),
+          tx.invoice.aggregate({
+            where: { tenantId },
+            _sum: { totalAmount: true },
+          }),
           tx.invoice.findMany({
             where: { tenantId },
             orderBy: { createdAt: 'desc' },
