@@ -101,6 +101,22 @@ export class InvoiceService {
       );
     }
 
+    // Validate required string fields before the Prisma call so callers receive
+    // a clear 400 BadRequest rather than a PrismaClientValidationError (which
+    // would surface as a 500 and pollutes the system-error log).
+    if (!request.seller?.tin) {
+      throw new BadRequestException('seller.tin is required');
+    }
+    if (!request.seller?.partyName) {
+      throw new BadRequestException('seller.partyName is required');
+    }
+    if (!request.buyer?.partyName) {
+      throw new BadRequestException('buyer.partyName is required');
+    }
+    if (!request.issueDate) {
+      throw new BadRequestException('issueDate is required');
+    }
+
     const invoice = await this.invoiceRepository.create({
       tenantId,
       environment,
