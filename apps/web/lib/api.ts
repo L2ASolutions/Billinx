@@ -1,28 +1,40 @@
-// Server-side: call backend directly. Client-side: use relative URL so Next.js
-// rewrites proxy the request (avoids CORS — browser calls :3001, Next proxies to :3000).
+// Server-side: call backend directly.
+// Client-side: use /api prefix so requests go through the Next.js proxy API
+// route (app/api/[...path]/route.ts) which explicitly forwards all headers —
+// including Authorization — to the backend.
 const API_BASE =
-  typeof window === "undefined"
-    ? (process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000")
-    : "";
+  typeof window === 'undefined'
+    ? (process.env.API_URL ?? 'http://localhost:3000')
+    : '/api';
 
 function getToken(admin = false): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(admin ? "adminToken" : "accessToken");
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(admin ? 'adminToken' : 'accessToken');
 }
 
 async function request<T>(
   path: string,
   options: RequestInit = {},
-  admin = false
+  admin = false,
 ): Promise<T> {
   const token = getToken(admin);
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const url = `${API_BASE}${path}`;
+  const method = (options.method ?? 'GET').toUpperCase();
+
+  // Debug: log every outgoing request so proxy/header issues are immediately
+  // visible in the browser console.
+  console.log('[API]', method, url, {
+    hasAuth: !!headers['Authorization'],
+    contentType: headers['Content-Type'],
+  });
+
+  const res = await fetch(url, { ...options, headers });
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -37,12 +49,12 @@ async function request<T>(
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, data?: unknown) =>
-    request<T>(path, { method: "POST", body: JSON.stringify(data) }),
+    request<T>(path, { method: 'POST', body: JSON.stringify(data) }),
   patch: <T>(path: string, data?: unknown) =>
-    request<T>(path, { method: "PATCH", body: JSON.stringify(data) }),
+    request<T>(path, { method: 'PATCH', body: JSON.stringify(data) }),
   put: <T>(path: string, data?: unknown) =>
-    request<T>(path, { method: "PUT", body: JSON.stringify(data) }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+    request<T>(path, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
 
 // Auth
@@ -53,18 +65,21 @@ export const authApi = {
       mfaRequired?: boolean;
       mfaToken?: string;
       mfaSetupRequired?: boolean;
-    }>("/v1/auth/login", { email, password }),
-  refresh: () =>
-    api.post<{ accessToken: string }>("/v1/auth/refresh"),
-  revoke: () =>
-    api.post("/v1/auth/revoke", { all: true }),
+    }>('/v1/auth/login', { email, password }),
+  refresh: () => api.post<{ accessToken: string }>('/v1/auth/refresh'),
+  revoke: () => api.post('/v1/auth/revoke', { all: true }),
   verifyMfa: (mfaToken: string, code: string) =>
-    api.post<{ accessToken: string }>("/v1/auth/mfa/challenge", { mfaToken, code }),
-  setupMfa: () => api.post<{ qrCodeBase64: string; manualKey: string }>("/v1/auth/mfa/setup"),
-  enableMfa: (code: string) => api.post("/v1/auth/mfa/verify-setup", { code }),
-  forgotPassword: (email: string) => api.post("/v1/auth/forgot-password", { email }),
+    api.post<{ accessToken: string }>('/v1/auth/mfa/challenge', {
+      mfaToken,
+      code,
+    }),
+  setupMfa: () =>
+    api.post<{ qrCodeBase64: string; manualKey: string }>('/v1/auth/mfa/setup'),
+  enableMfa: (code: string) => api.post('/v1/auth/mfa/verify-setup', { code }),
+  forgotPassword: (email: string) =>
+    api.post('/v1/auth/forgot-password', { email }),
   resetPassword: (token: string, password: string) =>
-    api.post("/v1/auth/reset-password", { token, newPassword: password }),
+    api.post('/v1/auth/reset-password', { token, newPassword: password }),
   requestAccess: (data: {
     companyName: string;
     tin: string;
@@ -73,29 +88,37 @@ export const authApi = {
     phone?: string;
     estimatedVolume?: string;
     useCase?: string;
-  }) => api.post("/v1/request-access", data),
+  }) => api.post('/v1/request-access', data),
   acceptInvitation: (token: string, password: string, firstName: string) =>
-    api.post("/v1/auth/accept-invitation", { token, password, firstName }),
+    api.post('/v1/auth/accept-invitation', { token, password, firstName }),
 };
 
 // Invoices
 export const invoiceApi = {
   list: (params?: Record<string, string | number>) => {
-    const qs = params ? "?" + new URLSearchParams(params as Record<string, string>).toString() : "";
-    return api.get<{ data: unknown[]; total: number; page: number; limit: number }>(`/v1/invoices/dashboard/list${qs}`);
+    const qs = params
+      ? '?' + new URLSearchParams(params as Record<string, string>).toString()
+      : '';
+    return api.get<{
+      data: unknown[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(`/v1/invoices/dashboard/list${qs}`);
   },
   get: (id: string) => api.get<unknown>(`/v1/invoices/${id}`),
-  create: (data: unknown) => api.post<unknown>("/v1/invoices/dashboard", data),
+  create: (data: unknown) => api.post<unknown>('/v1/invoices/dashboard', data),
   cancel: (id: string, reason: string) =>
     api.post(`/v1/invoices/${id}/cancel`, { reason }),
-  stats: () => api.get<unknown>("/v1/invoices/dashboard/stats"),
+  stats: () => api.get<unknown>('/v1/invoices/dashboard/stats'),
 };
 
 // Team / Users
 export const userApi = {
-  me: () => api.get<unknown>("/v1/users/me"),
-  list: () => api.get<{ data: unknown[]; total: number }>("/v1/users"),
-  invite: (email: string, role: string) => api.post("/v1/users/invite", { email, role }),
+  me: () => api.get<unknown>('/v1/users/me'),
+  list: () => api.get<{ data: unknown[]; total: number }>('/v1/users'),
+  invite: (email: string, role: string) =>
+    api.post('/v1/users/invite', { email, role }),
   updateRole: (userId: string, role: string) =>
     api.patch(`/v1/users/${userId}/role`, { role }),
   remove: (userId: string) => api.delete(`/v1/users/${userId}`),
@@ -103,17 +126,18 @@ export const userApi = {
 
 // API Keys
 export const apiKeyApi = {
-  list: () => api.get<{ data: unknown[]; total: number }>("/v1/api-keys"),
+  list: () => api.get<{ data: unknown[]; total: number }>('/v1/api-keys'),
   create: (label: string, environment: string) =>
-    api.post<{ key: string }>("/v1/api-keys", { label, environment }),
+    api.post<{ key: string }>('/v1/api-keys', { label, environment }),
   revoke: (id: string) => api.delete(`/v1/api-keys/${id}`),
-  rotate: (id: string) => api.post<{ key: string }>(`/v1/api-keys/${id}/rotate`),
+  rotate: (id: string) =>
+    api.post<{ key: string }>(`/v1/api-keys/${id}/rotate`),
 };
 
 // Webhooks
 export const webhookApi = {
-  list: () => api.get<{ data: unknown[]; total: number }>("/v1/webhooks"),
-  create: (data: unknown) => api.post<unknown>("/v1/webhooks", data),
+  list: () => api.get<{ data: unknown[]; total: number }>('/v1/webhooks'),
+  create: (data: unknown) => api.post<unknown>('/v1/webhooks', data),
   update: (id: string, data: unknown) => api.patch(`/v1/webhooks/${id}`, data),
   delete: (id: string) => api.delete(`/v1/webhooks/${id}`),
 };
@@ -125,25 +149,36 @@ function adminRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
 const aApi = {
   get: <T>(path: string) => adminRequest<T>(path),
   post: <T>(path: string, data?: unknown) =>
-    adminRequest<T>(path, { method: "POST", body: JSON.stringify(data) }),
+    adminRequest<T>(path, { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // Admin
 export const adminApi = {
   login: (email: string, password: string) =>
-    api.post<{ accessToken: string }>("/v1/admin/auth/login", { email, password }),
-  dashboard: () => aApi.get<unknown>("/v1/admin/dashboard"),
+    api.post<{ accessToken: string }>('/v1/admin/auth/login', {
+      email,
+      password,
+    }),
+  dashboard: () => aApi.get<unknown>('/v1/admin/dashboard'),
   accessRequests: (status?: string) => {
-    const qs = status ? `?status=${status}` : "";
-    return aApi.get<{ data: unknown[]; total: number }>(`/v1/admin/access-requests${qs}`);
+    const qs = status ? `?status=${status}` : '';
+    return aApi.get<{ data: unknown[]; total: number }>(
+      `/v1/admin/access-requests${qs}`,
+    );
   },
   approveRequest: (id: string, data: unknown) =>
     aApi.post(`/v1/admin/access-requests/${id}/provision`, data),
   rejectRequest: (id: string, reason: string) =>
-    adminRequest(`/v1/admin/access-requests/${id}/reject`, { method: "PATCH", body: JSON.stringify({ reviewNote: reason }) }),
-  tenants: () => aApi.get<{ data: unknown[]; total: number }>("/v1/admin/tenants"),
+    adminRequest(`/v1/admin/access-requests/${id}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reviewNote: reason }),
+    }),
+  tenants: () =>
+    aApi.get<{ data: unknown[]; total: number }>('/v1/admin/tenants'),
   activity: (params?: Record<string, string>) => {
-    const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-    return aApi.get<{ data: unknown[]; total: number }>(`/v1/admin/activity${qs}`);
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return aApi.get<{ data: unknown[]; total: number }>(
+      `/v1/admin/activity${qs}`,
+    );
   },
 };
