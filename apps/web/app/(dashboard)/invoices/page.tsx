@@ -45,9 +45,11 @@ export default function InvoicesPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError("");
     try {
       const params: Record<string, string | number> = { page, limit: 20 };
       if (status !== "ALL") params.status = status;
@@ -55,6 +57,12 @@ export default function InvoicesPage() {
       const res = await invoiceApi.list(params);
       setInvoices(res.data as Invoice[]);
       setTotal(res.total);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to load invoices";
+      console.error("[Invoices] load error:", err);
+      setError(msg);
+      setInvoices([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
@@ -76,6 +84,12 @@ export default function InvoicesPage() {
       />
 
       <div className="p-6 space-y-4">
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+            {error}
+          </div>
+        )}
+
         {/* Filters */}
         <div className="flex gap-3 items-end">
           <div className="flex-1 max-w-xs">
