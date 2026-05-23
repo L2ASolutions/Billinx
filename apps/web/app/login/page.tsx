@@ -22,23 +22,25 @@ export default function LoginPage() {
     try {
       const res = await authApi.login(email, password);
 
-      if (res.mfaRequired && res.mfaToken) {
-        router.push(`/mfa?token=${encodeURIComponent(res.mfaToken)}`);
+      if (res.mfaSetupRequired) {
+        localStorage.setItem("accessToken", res.accessToken ?? "");
+        router.push("/mfa/setup");
         return;
       }
 
-      if (res.mfaSetupRequired && res.accessToken) {
-        localStorage.setItem("accessToken", res.accessToken);
-        router.push("/mfa/setup");
+      if (res.mfaRequired) {
+        localStorage.setItem("mfaToken", res.mfaToken ?? "");
+        router.push("/mfa");
         return;
       }
 
       if (res.accessToken) {
         localStorage.setItem("accessToken", res.accessToken);
         router.push("/dashboard");
-      } else {
-        setError("Login succeeded but no token received. Contact support.");
+        return;
       }
+
+      setError("Login succeeded but no token received. Contact support.");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Login failed. Check your credentials.";
       setError(msg);

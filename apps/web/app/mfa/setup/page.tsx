@@ -3,7 +3,6 @@
 import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import Link from "next/link";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -96,9 +95,20 @@ export default function MfaSetupPage() {
         )}
 
         <div className="text-center">
-          <Link href="/dashboard" className="text-sm text-muted hover:text-dark underline">
+          <button
+            type="button"
+            onClick={() => {
+              // Token was stored by login page before redirecting here.
+              // Explicitly re-confirm it is present so the dashboard auth
+              // guard sees an authenticated session on arrival.
+              const token = localStorage.getItem("accessToken");
+              if (token) localStorage.setItem("accessToken", token);
+              router.push("/dashboard");
+            }}
+            className="text-sm text-muted hover:text-dark underline"
+          >
             Skip for now
-          </Link>
+          </button>
         </div>
       </div>
     </AuthCard>
