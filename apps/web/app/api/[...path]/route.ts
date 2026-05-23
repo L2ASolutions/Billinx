@@ -8,21 +8,12 @@ import { NextRequest, NextResponse } from 'next/server';
  * verbatim to the backend. Rewrites rely on Next.js's internal HTTP client
  * which can silently drop or mangle headers in certain Next.js 14 builds.
  */
-// In GitHub Codespaces every port gets a unique forwarded URL, so localhost:3000
-// is unreachable from the Next.js server-side runtime.  When CODESPACE_NAME is
-// present we build the correct forwarded URL; otherwise we fall back to API_URL
-// (useful for local dev or explicit overrides).
-function resolveBackend(): string {
-  const codespaceName = process.env.CODESPACE_NAME;
-  if (codespaceName) {
-    const domain =
-      process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN ?? 'app.github.dev';
-    return `https://${codespaceName}-3000.${domain}`;
-  }
-  return process.env.API_URL ?? 'http://localhost:3000';
-}
-
-const BACKEND = resolveBackend();
+// This route handler runs server-side inside the same container as the backend,
+// so it always reaches the backend over localhost — even in Codespaces.
+// The Codespaces forwarded URL (https://<name>-3000.app.github.dev) is for
+// browser → backend calls and requires GitHub auth; it must NOT be used here.
+// Set API_URL in .env.local to override (e.g. when backend runs elsewhere).
+const BACKEND = process.env.API_URL ?? 'http://localhost:3000';
 
 async function proxy(
   req: NextRequest,
