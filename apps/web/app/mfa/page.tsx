@@ -1,15 +1,18 @@
 "use client";
 
 import { useState, FormEvent, useRef, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { Button } from "@/components/ui/Button";
 import { authApi } from "@/lib/api";
 
 function MfaForm() {
   const router = useRouter();
-  const params = useSearchParams();
-  const mfaToken = params.get("token") ?? "";
+  // mfaToken is stored in localStorage by the login page (not passed in the URL
+  // so it is never exposed in browser history or server logs).
+  const mfaToken = typeof window !== "undefined"
+    ? (localStorage.getItem("mfaToken") ?? "")
+    : "";
 
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState("");
@@ -39,6 +42,7 @@ function MfaForm() {
     setLoading(true);
     try {
       const res = await authApi.verifyMfa(mfaToken, code);
+      localStorage.removeItem("mfaToken"); // consumed — remove to avoid stale state
       localStorage.setItem("accessToken", res.accessToken);
       router.push("/dashboard");
     } catch (err: unknown) {
