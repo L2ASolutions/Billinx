@@ -35,12 +35,16 @@ export default function TeamPage() {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   async function load() {
     setLoading(true);
+    setLoadError("");
     try {
       const res = await userApi.list();
       setMembers(res.data as Member[]);
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : "Failed to load team members");
     } finally {
       setLoading(false);
     }
@@ -87,6 +91,12 @@ export default function TeamPage() {
       />
 
       <div className="p-6 space-y-4">
+        {loadError && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+            {loadError}
+          </div>
+        )}
+
         {inviteSuccess && (
           <div className="p-3 bg-green-light border border-green/20 rounded-xl text-sm text-dark">
             {inviteSuccess}

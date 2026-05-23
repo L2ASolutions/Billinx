@@ -33,9 +33,12 @@ export default function WebhooksPage() {
 
   async function load() {
     setLoading(true);
+    setError("");
     try {
       const res = await webhookApi.list();
       setWebhooks(res.data as Webhook[]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load webhooks");
     } finally {
       setLoading(false);
     }

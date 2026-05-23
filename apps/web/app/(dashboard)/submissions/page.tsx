@@ -30,14 +30,19 @@ export default function SubmissionsPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeStatus, setActiveStatus] = useState("ALL");
+  const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError("");
     try {
       const params: Record<string, string> = {};
       if (activeStatus !== "ALL") params.status = activeStatus;
       const res = await invoiceApi.list(params);
       setInvoices(res.data as Invoice[]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load submissions");
+      setInvoices([]);
     } finally {
       setLoading(false);
     }
@@ -49,6 +54,12 @@ export default function SubmissionsPage() {
     <>
       <Topbar title="Submissions" />
       <div className="p-6 space-y-4">
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+            {error}
+          </div>
+        )}
+
         {/* Status tabs */}
         <div className="flex gap-2 flex-wrap">
           {["ALL", ...SUBMISSION_STATUSES].map((s) => (

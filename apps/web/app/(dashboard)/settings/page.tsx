@@ -28,12 +28,16 @@ export default function SettingsPage() {
   const [creating, setCreating] = useState(false);
   const [newKey, setNewKey] = useState("");
   const [keyError, setKeyError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   async function loadKeys() {
     setLoading(true);
+    setLoadError("");
     try {
       const res = await apiKeyApi.list();
       setKeys(res.data as ApiKey[]);
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : "Failed to load API keys");
     } finally {
       setLoading(false);
     }
@@ -72,6 +76,12 @@ export default function SettingsPage() {
       <Topbar title="Settings" />
 
       <div className="p-6 space-y-6 max-w-3xl">
+        {loadError && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+            {loadError}
+          </div>
+        )}
+
         {/* Profile */}
         <div className="bg-white rounded-xl border border-border p-6">
           <h2 className="font-semibold text-dark mb-4">Profile</h2>
