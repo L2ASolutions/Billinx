@@ -11,6 +11,9 @@ const adminNav = [
   { label: "Access Requests", href: "/admin/access-requests" },
   { label: "Tenants", href: "/admin/tenants" },
   { label: "Activity", href: "/admin/activity" },
+  { label: "Consent", href: "/admin/consent" },
+  { label: "Erasure", href: "/admin/erasure" },
+  { label: "System", href: "/admin/system" },
 ];
 
 function AdminLayoutInner({ children }: { children: React.ReactNode }) {

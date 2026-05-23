@@ -38,13 +38,6 @@ async function request<T>(
   const res = await fetch(url, { ...options, headers });
 
   if (!res.ok) {
-    // A 401 means the stored token is stale or invalid.  Wipe all local auth
-    // state and send the user to the appropriate login page so they can get
-    // a fresh token.  We do this before throwing so callers never have to
-    // handle session-expiry themselves.
-    // Only clear state and redirect on 401 for normal authenticated requests.
-    // skipAuthRedirect is set for calls that may legitimately return 401 without
-    // meaning the session is invalid (e.g. MFA setup / enable endpoints).
     if (res.status === 401 && typeof window !== 'undefined' && !skipAuthRedirect) {
       localStorage.clear();
       window.location.href = admin ? '/admin/login' : '/login';
@@ -56,6 +49,44 @@ async function request<T>(
   }
 
   if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+async function requestBlob(
+  path: string,
+  options: RequestInit = {},
+  admin = false,
+): Promise<{ blob: Blob; filename: string }> {
+  const token = getToken(admin);
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(body?.message ?? `Request failed: ${res.status}`), { status: res.status });
+  }
+  const cd = res.headers.get('content-disposition') ?? '';
+  const match = cd.match(/filename="?([^"]+)"?/);
+  const filename = match?.[1] ?? 'export';
+  return { blob: await res.blob(), filename };
+}
+
+async function requestMultipart<T>(
+  path: string,
+  formData: FormData,
+  admin = false,
+): Promise<T> {
+  const token = getToken(admin);
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: formData });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(body?.message ?? `Request failed: ${res.status}`), { status: res.status });
+  }
   return res.json();
 }
 
@@ -86,8 +117,6 @@ export const authApi = {
       mfaToken,
       code,
     }),
-  // skipAuthRedirect=true: a 401 here does not mean the session is invalid —
-  // it may mean MFA is already configured. Do not clear localStorage or redirect.
   setupMfa: () =>
     request<{ qrCodeBase64: string; manualKey: string }>(
       '/v1/auth/mfa/setup',
@@ -137,6 +166,75 @@ export const invoiceApi = {
   cancel: (id: string, reason: string) =>
     api.post(`/v1/invoices/${id}/cancel`, { reason }),
   stats: () => api.get<unknown>('/v1/invoices/dashboard/stats'),
+  getXml: (id: string) => requestBlob(`/v1/invoices/${id}/xml`),
+  getStatus: (id: string) => api.get<unknown>(`/v1/invoices/${id}/status`),
+  // Payments
+  recordPayment: (id: string, data: {
+    amount: number;
+    reference: string;
+    provider: string;
+    paidAt: string;
+    notes?: string;
+  }) => api.post<unknown>(`/v1/invoices/${id}/payments`, data),
+  listPayments: (id: string) => api.get<unknown>(`/v1/invoices/${id}/payments`),
+  // Bulk
+  bulkUploadCsv: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return requestMultipart<unknown>('/v1/invoices/bulk/csv', fd);
+  },
+  getBulkStatus: (batchId: string) =>
+    api.get<unknown>(`/v1/invoices/bulk/${batchId}/status`),
+};
+
+// Payments list (tenant-wide)
+export const paymentApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return api.get<unknown>(`/v1/invoices/dashboard/list${qs}`);
+  },
+};
+
+// Exports / Reports
+export const exportApi = {
+  csv: (startDate: string, endDate: string) =>
+    requestBlob(`/v1/invoices/export/csv?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`),
+  json: (startDate: string, endDate: string) =>
+    request<unknown>(`/v1/invoices/export/json?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`),
+  monthly: (year: number, month: number) =>
+    request<unknown>(`/v1/invoices/export/monthly?year=${year}&month=${month}`),
+};
+
+// Reminder Rules
+export const reminderApi = {
+  list: () => api.get<{ data: unknown[]; total: number }>('/v1/reminder-rules'),
+  create: (data: {
+    name: string;
+    triggerType: string;
+    triggerDays: number;
+    message: string;
+  }) => api.post<unknown>('/v1/reminder-rules', data),
+  update: (id: string, data: Partial<{
+    name: string;
+    triggerType: string;
+    triggerDays: number;
+    message: string;
+    isActive: boolean;
+  }>) => api.patch<unknown>(`/v1/reminder-rules/${id}`, data),
+  delete: (id: string) => api.delete<void>(`/v1/reminder-rules/${id}`),
+};
+
+// Products
+export const productApi = {
+  list: (params?: { search?: string; category?: string; isActive?: string }) => {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return api.get<{ data: unknown[]; total: number }>(`/v1/products${qs}`);
+  },
+  get: (id: string) => api.get<unknown>(`/v1/products/${id}`),
+  create: (data: unknown) => api.post<unknown>('/v1/products', data),
+  update: (id: string, data: unknown) => api.patch<unknown>(`/v1/products/${id}`, data),
+  delete: (id: string) => api.delete<unknown>(`/v1/products/${id}`),
+  asLineItem: (id: string) => api.get<unknown>(`/v1/products/${id}/as-line-item`),
 };
 
 // Team / Users
@@ -176,6 +274,8 @@ const aApi = {
   get: <T>(path: string) => adminRequest<T>(path),
   post: <T>(path: string, data?: unknown) =>
     adminRequest<T>(path, { method: 'POST', body: JSON.stringify(data) }),
+  patch: <T>(path: string, data?: unknown) =>
+    adminRequest<T>(path, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 // Admin
@@ -186,6 +286,7 @@ export const adminApi = {
       password,
     }),
   dashboard: () => aApi.get<unknown>('/v1/admin/dashboard'),
+  metrics: () => aApi.get<unknown>('/v1/admin/metrics'),
   accessRequests: (status?: string) => {
     const qs = status ? `?status=${status}` : '';
     return aApi.get<{ data: unknown[]; total: number }>(
@@ -201,10 +302,46 @@ export const adminApi = {
     }),
   tenants: () =>
     aApi.get<{ data: unknown[]; total: number }>('/v1/admin/tenants'),
+  getTenant: (id: string) => aApi.get<unknown>(`/v1/admin/tenants/${id}`),
   activity: (params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return aApi.get<{ data: unknown[]; total: number }>(
       `/v1/admin/activity${qs}`,
     );
   },
+  // Consent records
+  consentRecords: (params?: { tenantId?: string; email?: string; consentType?: string }) => {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return aApi.get<{ data: unknown[]; total: number }>(`/v1/admin/consent-records${qs}`);
+  },
+  // Erasure requests
+  erasureRequests: (status?: string) => {
+    const qs = status ? `?status=${status}` : '';
+    return aApi.get<{ data: unknown[]; total: number }>(`/v1/admin/erasure-requests${qs}`);
+  },
+  approveErasure: (id: string, reviewNote?: string) =>
+    aApi.post(`/v1/admin/erasure-requests/${id}/approve`, { reviewNote }),
+  rejectErasure: (id: string, reviewNote?: string) =>
+    aApi.post(`/v1/admin/erasure-requests/${id}/reject`, { reviewNote }),
+  // Queue
+  queueStatus: () => aApi.get<unknown>('/v1/admin/queue/status'),
+  bulkQueueStatus: () => aApi.get<unknown>('/v1/admin/queue/bulk/status'),
+  retryFailed: () => aApi.post('/v1/admin/queue/retry-failed'),
+  // Recovery & reminders
+  runRecovery: () => aApi.post('/v1/admin/recovery/run'),
+  runReminders: (tenantId?: string) => {
+    const qs = tenantId ? `?tenantId=${tenantId}` : '';
+    return aApi.post(`/v1/admin/reminders/run${qs}`);
+  },
+  // Retention
+  retentionStats: () => aApi.get<unknown>('/v1/admin/retention/stats'),
+  runRetention: () => aApi.post('/v1/admin/retention/run'),
+  // Audit
+  verifyAudit: () => aApi.get<unknown>('/v1/admin/audit/verify'),
+  // Platform CSV export
+  exportPlatformCsv: (startDate: string, endDate: string) =>
+    requestBlob(`/v1/admin/export/platform-csv?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`, {}, true),
+  // Unlock user
+  unlockAccount: (tenantId: string, email: string) =>
+    aApi.post('/v1/admin/users/unlock', { tenantId, email }),
 };

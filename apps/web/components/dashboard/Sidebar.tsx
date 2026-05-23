@@ -27,6 +27,37 @@ const nav = [
     ),
   },
   {
+    label: "Payments",
+    href: "/payments",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+        <line x1="1" y1="10" x2="23" y2="10" />
+      </svg>
+    ),
+    badge: "overdue",
+  },
+  {
+    label: "Products",
+    href: "/products",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
+      </svg>
+    ),
+  },
+  {
+    label: "Reports",
+    href: "/reports",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" /><line x1="2" y1="20" x2="22" y2="20" />
+      </svg>
+    ),
+  },
+  {
     label: "Submissions",
     href: "/submissions",
     icon: (
@@ -57,7 +88,7 @@ const nav = [
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({ overdueBadge = 0 }: { overdueBadge?: number }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
@@ -83,6 +114,7 @@ export function Sidebar() {
       <nav className="flex-1 px-3 py-4 space-y-0.5">
         {nav.map((item) => {
           const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+          const showBadge = item.badge === "overdue" && overdueBadge > 0;
           return (
             <Link
               key={item.href}
@@ -95,7 +127,12 @@ export function Sidebar() {
               )}
             >
               {item.icon}
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {showBadge && (
+                <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                  {overdueBadge > 99 ? "99+" : overdueBadge}
+                </span>
+              )}
             </Link>
           );
         })}
