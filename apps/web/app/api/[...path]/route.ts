@@ -28,7 +28,14 @@ async function proxy(
   req: NextRequest,
   { params }: { params: { path: string[] } },
 ): Promise<NextResponse> {
-  const path = params.path.join('/');
+  // params.path contains the segments after the /api/ directory prefix, e.g.
+  //   Request: /api/v1/invoices/dashboard/stats
+  //   params.path: ['v1', 'invoices', 'dashboard', 'stats']
+  // Strip a leading 'api/' segment as a safety net for any call path that
+  // includes the prefix in the captured segments, so we never forward
+  // /api/v1/... to the backend — only /v1/...
+  const rawPath = params.path.join('/');
+  const path = rawPath.startsWith('api/') ? rawPath.slice(4) : rawPath;
   const search = req.nextUrl.search;
   const url = `${BACKEND}/${path}${search}`;
 
