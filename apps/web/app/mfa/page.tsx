@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { Button } from "@/components/ui/Button";
 import { authApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 function MfaForm() {
   const router = useRouter();
+  const { setTokens } = useAuth();
   // mfaToken is stored in localStorage by the login page (not passed in the URL
   // so it is never exposed in browser history or server logs).
   const mfaToken = typeof window !== "undefined"
@@ -43,7 +45,9 @@ function MfaForm() {
     try {
       const res = await authApi.verifyMfa(mfaToken, code);
       localStorage.removeItem("mfaToken"); // consumed — remove to avoid stale state
-      localStorage.setItem("accessToken", res.accessToken);
+      // setTokens writes to localStorage AND updates AuthProvider context so the
+      // dashboard layout sees isAuthenticated:true on the next client-side nav.
+      setTokens(res.accessToken);
       router.push("/dashboard");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Invalid code";
