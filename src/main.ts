@@ -112,6 +112,19 @@ async function bootstrap() {
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
+
+  // Log uncaught exceptions and unhandled rejections so the crash reason
+  // is always visible in pm2 error logs before the process exits.
+  process.on('uncaughtException', (err) => {
+    logger.error(`Uncaught exception: ${err.message}`, err.stack);
+    process.exit(1);
+  });
+  process.on('unhandledRejection', (reason) => {
+    const msg = reason instanceof Error ? reason.message : String(reason);
+    const stack = reason instanceof Error ? reason.stack : undefined;
+    logger.error(`Unhandled promise rejection: ${msg}`, stack);
+    process.exit(1);
+  });
 }
 
 bootstrap().catch((err) => {

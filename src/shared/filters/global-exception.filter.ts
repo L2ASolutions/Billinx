@@ -5,9 +5,11 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  Injectable,
 } from '@nestjs/common';
 import { Response, Request } from 'express';
 import { getOptionalRequestContext } from '../context/request-context';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
 import * as Sentry from '@sentry/nestjs';
 
 export interface ErrorResponse {
@@ -19,9 +21,12 @@ export interface ErrorResponse {
   path: string;
 }
 
+@Injectable()
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
+
+  constructor(private readonly prisma: PrismaService) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
@@ -45,6 +50,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         message = exceptionResponse;
         error = exception.name;
       }
+    } else if (
+      exception instanceof Error &&
+      exception.constructor.name === 'PrismaClientValidationError'
+    ) {
+      // Prisma validation errors (missing required field, wrong type, etc.)
+      // are a client mistake — return 400 without logging to system-error table.
+      statusCode = HttpStatus.BAD_REQUEST;
+      error = 'BAD_REQUEST';
+      message = 'Invalid request data';
+      this.logger.warn(
+        `Prisma validation error on ${request.path}: ${exception.message.split('\n')[0]}`,
+      );
     } else if (exception instanceof Error) {
       this.logger.error(
         `Unhandled exception: ${exception.message}`,
@@ -81,30 +98,26 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     request: Request,
     requestCtx: any,
   ): void {
-    // Dynamically import to avoid circular dependencies
-    import('../../infrastructure/database/prisma.service')
-      .then(({ PrismaService }) => {
-        const prisma = new PrismaService();
-        return prisma.asAdmin(async (tx) => {
-          return tx.systemError.create({
-            data: {
-              tenantId:
-                requestCtx?.tenantId !== 'ADMIN'
-                  ? (requestCtx?.tenantId ?? null)
-                  : null,
-              errorCode: error.name ?? 'UNKNOWN_ERROR',
-              errorMessage: error.message,
-              stackTrace: error.stack ?? null,
-              endpoint: request.path,
-              method: request.method,
-              actor: requestCtx?.actor ?? null,
-              requestId: requestCtx?.requestId ?? null,
-              severity: 'HIGH',
-              isResolved: false,
-            },
-          });
-        });
-      })
+    this.prisma
+      .asAdmin((tx) =>
+        tx.systemError.create({
+          data: {
+            tenantId:
+              requestCtx?.tenantId !== 'ADMIN'
+                ? (requestCtx?.tenantId ?? null)
+                : null,
+            errorCode: error.name ?? 'UNKNOWN_ERROR',
+            errorMessage: error.message,
+            stackTrace: error.stack ?? null,
+            endpoint: request.path,
+            method: request.method,
+            actor: requestCtx?.actor ?? null,
+            requestId: requestCtx?.requestId ?? null,
+            severity: 'HIGH',
+            isResolved: false,
+          },
+        }),
+      )
       .catch((err) =>
         this.logger.error(`Failed to track system error: ${err.message}`),
       );
