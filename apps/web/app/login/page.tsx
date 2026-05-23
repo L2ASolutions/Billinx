@@ -7,9 +7,11 @@ import { AuthCard } from "@/components/auth/AuthCard";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { authApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { setTokens } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -23,6 +25,9 @@ export default function LoginPage() {
       const res = await authApi.login(email, password);
 
       if (res.mfaSetupRequired) {
+        // Store token so /mfa/setup can call the setup API with it.
+        // We do not call setTokens here because the user is not fully
+        // authenticated until they complete or skip MFA setup.
         localStorage.setItem("accessToken", res.accessToken ?? "");
         router.push("/mfa/setup");
         return;
@@ -35,7 +40,10 @@ export default function LoginPage() {
       }
 
       if (res.accessToken) {
-        localStorage.setItem("accessToken", res.accessToken);
+        // setTokens writes to localStorage AND updates the AuthProvider context
+        // so the dashboard layout sees isAuthenticated:true immediately on the
+        // next client-side navigation — no full-page reload required.
+        setTokens(res.accessToken);
         router.push("/dashboard");
         return;
       }
