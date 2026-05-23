@@ -1,3 +1,4 @@
+import 'dotenv/config'; // Load .env before anything else (dev fallback; prod uses injected env vars)
 import './instrument'; // Sentry must be initialised before anything else
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
@@ -19,9 +20,21 @@ async function bootstrap() {
   // Trust the first proxy hop (AWS ALB / Nginx) so req.ip and X-Forwarded-For are correct
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
+  // Build the CORS allowed-origins list.
+  // In GitHub Codespaces the frontend runs on a forwarded port URL such as
+  //   https://<CODESPACE_NAME>-3001.<GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN>
+  // We detect that automatically and add it alongside the standard origins.
+  const defaultOrigins = ['http://localhost:3001'];
+  const codespaceName = process.env.CODESPACE_NAME;
+  if (codespaceName) {
+    const domain =
+      process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN ?? 'app.github.dev';
+    defaultOrigins.push(`https://${codespaceName}-3001.${domain}`);
+  }
+
   const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
-    : ['http://localhost:3001'];
+    : defaultOrigins;
 
   app.enableCors({
     origin: allowedOrigins,
