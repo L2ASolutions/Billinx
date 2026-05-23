@@ -3,7 +3,6 @@
 import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import Link from "next/link";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -15,6 +14,14 @@ export default function MfaSetupPage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Capture the token into React state the instant this component mounts,
+  // before the setupMfa() API call runs.  If that call fails with a 401 the
+  // global handler clears localStorage, but we still have the token here so
+  // "Skip for now" can restore it and navigate to /dashboard cleanly.
+  const [savedToken] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("accessToken") : null
+  );
 
   useEffect(() => {
     authApi.setupMfa().then(setSetup).catch(() => {
@@ -96,9 +103,24 @@ export default function MfaSetupPage() {
         )}
 
         <div className="text-center">
-          <Link href="/dashboard" className="text-sm text-muted hover:text-dark underline">
+          <button
+            type="button"
+            onClick={() => {
+              // Prefer the token still in localStorage; fall back to the copy
+              // captured in state before any API call could wipe it.
+              const token = localStorage.getItem("accessToken") || savedToken;
+              if (token) {
+                localStorage.setItem("accessToken", token);
+                router.push("/dashboard");
+              } else {
+                // No token at all — go back to login.
+                router.push("/login");
+              }
+            }}
+            className="text-sm text-muted hover:text-dark underline"
+          >
             Skip for now
-          </Link>
+          </button>
         </div>
       </div>
     </AuthCard>
