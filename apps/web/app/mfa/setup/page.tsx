@@ -15,6 +15,14 @@ export default function MfaSetupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Capture the token into React state the instant this component mounts,
+  // before the setupMfa() API call runs.  If that call fails with a 401 the
+  // global handler clears localStorage, but we still have the token here so
+  // "Skip for now" can restore it and navigate to /dashboard cleanly.
+  const [savedToken] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("accessToken") : null
+  );
+
   useEffect(() => {
     authApi.setupMfa().then(setSetup).catch(() => {
       setError("Failed to load MFA setup. Please try again.");
@@ -98,12 +106,16 @@ export default function MfaSetupPage() {
           <button
             type="button"
             onClick={() => {
-              // Token was stored by login page before redirecting here.
-              // Explicitly re-confirm it is present so the dashboard auth
-              // guard sees an authenticated session on arrival.
-              const token = localStorage.getItem("accessToken");
-              if (token) localStorage.setItem("accessToken", token);
-              router.push("/dashboard");
+              // Prefer the token still in localStorage; fall back to the copy
+              // captured in state before any API call could wipe it.
+              const token = localStorage.getItem("accessToken") || savedToken;
+              if (token) {
+                localStorage.setItem("accessToken", token);
+                router.push("/dashboard");
+              } else {
+                // No token at all — go back to login.
+                router.push("/login");
+              }
             }}
             className="text-sm text-muted hover:text-dark underline"
           >
