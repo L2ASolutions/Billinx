@@ -22,6 +22,25 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const token = localStorage.getItem("adminToken");
+    if (token) {
+      // Decode and check the exp claim so a stale admin token doesn't grant
+      // access — mirrors the same check in lib/auth.tsx for regular users.
+      try {
+        const decoded = JSON.parse(atob(token.split(".")[1]));
+        const exp = decoded?.exp as number | undefined;
+        if (exp && Date.now() >= exp * 1000) {
+          // Token is expired — discard it and redirect to admin login
+          localStorage.removeItem("adminToken");
+          setState({ isAuthenticated: false, isLoading: false });
+          return;
+        }
+      } catch {
+        // Malformed token — treat as unauthenticated
+        localStorage.removeItem("adminToken");
+        setState({ isAuthenticated: false, isLoading: false });
+        return;
+      }
+    }
     setState({ isAuthenticated: !!token, isLoading: false });
   }, []);
 
@@ -32,7 +51,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem("adminToken");
+    localStorage.clear(); // wipe all auth state
     setState({ isAuthenticated: false, isLoading: false });
     router.push("/admin/login");
   }, [router]);

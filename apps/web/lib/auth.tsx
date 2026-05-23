@@ -36,6 +36,12 @@ function decodeJwt(token: string): Record<string, unknown> | null {
   }
 }
 
+function isTokenExpired(decoded: Record<string, unknown>): boolean {
+  const exp = decoded.exp as number | undefined;
+  if (!exp) return false; // no exp claim — treat as valid
+  return Date.now() >= exp * 1000;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -46,7 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hydrateFromToken = useCallback((token: string) => {
     const decoded = decodeJwt(token);
-    if (!decoded) {
+    if (!decoded || isTokenExpired(decoded)) {
+      // Token is missing, malformed, or expired — discard it immediately so
+      // the layout's auth guard redirects to /login without an API round-trip.
+      localStorage.removeItem('accessToken');
       setState({ user: null, accessToken: null, isLoading: false, isAuthenticated: false });
       return;
     }
@@ -81,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     authApi.revoke().catch(() => {});
-    localStorage.removeItem("accessToken");
+    localStorage.clear(); // wipe all auth state, not just accessToken
     setState({ user: null, accessToken: null, isLoading: false, isAuthenticated: false });
   }, []);
 
