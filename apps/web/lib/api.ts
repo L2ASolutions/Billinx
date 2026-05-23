@@ -37,6 +37,15 @@ async function request<T>(
   const res = await fetch(url, { ...options, headers });
 
   if (!res.ok) {
+    // A 401 means the stored token is stale or invalid.  Wipe all local auth
+    // state and send the user to the appropriate login page so they can get
+    // a fresh token.  We do this before throwing so callers never have to
+    // handle session-expiry themselves.
+    if (res.status === 401 && typeof window !== 'undefined') {
+      localStorage.clear();
+      window.location.href = admin ? '/admin/login' : '/login';
+    }
+
     const body = await res.json().catch(() => ({}));
     const message = body?.message ?? `Request failed: ${res.status}`;
     throw Object.assign(new Error(message), { status: res.status, body });
