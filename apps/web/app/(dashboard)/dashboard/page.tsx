@@ -13,6 +13,7 @@ interface Stats {
   accepted: number;
   rejected: number;
   pending: number;
+  overdue?: number;
   totalAmount: number;
   recentInvoices: Array<{
     id: string;
@@ -21,6 +22,7 @@ interface Stats {
     totalAmount: number;
     currency: string;
     status: string;
+    isOverdue?: boolean;
     createdAt: string;
   }>;
 }
@@ -38,31 +40,52 @@ const STATUS_COLORS: Record<string, string> = {
   VALIDATING: "bg-blue-50 text-blue-600",
 };
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-border p-5">
+function StatCard({
+  label,
+  value,
+  sub,
+  color,
+  href,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  color?: string;
+  href?: string;
+}) {
+  const inner = (
+    <div className={`bg-white rounded-xl border border-border p-5 ${href ? "hover:border-green/40 transition-colors" : ""}`}>
       <p className="text-sm text-muted mb-1">{label}</p>
-      <p className="text-2xl font-bold text-dark">{value}</p>
+      <p className={`text-2xl font-bold ${color ?? "text-dark"}`}>{value}</p>
       {sub && <p className="text-xs text-muted mt-1">{sub}</p>}
     </div>
   );
+  return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
 export default function DashboardPage() {
-  // Defense-in-depth: redirect to /login if the token is missing or expired.
-  // The (dashboard) layout also does this, but calling it here catches any
-  // case where the token expires after the layout has already rendered.
   const { isLoading } = useRequireAuth();
-
   const [stats, setStats] = useState<Stats | null>(null);
-  const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   useEffect(() => {
-    if (isLoading) return; // wait for auth check before firing API calls
+    if (isLoading) return;
     invoiceApi.stats()
-      .then((data) => setStats(data as Stats))
-      .catch(() => setError("Failed to load dashboard data"));
+      .then((data) => {
+        setStats(data as Stats);
+        setLoadError("");
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Failed to load dashboard data";
+        setLoadError(msg);
+        // Set empty stats so the page renders zeros instead of blank
+        setStats({ total: 0, accepted: 0, rejected: 0, pending: 0, totalAmount: 0, recentInvoices: [] });
+      })
+      .finally(() => setDataLoaded(true));
   }, [isLoading]);
+
+  const overdue = stats?.overdue ?? 0;
 
   return (
     <>
@@ -76,45 +99,85 @@ export default function DashboardPage() {
       />
 
       <div className="p-6 space-y-6">
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
-            {error}
+        {loadError && (
+          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-800 flex items-center justify-between">
+            <span>{loadError}</span>
+            <button
+              className="text-xs font-medium underline"
+              onClick={() => {
+                setDataLoaded(false);
+                invoiceApi.stats()
+                  .then((d) => { setStats(d as Stats); setLoadError(""); })
+                  .catch((err: unknown) => setLoadError(err instanceof Error ? err.message : "Failed"))
+                  .finally(() => setDataLoaded(true));
+              }}
+            >
+              Retry
+            </button>
           </div>
         )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Total Invoices" value={stats?.total ?? "—"} />
+          <StatCard label="Total Invoices" value={stats?.total ?? 0} />
           <StatCard
             label="Accepted"
-            value={stats?.accepted ?? "—"}
-            sub={stats ? `${Math.round((stats.accepted / Math.max(stats.total, 1)) * 100)}% acceptance rate` : undefined}
+            value={stats?.accepted ?? 0}
+            sub={stats && stats.total > 0
+              ? `${Math.round((stats.accepted / stats.total) * 100)}% acceptance rate`
+              : "No invoices yet"}
+            color="text-green-700"
           />
-          <StatCard label="Pending" value={stats?.pending ?? "—"} />
+          <StatCard label="Pending" value={stats?.pending ?? 0} />
           <StatCard
             label="Total Value"
-            value={stats ? formatCurrency(stats.totalAmount) : "—"}
+            value={stats ? formatCurrency(stats.totalAmount) : "₦0.00"}
           />
         </div>
+
+        {/* Overdue alert */}
+        {overdue > 0 && (
+          <Link href="/payments?filter=OVERDUE">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between cursor-pointer hover:bg-red-100 transition-colors">
+              <div className="flex items-center gap-3">
+                <span className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-red-700">{overdue} overdue invoice{overdue !== 1 ? "s" : ""}</p>
+                  <p className="text-xs text-red-500">Payment is past due — click to view</p>
+                </div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2"><polyline points="9 18 15 12 9 6" /></svg>
+            </div>
+          </Link>
+        )}
 
         {/* Recent invoices */}
         <div className="bg-white rounded-xl border border-border">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <h2 className="font-semibold text-dark">Recent Invoices</h2>
-            <Link href="/invoices" className="text-sm text-green hover:underline">
-              View all
-            </Link>
+            <Link href="/invoices" className="text-sm text-green hover:underline">View all</Link>
           </div>
 
-          {!stats ? (
+          {!dataLoaded && !loadError ? (
             <div className="p-8 text-center">
               <div className="w-6 h-6 border-2 border-green border-t-transparent rounded-full animate-spin mx-auto" />
             </div>
-          ) : stats.recentInvoices?.length === 0 ? (
-            <div className="p-8 text-center text-muted text-sm">
-              No invoices yet.{" "}
-              <Link href="/invoices/new" className="text-green hover:underline">
-                Create your first invoice
+          ) : !stats?.recentInvoices?.length ? (
+            <div className="p-12 text-center">
+              <div className="w-14 h-14 rounded-full bg-surface flex items-center justify-center mx-auto mb-3">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+              </div>
+              <p className="text-muted text-sm mb-3">No invoices yet.</p>
+              <Link href="/invoices/new">
+                <Button size="sm">Create your first invoice</Button>
               </Link>
             </div>
           ) : (
@@ -129,12 +192,17 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {stats.recentInvoices?.map((inv) => (
-                  <tr key={inv.id} className="border-b border-border last:border-0 hover:bg-surface transition-colors">
+                {stats.recentInvoices.map((inv) => (
+                  <tr key={inv.id} className={`border-b border-border last:border-0 transition-colors ${inv.isOverdue ? "bg-red-50/30 hover:bg-red-50/50" : "hover:bg-surface"}`}>
                     <td className="px-6 py-3">
-                      <Link href={`/invoices/${inv.id}`} className="text-sm font-mono text-green hover:underline">
-                        {inv.platformIrn?.slice(0, 20) ?? inv.id.slice(0, 8)}…
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/invoices/${inv.id}`} className="text-sm font-mono text-green hover:underline">
+                          {inv.platformIrn?.slice(0, 20) ?? inv.id.slice(0, 8)}…
+                        </Link>
+                        {inv.isOverdue && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-600 font-medium">Overdue</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-3 text-sm text-dark">{inv.buyerName}</td>
                     <td className="px-6 py-3 text-sm text-dark font-medium">
