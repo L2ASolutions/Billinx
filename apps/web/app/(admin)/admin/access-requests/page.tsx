@@ -8,15 +8,26 @@ import { formatDate } from "@/lib/utils";
 
 type RequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 
+interface KybVerification {
+  riskScore?: string;
+  cacVerified?: boolean;
+  companyNameMatch?: number;
+  riskReasons?: string[];
+  verifiedAt?: string;
+}
+
 interface AccessRequest {
   id: string;
   companyName: string;
   contactName: string;
   email: string;
   phone?: string;
+  tin?: string;
   useCase?: string;
+  estimatedVolume?: string;
   status: RequestStatus;
   createdAt: string;
+  kybVerification?: KybVerification;
 }
 
 const STATUS_COLORS: Record<RequestStatus, string> = {
@@ -105,11 +116,47 @@ export default function AccessRequestsPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl border border-border p-6 w-full max-w-md">
             <h2 className="font-semibold text-dark mb-2">Review: {selected.companyName}</h2>
-            <div className="text-sm text-muted space-y-1 mb-6">
+            <div className="text-sm text-muted space-y-1 mb-4">
               <p><strong className="text-dark">Contact:</strong> {selected.contactName}</p>
               <p><strong className="text-dark">Email:</strong> {selected.email}</p>
+              {selected.tin && <p><strong className="text-dark">TIN:</strong> {selected.tin}</p>}
+              {selected.estimatedVolume && <p><strong className="text-dark">Est. Volume:</strong> {selected.estimatedVolume}</p>}
               {selected.useCase && <p><strong className="text-dark">Use case:</strong> {selected.useCase}</p>}
             </div>
+
+            {/* KYB Score */}
+            {selected.kybVerification && (
+              <div className={`mb-4 p-3 rounded-lg border text-sm ${
+                selected.kybVerification.riskScore === "GREEN" ? "bg-green-50 border-green/20" :
+                selected.kybVerification.riskScore === "AMBER" ? "bg-yellow-50 border-yellow-200" :
+                "bg-red-50 border-red-200"
+              }`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <strong className="text-dark">KYB Risk Score:</strong>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                    selected.kybVerification.riskScore === "GREEN" ? "bg-green text-white" :
+                    selected.kybVerification.riskScore === "AMBER" ? "bg-yellow-500 text-white" :
+                    selected.kybVerification.riskScore === "RED" ? "bg-red-500 text-white" :
+                    "bg-gray-300 text-gray-700"
+                  }`}>
+                    {selected.kybVerification.riskScore ?? "PENDING"}
+                  </span>
+                  {selected.kybVerification.cacVerified && (
+                    <span className="px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700">CAC ✓</span>
+                  )}
+                </div>
+                {selected.kybVerification.companyNameMatch != null && (
+                  <p className="text-xs text-muted">Name match score: {selected.kybVerification.companyNameMatch}%</p>
+                )}
+                {selected.kybVerification.riskReasons && selected.kybVerification.riskReasons.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {selected.kybVerification.riskReasons.map((r, i) => (
+                      <li key={i} className="text-xs text-muted">• {r}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
             <form onSubmit={handleApprove} className="space-y-4">
               <div>
@@ -178,6 +225,7 @@ export default function AccessRequestsPage() {
               <tr className="border-b border-border">
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Company</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Contact</th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">KYB</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Status</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Applied</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide"></th>
@@ -191,6 +239,20 @@ export default function AccessRequestsPage() {
                     <p className="text-xs text-muted">{req.email}</p>
                   </td>
                   <td className="px-6 py-3 text-sm text-dark">{req.contactName}</td>
+                  <td className="px-6 py-3">
+                    {req.kybVerification?.riskScore ? (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
+                        req.kybVerification.riskScore === "GREEN" ? "bg-green text-white" :
+                        req.kybVerification.riskScore === "AMBER" ? "bg-yellow-500 text-white" :
+                        req.kybVerification.riskScore === "RED" ? "bg-red-500 text-white" :
+                        "bg-gray-200 text-gray-600"
+                      }`}>
+                        {req.kybVerification.riskScore}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted">—</span>
+                    )}
+                  </td>
                   <td className="px-6 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[req.status]}`}>
                       {req.status}
