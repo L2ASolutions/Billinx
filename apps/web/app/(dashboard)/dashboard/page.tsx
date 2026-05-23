@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { invoiceApi } from "@/lib/api";
+import { useRequireAuth } from "@/lib/auth";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 interface Stats {
@@ -48,14 +49,20 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 }
 
 export default function DashboardPage() {
+  // Defense-in-depth: redirect to /login if the token is missing or expired.
+  // The (dashboard) layout also does this, but calling it here catches any
+  // case where the token expires after the layout has already rendered.
+  const { isLoading } = useRequireAuth();
+
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (isLoading) return; // wait for auth check before firing API calls
     invoiceApi.stats()
       .then((data) => setStats(data as Stats))
       .catch(() => setError("Failed to load dashboard data"));
-  }, []);
+  }, [isLoading]);
 
   return (
     <>
