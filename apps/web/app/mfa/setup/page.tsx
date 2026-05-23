@@ -7,25 +7,28 @@ import { AuthCard } from "@/components/auth/AuthCard";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { authApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 export default function MfaSetupPage() {
   const router = useRouter();
+  const { setTokens } = useAuth();
+
+  // Capture the access token synchronously at mount time — before any API call
+  // can wipe localStorage.  This is the source of truth for Skip for now.
+  const [savedToken] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("accessToken") : null
+  );
+
   const [setup, setSetup] = useState<{ qrCodeBase64: string; manualKey: string } | null>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Capture the token into React state the instant this component mounts,
-  // before the setupMfa() API call runs.  If that call fails with a 401 the
-  // global handler clears localStorage, but we still have the token here so
-  // "Skip for now" can restore it and navigate to /dashboard cleanly.
-  const [savedToken] = useState<string | null>(() =>
-    typeof window !== "undefined" ? localStorage.getItem("accessToken") : null
-  );
-
   useEffect(() => {
+    // setupMfa uses skipAuthRedirect=true so a 401 from this endpoint will NOT
+    // clear localStorage or redirect — the user can still click Skip for now.
     authApi.setupMfa().then(setSetup).catch(() => {
-      setError("Failed to load MFA setup. Please try again.");
+      setError("Could not load MFA setup. You can skip and set it up later.");
     });
   }, []);
 
@@ -35,12 +38,30 @@ export default function MfaSetupPage() {
     setLoading(true);
     try {
       await authApi.enableMfa(code);
+      // enableMfa uses skipAuthRedirect=true too.
+      // After enabling, the token in localStorage is still valid for the dashboard.
+      const token = localStorage.getItem("accessToken") || savedToken;
+      if (token) setTokens(token);
       router.push("/dashboard");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Invalid code";
       setError(msg);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function handleSkip() {
+    // Use savedToken (captured at mount) as fallback in case setupMfa's error
+    // handler cleared localStorage.  setTokens updates both localStorage AND
+    // the AuthProvider context so the dashboard layout sees isAuthenticated:true
+    // immediately on the next client-side navigation.
+    const token = localStorage.getItem("accessToken") || savedToken;
+    if (token) {
+      setTokens(token);
+      router.push("/dashboard");
+    } else {
+      router.push("/login");
     }
   }
 
@@ -105,18 +126,7 @@ export default function MfaSetupPage() {
         <div className="text-center">
           <button
             type="button"
-            onClick={() => {
-              // Prefer the token still in localStorage; fall back to the copy
-              // captured in state before any API call could wipe it.
-              const token = localStorage.getItem("accessToken") || savedToken;
-              if (token) {
-                localStorage.setItem("accessToken", token);
-                router.push("/dashboard");
-              } else {
-                // No token at all — go back to login.
-                router.push("/login");
-              }
-            }}
+            onClick={handleSkip}
             className="text-sm text-muted hover:text-dark underline"
           >
             Skip for now

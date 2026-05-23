@@ -16,6 +16,7 @@ async function request<T>(
   path: string,
   options: RequestInit = {},
   admin = false,
+  skipAuthRedirect = false,
 ): Promise<T> {
   const token = getToken(admin);
   const headers: Record<string, string> = {
@@ -41,7 +42,10 @@ async function request<T>(
     // state and send the user to the appropriate login page so they can get
     // a fresh token.  We do this before throwing so callers never have to
     // handle session-expiry themselves.
-    if (res.status === 401 && typeof window !== 'undefined') {
+    // Only clear state and redirect on 401 for normal authenticated requests.
+    // skipAuthRedirect is set for calls that may legitimately return 401 without
+    // meaning the session is invalid (e.g. MFA setup / enable endpoints).
+    if (res.status === 401 && typeof window !== 'undefined' && !skipAuthRedirect) {
       localStorage.clear();
       window.location.href = admin ? '/admin/login' : '/login';
     }
@@ -82,9 +86,22 @@ export const authApi = {
       mfaToken,
       code,
     }),
+  // skipAuthRedirect=true: a 401 here does not mean the session is invalid —
+  // it may mean MFA is already configured. Do not clear localStorage or redirect.
   setupMfa: () =>
-    api.post<{ qrCodeBase64: string; manualKey: string }>('/v1/auth/mfa/setup'),
-  enableMfa: (code: string) => api.post('/v1/auth/mfa/verify-setup', { code }),
+    request<{ qrCodeBase64: string; manualKey: string }>(
+      '/v1/auth/mfa/setup',
+      { method: 'POST' },
+      false,
+      true,
+    ),
+  enableMfa: (code: string) =>
+    request<void>(
+      '/v1/auth/mfa/verify-setup',
+      { method: 'POST', body: JSON.stringify({ code }) },
+      false,
+      true,
+    ),
   forgotPassword: (email: string) =>
     api.post('/v1/auth/forgot-password', { email }),
   resetPassword: (token: string, password: string) =>
