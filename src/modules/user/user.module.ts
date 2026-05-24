@@ -3,7 +3,6 @@ import { UserController } from './user.controller';
 import { UserService } from './services/user.service';
 import { UserRepository } from './repositories/user.repository';
 import { SecretsService } from '../../infrastructure/secrets/secrets.service';
-import { ActivityService } from '../activity/services/activity.service';
 import { ApiKeyService } from '../identity/services/api-key.service';
 import { TokenService } from '../identity/services/token.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';
@@ -21,7 +20,6 @@ import { ConsentService } from '../consent/consent.service';
     UserService,
     UserRepository,
     SecretsService,
-    ActivityService,
     ApiKeyService,
     TokenService,
     JwtGuard,

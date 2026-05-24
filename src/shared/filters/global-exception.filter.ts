@@ -10,7 +10,9 @@ import {
 import { Response, Request } from 'express';
 import { getOptionalRequestContext } from '../context/request-context';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-import * as Sentry from '@sentry/nestjs';
+// Only import Sentry when a DSN is configured — the SDK registers OTEL hooks
+// at import time which causes OOM in development when no DSN is present.
+const Sentry = process.env.SENTRY_DSN ? require('@sentry/nestjs') : null;
 
 export interface ErrorResponse {
   error: string;
@@ -68,7 +70,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         exception.stack,
       );
 
-      Sentry.captureException(exception, {
+      Sentry?.captureException(exception, {
         extra: {
           path: request.path,
           method: request.method,
