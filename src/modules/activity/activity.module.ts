@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ActivityController } from './activity.controller';
 import { ActivityService } from './services/activity.service';
-import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { SecretsService } from '../../infrastructure/secrets/secrets.service';
 import { ApiKeyService } from '../identity/services/api-key.service';
 import { AdminJwtGuard } from '../admin/guards/admin-jwt.guard';
@@ -14,7 +13,6 @@ import { EmailModule } from '../../shared/email/email.module';
   controllers: [ActivityController],
   providers: [
     ActivityService,
-    PrismaService,
     SecretsService,
     ApiKeyService,
     AdminJwtGuard,
