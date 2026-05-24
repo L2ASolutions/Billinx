@@ -13,6 +13,9 @@ module.exports = {
         NODE_ENV: 'development',
         PORT: 3000,
         NODE_OPTIONS: '--max-old-space-size=1024',
+        WORKER_CONCURRENCY: '1',
+        BULK_WORKER_CONCURRENCY: '1',
+        WEBHOOK_WORKER_CONCURRENCY: '1',
       },
     },
     {

@@ -39,7 +39,7 @@ export class WebhookWorker implements OnModuleInit, OnModuleDestroy {
         },
         {
           connection: webhookRedisConnection,
-          concurrency: 10,
+          concurrency: parseInt(process.env.WEBHOOK_WORKER_CONCURRENCY ?? '10', 10),
           settings: {
             backoffStrategy: (attemptsMade: number) => {
               // attempt 1 fails → wait 5s; attempt 2 fails → wait 15s
