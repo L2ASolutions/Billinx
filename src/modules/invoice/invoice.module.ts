@@ -10,7 +10,6 @@ import { IrnService } from './services/irn.service';
 import { StateMachineService } from './services/state-machine.service';
 import { XmlInvoiceBuilder } from './services/xml-invoice.builder';
 import { SecretsService } from '../../infrastructure/secrets/secrets.service';
-import { ActivityService } from '../activity/services/activity.service';
 import { ApiKeyService } from '../identity/services/api-key.service';
 import { TokenService } from '../identity/services/token.service';
 import { ApiKeyGuard } from '../identity/guards/api-key.guard';
@@ -35,7 +34,6 @@ import { TenantModule } from '../tenant/tenant.module';
     StateMachineService,
     XmlInvoiceBuilder,
     SecretsService,
-    ActivityService,
     ApiKeyService,
     TokenService,
     ApiKeyGuard,
