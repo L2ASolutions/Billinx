@@ -22,7 +22,7 @@ import { ConsentModule } from './modules/consent/consent.module';
 import { ProductCatalogModule } from './modules/product-catalog/product-catalog.module';
 import { ExportModule } from './modules/export/export.module';
 import { ReminderModule } from './modules/reminder/reminder.module';
-import { PrismaService } from './infrastructure/database/prisma.service';
+import { DatabaseModule } from './infrastructure/database/database.module';
 import { SecretsService } from './infrastructure/secrets/secrets.service';
 import { IdempotencyInterceptor } from './shared/interceptors/idempotency.interceptor';
 import { AuditLogInterceptor } from './shared/interceptors/audit-log.interceptor';
@@ -31,6 +31,7 @@ import { GlobalExceptionFilter } from './shared/filters/global-exception.filter'
 
 @Module({
   imports: [
+    DatabaseModule,
     EventEmitterModule.forRoot({ wildcard: false, delimiter: '.' }),
     ScheduleModule.forRoot(),
     RetentionModule,
@@ -52,7 +53,6 @@ import { GlobalExceptionFilter } from './shared/filters/global-exception.filter'
     ReminderModule,
   ],
   providers: [
-    PrismaService,
     SecretsService,
     RedisService,
     {
