@@ -1,9 +1,8 @@
 import { Module } from '@nestjs/common';
 import { RetentionService } from './retention.service';
-import { PrismaService } from '../../infrastructure/database/prisma.service';
 
 @Module({
-  providers: [RetentionService, PrismaService],
+  providers: [RetentionService],
   exports: [RetentionService],
 })
 export class RetentionModule {}

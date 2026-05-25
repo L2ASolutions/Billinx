@@ -80,24 +80,26 @@ export class IdempotencyInterceptor implements NestInterceptor {
     }
 
     return next.handle().pipe(
-      tap(async (responseBody) => {
-        const statusCode = response.statusCode;
-        const expiresAt = new Date(
-          Date.now() + IDEMPOTENCY_TTL_HOURS * 60 * 60 * 1000,
-        );
+      tap((responseBody) => {
+        void (async () => {
+          const statusCode = response.statusCode;
+          const expiresAt = new Date(
+            Date.now() + IDEMPOTENCY_TTL_HOURS * 60 * 60 * 1000,
+          );
 
-        await this.prisma.asAdmin(async (tx) => {
-          return tx.idempotencyRecord.create({
-            data: {
-              tenantId: ctx.tenantId,
-              idempotencyKey,
-              requestHash,
-              responseBody: JSON.parse(JSON.stringify(responseBody ?? {})),
-              responseStatus: statusCode,
-              expiresAt,
-            },
+          await this.prisma.asAdmin(async (tx) => {
+            return tx.idempotencyRecord.create({
+              data: {
+                tenantId: ctx.tenantId,
+                idempotencyKey,
+                requestHash,
+                responseBody: JSON.parse(JSON.stringify(responseBody ?? {})),
+                responseStatus: statusCode,
+                expiresAt,
+              },
+            });
           });
-        });
+        })();
       }),
     );
   }

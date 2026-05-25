@@ -3,7 +3,6 @@ import { TenantController } from './tenant.controller';
 import { TenantService } from './services/tenant.service';
 import { TenantRepository } from './repositories/tenant.repository';
 import { CredentialService } from './services/credential.service';
-import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { SecretsService } from '../../infrastructure/secrets/secrets.service';
 import { AdminKeyGuard } from '../identity/guards/admin-key.guard';
 import { ReminderModule } from '../reminder/reminder.module';
@@ -15,7 +14,6 @@ import { ReminderModule } from '../reminder/reminder.module';
     TenantService,
     TenantRepository,
     CredentialService,
-    PrismaService,
     SecretsService,
     AdminKeyGuard,
   ],

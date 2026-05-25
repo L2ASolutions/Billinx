@@ -142,7 +142,7 @@ export class EmailService {
       return;
     }
 
-    Promise.resolve().then(async () => {
+    void Promise.resolve().then(async () => {
       try {
         const info = await this.transporter.sendMail({
           from: FROM_ADDRESS,
