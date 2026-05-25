@@ -10,9 +10,15 @@ import {
 import { Response, Request } from 'express';
 import { getOptionalRequestContext } from '../context/request-context';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
-// Only import Sentry when a DSN is configured — the SDK registers OTEL hooks
-// at import time which causes OOM in development when no DSN is present.
-const Sentry = process.env.SENTRY_DSN ? require('@sentry/nestjs') : null;
+// Loaded lazily to avoid registering OTEL hooks when no DSN is configured.
+import type * as SentryNestJs from '@sentry/nestjs';
+
+let Sentry: typeof SentryNestJs | null = null;
+if (process.env.SENTRY_DSN) {
+  void import('@sentry/nestjs').then((mod) => {
+    Sentry = mod;
+  });
+}
 
 export interface ErrorResponse {
   error: string;

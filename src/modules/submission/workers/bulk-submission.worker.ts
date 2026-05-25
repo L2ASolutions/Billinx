@@ -26,7 +26,7 @@ export class BulkSubmissionWorker implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleDestroy() {
-    this.stopWorker();
+    void this.stopWorker();
   }
 
   private startWorker(): void {
