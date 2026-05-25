@@ -38,7 +38,11 @@ async function request<T>(
   const res = await fetch(url, { ...options, headers });
 
   if (!res.ok) {
-    if (res.status === 401 && typeof window !== 'undefined' && !skipAuthRedirect) {
+    if (
+      res.status === 401 &&
+      typeof window !== 'undefined' &&
+      !skipAuthRedirect
+    ) {
       localStorage.clear();
       window.location.href = admin ? '/admin/login' : '/login';
     }
@@ -66,7 +70,10 @@ async function requestBlob(
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(body?.message ?? `Request failed: ${res.status}`), { status: res.status });
+    throw Object.assign(
+      new Error(body?.message ?? `Request failed: ${res.status}`),
+      { status: res.status },
+    );
   }
   const cd = res.headers.get('content-disposition') ?? '';
   const match = cd.match(/filename="?([^"]+)"?/);
@@ -82,10 +89,17 @@ async function requestMultipart<T>(
   const token = getToken(admin);
   const headers: Record<string, string> = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: formData });
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(body?.message ?? `Request failed: ${res.status}`), { status: res.status });
+    throw Object.assign(
+      new Error(body?.message ?? `Request failed: ${res.status}`),
+      { status: res.status },
+    );
   }
   return res.json();
 }
@@ -169,13 +183,16 @@ export const invoiceApi = {
   getXml: (id: string) => requestBlob(`/v1/invoices/${id}/xml`),
   getStatus: (id: string) => api.get<unknown>(`/v1/invoices/${id}/status`),
   // Payments
-  recordPayment: (id: string, data: {
-    amount: number;
-    reference: string;
-    provider: string;
-    paidAt: string;
-    notes?: string;
-  }) => api.post<unknown>(`/v1/invoices/${id}/payments`, data),
+  recordPayment: (
+    id: string,
+    data: {
+      amount: number;
+      reference: string;
+      provider: string;
+      paidAt: string;
+      notes?: string;
+    },
+  ) => api.post<unknown>(`/v1/invoices/${id}/payments`, data),
   listPayments: (id: string) => api.get<unknown>(`/v1/invoices/${id}/payments`),
   // Bulk
   bulkUploadCsv: (file: File) => {
@@ -198,9 +215,13 @@ export const paymentApi = {
 // Exports / Reports
 export const exportApi = {
   csv: (startDate: string, endDate: string) =>
-    requestBlob(`/v1/invoices/export/csv?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`),
+    requestBlob(
+      `/v1/invoices/export/csv?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`,
+    ),
   json: (startDate: string, endDate: string) =>
-    request<unknown>(`/v1/invoices/export/json?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`),
+    request<unknown>(
+      `/v1/invoices/export/json?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`,
+    ),
   monthly: (year: number, month: number) =>
     request<unknown>(`/v1/invoices/export/monthly?year=${year}&month=${month}`),
 };
@@ -214,27 +235,36 @@ export const reminderApi = {
     triggerDays: number;
     message: string;
   }) => api.post<unknown>('/v1/reminder-rules', data),
-  update: (id: string, data: Partial<{
-    name: string;
-    triggerType: string;
-    triggerDays: number;
-    message: string;
-    isActive: boolean;
-  }>) => api.patch<unknown>(`/v1/reminder-rules/${id}`, data),
+  update: (
+    id: string,
+    data: Partial<{
+      name: string;
+      triggerType: string;
+      triggerDays: number;
+      message: string;
+      isActive: boolean;
+    }>,
+  ) => api.patch<unknown>(`/v1/reminder-rules/${id}`, data),
   delete: (id: string) => api.delete<void>(`/v1/reminder-rules/${id}`),
 };
 
 // Products
 export const productApi = {
-  list: (params?: { search?: string; category?: string; isActive?: string }) => {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+  list: (params?: {
+    search?: string;
+    category?: string;
+    isActive?: string;
+  }) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return api.get<{ data: unknown[]; total: number }>(`/v1/products${qs}`);
   },
   get: (id: string) => api.get<unknown>(`/v1/products/${id}`),
   create: (data: unknown) => api.post<unknown>('/v1/products', data),
-  update: (id: string, data: unknown) => api.patch<unknown>(`/v1/products/${id}`, data),
+  update: (id: string, data: unknown) =>
+    api.patch<unknown>(`/v1/products/${id}`, data),
   delete: (id: string) => api.delete<unknown>(`/v1/products/${id}`),
-  asLineItem: (id: string) => api.get<unknown>(`/v1/products/${id}/as-line-item`),
+  asLineItem: (id: string) =>
+    api.get<unknown>(`/v1/products/${id}/as-line-item`),
 };
 
 // Team / Users
@@ -310,14 +340,22 @@ export const adminApi = {
     );
   },
   // Consent records
-  consentRecords: (params?: { tenantId?: string; email?: string; consentType?: string }) => {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
-    return aApi.get<{ data: unknown[]; total: number }>(`/v1/admin/consent-records${qs}`);
+  consentRecords: (params?: {
+    tenantId?: string;
+    email?: string;
+    consentType?: string;
+  }) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return aApi.get<{ data: unknown[]; total: number }>(
+      `/v1/admin/consent-records${qs}`,
+    );
   },
   // Erasure requests
   erasureRequests: (status?: string) => {
     const qs = status ? `?status=${status}` : '';
-    return aApi.get<{ data: unknown[]; total: number }>(`/v1/admin/erasure-requests${qs}`);
+    return aApi.get<{ data: unknown[]; total: number }>(
+      `/v1/admin/erasure-requests${qs}`,
+    );
   },
   approveErasure: (id: string, reviewNote?: string) =>
     aApi.post(`/v1/admin/erasure-requests/${id}/approve`, { reviewNote }),
@@ -340,7 +378,11 @@ export const adminApi = {
   verifyAudit: () => aApi.get<unknown>('/v1/admin/audit/verify'),
   // Platform CSV export
   exportPlatformCsv: (startDate: string, endDate: string) =>
-    requestBlob(`/v1/admin/export/platform-csv?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`, {}, true),
+    requestBlob(
+      `/v1/admin/export/platform-csv?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`,
+      {},
+      true,
+    ),
   // Unlock user
   unlockAccount: (tenantId: string, email: string) =>
     aApi.post('/v1/admin/users/unlock', { tenantId, email }),
