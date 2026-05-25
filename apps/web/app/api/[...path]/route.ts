@@ -60,12 +60,17 @@ async function proxy(
       method: req.method,
       headers: forwardHeaders,
       body: body as BodyInit | undefined,
+      signal: AbortSignal.timeout(30_000), // 30 s — prevents hanging if backend restarts
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
+    const isTimeout = err instanceof Error && err.name === 'TimeoutError';
     return NextResponse.json(
-      { statusCode: 502, message: `Upstream unreachable: ${msg}` },
-      { status: 502 },
+      {
+        statusCode: isTimeout ? 504 : 502,
+        message: isTimeout ? 'Upstream timed out' : `Upstream unreachable: ${msg}`,
+      },
+      { status: isTimeout ? 504 : 502 },
     );
   }
 
