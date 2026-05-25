@@ -1,9 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConsentService } from './consent.service';
-import { PrismaService } from '../../infrastructure/database/prisma.service';
 
 @Module({
-  providers: [ConsentService, PrismaService],
+  providers: [ConsentService],
   exports: [ConsentService],
 })
 export class ConsentModule {}

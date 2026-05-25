@@ -55,7 +55,9 @@ export class CredentialService {
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
     decipher.setAuthTag(authTag);
 
-    return decipher.update(ciphertext) + decipher.final('utf8');
+    return (
+      decipher.update(ciphertext, undefined, 'utf8') + decipher.final('utf8')
+    );
   }
 
   encryptCredential(
