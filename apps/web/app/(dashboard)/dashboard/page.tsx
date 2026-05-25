@@ -180,7 +180,7 @@ export default function DashboardPage() {
   // Initial load
   useEffect(() => {
     if (authLoading) return;
-    loadData();
+    void loadData();
   }, [authLoading, loadData]);
 
   const handleRefresh = async () => {
@@ -230,7 +230,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-2 mt-1">
           {/* Refresh button */}
           <button
-            onClick={handleRefresh}
+            onClick={() => void handleRefresh()}
             disabled={refreshing}
             title={
               lastRefreshedLabel
