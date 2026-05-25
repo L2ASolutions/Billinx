@@ -37,7 +37,15 @@ async function proxy(
   const forwardHeaders: Record<string, string> = {};
   req.headers.forEach((value, key) => {
     // Skip hop-by-hop headers that must not be forwarded to the upstream.
-    const hopByHop = ['host', 'connection', 'keep-alive', 'transfer-encoding', 'te', 'trailer', 'upgrade'];
+    const hopByHop = [
+      'host',
+      'connection',
+      'keep-alive',
+      'transfer-encoding',
+      'te',
+      'trailer',
+      'upgrade',
+    ];
     if (!hopByHop.includes(key.toLowerCase())) {
       forwardHeaders[key] = value;
     }
