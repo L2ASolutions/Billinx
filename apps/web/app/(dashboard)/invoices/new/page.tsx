@@ -332,18 +332,46 @@ function NewInvoiceForm() {
     setError("");
     setLoading(true);
     try {
+      const typeCodeMap: Record<string, string> = {
+        STANDARD: "380",
+        CREDIT_NOTE: "381",
+        DEBIT_NOTE: "383",
+        PROFORMA: "325",
+      };
+
       const payload = {
-        ...form,
+        invoiceTypeCode: typeCodeMap[form.invoiceType] ?? "380",
+        invoiceKind: form.invoiceKind,
+        currency: form.currency,
         issueDate: new Date(form.issueDate).toISOString(),
-        paymentDueDate: form.paymentDueDate ? new Date(form.paymentDueDate).toISOString() : undefined,
+        dueDate: form.paymentDueDate ? new Date(form.paymentDueDate).toISOString() : undefined,
+        sourceReference: form.sourceReference || undefined,
+        originalIrn: form.originalIrn || undefined,
+        seller: {
+          tin: form.sellerTin,
+          partyName: form.sellerName,
+          address: form.sellerAddress || undefined,
+        },
+        buyer: {
+          partyName: form.buyerName,
+          tin: form.buyerTin || undefined,
+          email: form.buyerEmail || undefined,
+          address: form.buyerAddress || undefined,
+        },
         lineItems: lineItems.map((item) => ({
           ...item,
           totalPrice: item.quantity * item.unitPrice * (1 + item.vatRate / 100),
           vatAmount: item.quantity * item.unitPrice * (item.vatRate / 100),
         })),
-        totalAmount: totals.total,
-        taxAmount: totals.tax,
+        taxTotal: [{ taxAmount: totals.tax }],
+        legalMonetaryTotal: {
+          lineExtensionAmount: totals.subtotal,
+          taxExclusiveAmount: totals.subtotal,
+          taxInclusiveAmount: totals.total,
+          payableAmount: totals.total,
+        },
       };
+
       const invoice = await invoiceApi.create(payload) as { id: string };
       router.push(`/invoices/${invoice.id}`);
     } catch (err: unknown) {
