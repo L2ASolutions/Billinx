@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/auth';
-import { api, invoiceApi } from '@/lib/api';
+import { invoiceApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 
@@ -75,13 +75,6 @@ const PILL: Record<string, { label: string; cls: string }> = {
   },
 };
 
-const ATTENTION_STATUSES = [
-  'REJECTED',
-  'VALIDATION_FAILED',
-  'SUBMISSION_FAILED',
-  'DEAD_LETTERED',
-];
-
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function Sk({ className = '' }: { className?: string }) {
@@ -118,67 +111,43 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
+  // Second call: recent invoices for the queue panel (sequential, after stats)
   const [queue, setQueue] = useState<QueueInvoice[]>([]);
   const [queueLoading, setQueueLoading] = useState(true);
-
-  const [attention, setAttention] = useState<QueueInvoice[]>([]);
-  const [attentionLoading, setAttentionLoading] = useState(true);
 
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
   const loadData = useCallback(async () => {
-    const [statsResult, queuedResult, submittingResult, ...attentionResults] =
-      await Promise.allSettled([
-        invoiceApi.stats(),
-        api.get<{ data: QueueInvoice[] }>(
-          '/v1/invoices/dashboard/list?status=QUEUED&limit=10',
-        ),
-        api.get<{ data: QueueInvoice[] }>(
-          '/v1/invoices/dashboard/list?status=SUBMITTING&limit=5',
-        ),
-        ...ATTENTION_STATUSES.map((s) =>
-          api.get<{ data: QueueInvoice[] }>(
-            `/v1/invoices/dashboard/list?status=${s}&limit=5`,
-          ),
-        ),
-      ]);
+    setStatsLoading(true);
+    setQueueLoading(true);
 
-    setStats(
-      statsResult.status === 'fulfilled'
-        ? (statsResult.value as Stats)
-        : {
-            total: 0,
-            accepted: 0,
-            rejected: 0,
-            pending: 0,
-            totalAmount: 0,
-            recentInvoices: [],
-          },
-    );
+    // ── Call 1: stats ──────────────────────────────────────────────────────
+    // Feeds: metric cards, recent-invoices table, attention summary.
+    // Never runs in parallel with Call 2 — sequential to keep DB load low.
+    try {
+      const statsData = await invoiceApi.stats();
+      setStats(statsData as Stats);
+    } catch {
+      setStats(null);
+    }
     setStatsLoading(false);
 
-    const queued =
-      queuedResult.status === 'fulfilled'
-        ? (queuedResult.value.data ?? [])
-        : [];
-    const submitting =
-      submittingResult.status === 'fulfilled'
-        ? (submittingResult.value.data ?? [])
-        : [];
-    setQueue([...queued, ...submitting]);
+    // ── Call 2: recent list ────────────────────────────────────────────────
+    // Feeds: submission queue panel. Fired only after Call 1 completes so
+    // both queries never hit the DB at the same time.
+    try {
+      const listData = await invoiceApi.list({ page: 1, limit: 5 } as Record<string, string | number>);
+      setQueue((listData as { data: QueueInvoice[] }).data ?? []);
+    } catch {
+      setQueue([]);
+    }
     setQueueLoading(false);
-
-    const attn = attentionResults.flatMap((r) =>
-      r.status === 'fulfilled' ? (r.value.data ?? []) : [],
-    );
-    setAttention(attn);
-    setAttentionLoading(false);
 
     setLastRefreshed(new Date());
   }, []);
 
-  // Initial load
+  // Initial load — wait for auth to resolve first
   useEffect(() => {
     if (authLoading) return;
     void loadData();
@@ -197,6 +166,9 @@ export default function DashboardPage() {
     stats && stats.total > 0
       ? Math.round((stats.accepted / stats.total) * 100)
       : 0;
+
+  // Attention count: rejected invoices from stats (no extra API call needed)
+  const attentionCount = stats?.rejected ?? 0;
 
   const lastRefreshedLabel = lastRefreshed
     ? lastRefreshed.toLocaleTimeString('en-NG', {
@@ -229,7 +201,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-2 mt-1">
-          {/* Refresh button */}
           <button
             onClick={() => void handleRefresh()}
             disabled={refreshing}
@@ -320,7 +291,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Rejected */}
+          {/* Rejected / Failed */}
           <div className="bg-white rounded-xl border border-border p-5">
             <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3">
               Rejected / Failed
@@ -333,12 +304,12 @@ export default function DashboardPage() {
             ) : (
               <>
                 <p
-                  className={`text-3xl font-bold ${(stats?.rejected ?? 0) > 0 ? 'text-red-600' : 'text-dark'}`}
+                  className={`text-3xl font-bold ${attentionCount > 0 ? 'text-red-600' : 'text-dark'}`}
                 >
-                  {stats?.rejected ?? 0}
+                  {attentionCount}
                 </p>
                 <p className="text-xs text-muted mt-1.5">
-                  {(stats?.rejected ?? 0) > 0
+                  {attentionCount > 0
                     ? 'Require attention'
                     : 'None — looking good'}
                 </p>
@@ -431,22 +402,16 @@ export default function DashboardPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    {(
-                      [
-                        'Invoice #',
-                        'Date',
-                        'Buyer',
-                        'Status',
-                        'Amount',
-                      ] as const
-                    ).map((col, i) => (
-                      <th
-                        key={col}
-                        className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${i === 4 ? 'text-right' : 'text-left'}`}
-                      >
-                        {col}
-                      </th>
-                    ))}
+                    {(['Invoice #', 'Date', 'Buyer', 'Status', 'Amount'] as const).map(
+                      (col, i) => (
+                        <th
+                          key={col}
+                          className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${i === 4 ? 'text-right' : 'text-left'}`}
+                        >
+                          {col}
+                        </th>
+                      ),
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -497,15 +462,21 @@ export default function DashboardPage() {
 
         {/* ── Bottom row: Submission Queue + Needs Attention ────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Submission Queue */}
+
+          {/* Submission Queue — recent 5 invoices loaded after stats */}
           <div className="bg-white rounded-xl border border-border overflow-hidden">
-            <div className="px-6 py-4 border-b border-border flex items-center gap-3">
-              <h2 className="font-semibold text-dark">Submission queue</h2>
-              {!queueLoading && (
-                <span className="px-2 py-0.5 rounded-full bg-surface text-xs font-medium text-muted border border-border">
-                  {queue.length}
-                </span>
-              )}
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h2 className="font-semibold text-dark">Submission queue</h2>
+                {!queueLoading && stats && (
+                  <span className="px-2 py-0.5 rounded-full bg-surface text-xs font-medium text-muted border border-border">
+                    {stats.pending} pending
+                  </span>
+                )}
+              </div>
+              <Link href="/submissions" className="text-sm text-green font-medium hover:underline">
+                View all →
+              </Link>
             </div>
 
             {queueLoading ? (
@@ -516,7 +487,7 @@ export default function DashboardPage() {
               </div>
             ) : queue.length === 0 ? (
               <div className="py-12 text-center">
-                <p className="text-sm text-muted">No pending submissions</p>
+                <p className="text-sm text-muted">No recent invoices</p>
               </div>
             ) : (
               <ul className="divide-y divide-border">
@@ -556,29 +527,40 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Needs Attention */}
+          {/* Needs Attention — derived from stats, zero extra API calls */}
           <div className="bg-white rounded-xl border border-border overflow-hidden">
-            <div className="px-6 py-4 border-b border-border flex items-center gap-3">
-              <h2 className="font-semibold text-dark">Needs attention</h2>
-              {!attentionLoading && attention.length > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-red-50 text-xs font-medium text-red-600 border border-red-100">
-                  {attention.length}
-                </span>
-              )}
-              {!attentionLoading && attention.length === 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-green-50 text-xs font-medium text-green-700 border border-green-100">
-                  All clear
-                </span>
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h2 className="font-semibold text-dark">Needs attention</h2>
+                {!statsLoading && (
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
+                      attentionCount > 0
+                        ? 'bg-red-50 text-red-600 border-red-100'
+                        : 'bg-green-50 text-green-700 border-green-100'
+                    }`}
+                  >
+                    {attentionCount > 0 ? attentionCount : 'All clear'}
+                  </span>
+                )}
+              </div>
+              {attentionCount > 0 && (
+                <Link
+                  href="/invoices?status=REJECTED"
+                  className="text-sm text-red-600 font-medium hover:underline"
+                >
+                  Review →
+                </Link>
               )}
             </div>
 
-            {attentionLoading ? (
+            {statsLoading ? (
               <div className="p-4 space-y-2">
                 {[0, 1, 2].map((i) => (
                   <Sk key={i} className="h-12 w-full" />
                 ))}
               </div>
-            ) : attention.length === 0 ? (
+            ) : attentionCount === 0 ? (
               <div className="py-12 flex flex-col items-center gap-3 text-center">
                 <svg
                   width="24"
@@ -597,40 +579,66 @@ export default function DashboardPage() {
                 </p>
               </div>
             ) : (
-              <ul className="divide-y divide-border">
-                {attention.map((inv) => {
-                  const pill = PILL[inv.status] ?? {
-                    label: inv.status.replace(/_/g, ' '),
-                    cls: 'bg-gray-100 text-gray-600',
-                  };
-                  return (
-                    <li
-                      key={inv.id}
-                      className="px-6 py-3.5 flex items-center justify-between gap-3 hover:bg-surface transition-colors"
+              <div className="p-6 space-y-4">
+                {/* Summary derived from stats — no extra API call */}
+                <div className="flex items-center gap-4 p-4 rounded-xl bg-red-50 border border-red-100">
+                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className="text-red-600"
                     >
-                      <div className="min-w-0">
-                        <Link
-                          href={`/invoices/${inv.id}`}
-                          className="text-sm font-mono text-green hover:underline block truncate"
-                        >
-                          {inv.platformIrn
-                            ? inv.platformIrn.slice(0, 18) + '…'
-                            : inv.id.slice(0, 8) + '…'}
-                        </Link>
-                        <p className="text-xs text-muted truncate mt-0.5">
-                          {inv.buyerName} ·{' '}
-                          {formatCurrency(inv.totalAmount, inv.currency)}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${pill.cls}`}
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-red-700">
+                      {attentionCount} rejected invoice{attentionCount !== 1 ? 's' : ''}
+                    </p>
+                    <p className="text-xs text-red-600 mt-0.5">
+                      Review and resubmit to stay FIRS compliant
+                    </p>
+                  </div>
+                </div>
+                {stats && stats.pending > 0 && (
+                  <div className="flex items-center gap-4 p-4 rounded-xl bg-amber-50 border border-amber-100">
+                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        className="text-amber-600"
                       >
-                        {pill.label}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                      </svg>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-amber-700">
+                        {stats.pending} invoice{stats.pending !== 1 ? 's' : ''} in queue
+                      </p>
+                      <p className="text-xs text-amber-600 mt-0.5">
+                        Being processed by FIRS submission pipeline
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <Link
+                  href="/invoices?status=REJECTED"
+                  className="block w-full text-center py-2.5 rounded-lg border border-red-200 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  View rejected invoices →
+                </Link>
+              </div>
             )}
           </div>
         </div>
