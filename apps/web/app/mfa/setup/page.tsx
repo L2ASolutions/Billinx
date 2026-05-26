@@ -75,7 +75,18 @@ export default function MfaSetupPage() {
           <>
             <div className="flex justify-center">
               <div className="p-3 bg-white border border-border rounded-xl">
-                <Image src={setup.qrCodeBase64} alt="MFA QR Code" width={180} height={180} />
+                {/* BUG-022: backend may return raw base64 without the data URI
+                    prefix; normalise so <Image> always receives a valid src. */}
+                <Image
+                  src={
+                    setup.qrCodeBase64.startsWith("data:")
+                      ? setup.qrCodeBase64
+                      : `data:image/png;base64,${setup.qrCodeBase64}`
+                  }
+                  alt="MFA QR Code"
+                  width={180}
+                  height={180}
+                />
               </div>
             </div>
 

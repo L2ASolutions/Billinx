@@ -59,6 +59,19 @@ export class InvoiceRepository {
       if (filters.from) where.issueDate.gte = new Date(filters.from);
       if (filters.to) where.issueDate.lte = new Date(filters.to);
     }
+    // Dashboard filters (BUG-012)
+    if (filters.search) {
+      where.OR = [
+        { buyerName: { contains: filters.search, mode: 'insensitive' } },
+        { sellerName: { contains: filters.search, mode: 'insensitive' } },
+        { platformIrn: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+    if (filters.paymentStatus) where.paymentStatus = filters.paymentStatus;
+    if (filters.isOverdue) {
+      where.isOverdue = true;
+      where.paymentStatus = { not: 'PAID' };
+    }
 
     const [data, total] = await this.prisma.asAdmin(async (tx) => {
       return Promise.all([

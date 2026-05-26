@@ -26,14 +26,6 @@ async function request<T>(
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const url = `${API_BASE}${path}`;
-  const method = (options.method ?? 'GET').toUpperCase();
-
-  // Debug: log every outgoing request so proxy/header issues are immediately
-  // visible in the browser console.
-  console.log('[API]', method, url, {
-    hasAuth: !!headers['Authorization'],
-    contentType: headers['Content-Type'],
-  });
 
   const res = await fetch(url, { ...options, headers });
 
@@ -43,6 +35,12 @@ async function request<T>(
       typeof window !== 'undefined' &&
       !skipAuthRedirect
     ) {
+      // BUG-021: Store a message for the login page to display so the user
+      // knows why they were redirected rather than being silently logged out.
+      sessionStorage.setItem(
+        'authError',
+        'Your session has expired. Please sign in again.',
+      );
       localStorage.clear();
       window.location.href = admin ? '/admin/login' : '/login';
     }
@@ -175,14 +173,17 @@ export const invoiceApi = {
       limit: number;
     }>(`/v1/invoices/dashboard/list${qs}`);
   },
-  get: (id: string) => api.get<unknown>(`/v1/invoices/${id}`),
+  // Single-invoice dashboard routes — use JWT-guarded /dashboard/:id paths (BUG-002)
+  get: (id: string) => api.get<unknown>(`/v1/invoices/dashboard/${id}`),
   create: (data: unknown) => api.post<unknown>('/v1/invoices/dashboard', data),
+  // BUG-003 fix: PATCH, not POST; BUG-002 fix: dashboard path with JWT guard
   cancel: (id: string, reason: string) =>
-    api.post(`/v1/invoices/${id}/cancel`, { reason }),
+    api.patch(`/v1/invoices/dashboard/${id}/cancel`, { reason }),
   stats: () => api.get<unknown>('/v1/invoices/dashboard/stats'),
-  getXml: (id: string) => requestBlob(`/v1/invoices/${id}/xml`),
-  getStatus: (id: string) => api.get<unknown>(`/v1/invoices/${id}/status`),
-  // Payments
+  getXml: (id: string) => requestBlob(`/v1/invoices/dashboard/${id}/xml`),
+  getStatus: (id: string) =>
+    api.get<unknown>(`/v1/invoices/dashboard/${id}/status`),
+  // Payments — dashboard routes (BUG-002)
   recordPayment: (
     id: string,
     data: {
@@ -192,16 +193,17 @@ export const invoiceApi = {
       paidAt: string;
       notes?: string;
     },
-  ) => api.post<unknown>(`/v1/invoices/${id}/payments`, data),
-  listPayments: (id: string) => api.get<unknown>(`/v1/invoices/${id}/payments`),
-  // Bulk
+  ) => api.post<unknown>(`/v1/invoices/dashboard/${id}/payments`, data),
+  listPayments: (id: string) =>
+    api.get<unknown>(`/v1/invoices/dashboard/${id}/payments`),
+  // Bulk — dashboard routes so JWT is accepted (BUG-005)
   bulkUploadCsv: (file: File) => {
     const fd = new FormData();
     fd.append('file', file);
-    return requestMultipart<unknown>('/v1/invoices/bulk/csv', fd);
+    return requestMultipart<unknown>('/v1/invoices/bulk/dashboard/csv', fd);
   },
   getBulkStatus: (batchId: string) =>
-    api.get<unknown>(`/v1/invoices/bulk/${batchId}/status`),
+    api.get<unknown>(`/v1/invoices/bulk/dashboard/${batchId}/status`),
 };
 
 // Payments list (tenant-wide)
@@ -226,14 +228,14 @@ export const exportApi = {
     request<unknown>(`/v1/invoices/export/monthly?year=${year}&month=${month}`),
 };
 
-// Reminder Rules
+// Reminder Rules — backend field is `reminderMessage` (BUG-011)
 export const reminderApi = {
   list: () => api.get<{ data: unknown[]; total: number }>('/v1/reminder-rules'),
   create: (data: {
     name: string;
     triggerType: string;
     triggerDays: number;
-    message: string;
+    reminderMessage: string;
   }) => api.post<unknown>('/v1/reminder-rules', data),
   update: (
     id: string,
@@ -241,7 +243,7 @@ export const reminderApi = {
       name: string;
       triggerType: string;
       triggerDays: number;
-      message: string;
+      reminderMessage: string;
       isActive: boolean;
     }>,
   ) => api.patch<unknown>(`/v1/reminder-rules/${id}`, data),
@@ -273,27 +275,34 @@ export const userApi = {
   list: () => api.get<{ data: unknown[]; total: number }>('/v1/users'),
   invite: (email: string, role: string) =>
     api.post('/v1/users/invite', { email, role }),
+  // BUG-010: POST (not PATCH) to /roles (plural, not /role)
   updateRole: (userId: string, role: string) =>
-    api.patch(`/v1/users/${userId}/role`, { role }),
+    api.post(`/v1/users/${userId}/roles`, { role }),
+  // BUG-009: DELETE /v1/users/:id now exists (soft-delete)
   remove: (userId: string) => api.delete(`/v1/users/${userId}`),
 };
 
-// API Keys
+// API Keys — use JWT-guarded /users/api-keys routes (BUG-004)
+// BUG-016: backend stores as `name`, not `label` — translate at the API boundary
 export const apiKeyApi = {
-  list: () => api.get<{ data: unknown[]; total: number }>('/v1/api-keys'),
+  list: () =>
+    api.get<{ data: unknown[]; total: number }>('/v1/users/api-keys'),
   create: (label: string, environment: string) =>
-    api.post<{ key: string }>('/v1/api-keys', { label, environment }),
-  revoke: (id: string) => api.delete(`/v1/api-keys/${id}`),
+    api.post<{ key: string }>('/v1/users/api-keys', { name: label, environment }),
+  revoke: (id: string) => api.delete(`/v1/users/api-keys/${id}`),
   rotate: (id: string) =>
-    api.post<{ key: string }>(`/v1/api-keys/${id}/rotate`),
+    api.post<{ key: string }>(`/v1/users/api-keys/${id}/rotate`),
 };
 
-// Webhooks
+// Webhooks — use /subscriptions/ path (BUG-001)
 export const webhookApi = {
-  list: () => api.get<{ data: unknown[]; total: number }>('/v1/webhooks'),
-  create: (data: unknown) => api.post<unknown>('/v1/webhooks', data),
-  update: (id: string, data: unknown) => api.patch(`/v1/webhooks/${id}`, data),
-  delete: (id: string) => api.delete(`/v1/webhooks/${id}`),
+  list: () =>
+    api.get<{ data: unknown[]; total: number }>('/v1/webhooks/subscriptions'),
+  create: (data: unknown) =>
+    api.post<unknown>('/v1/webhooks/subscriptions', data),
+  update: (id: string, data: unknown) =>
+    api.patch(`/v1/webhooks/subscriptions/${id}`, data),
+  delete: (id: string) => api.delete(`/v1/webhooks/subscriptions/${id}`),
 };
 
 function adminRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
