@@ -460,7 +460,9 @@ export class InvoiceController {
   @Get('dashboard/:id')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get a single invoice by ID (dashboard / JWT auth)' })
+  @ApiOperation({
+    summary: 'Get a single invoice by ID (dashboard / JWT auth)',
+  })
   async getDashboardInvoice(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getInvoice(id, ctx.tenantId);
@@ -471,7 +473,9 @@ export class InvoiceController {
   @ApiBearerAuth()
   @Header('Content-Type', 'application/xml')
   @ApiProduces('application/xml')
-  @ApiOperation({ summary: 'Download invoice as NRS XML (dashboard / JWT auth)' })
+  @ApiOperation({
+    summary: 'Download invoice as NRS XML (dashboard / JWT auth)',
+  })
   async getDashboardInvoiceXml(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.exportAsXml(id, ctx.tenantId);
@@ -480,7 +484,9 @@ export class InvoiceController {
   @Get('dashboard/:id/status')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get invoice lifecycle status (dashboard / JWT auth)' })
+  @ApiOperation({
+    summary: 'Get invoice lifecycle status (dashboard / JWT auth)',
+  })
   async getDashboardInvoiceStatus(
     @Param('id') id: string,
     @Req() req: Request,
@@ -512,7 +518,9 @@ export class InvoiceController {
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Record a payment against an invoice (dashboard / JWT auth)' })
+  @ApiOperation({
+    summary: 'Record a payment against an invoice (dashboard / JWT auth)',
+  })
   async recordPaymentDashboard(
     @Param('id') id: string,
     @Body() body: Record<string, any>,
@@ -532,7 +540,9 @@ export class InvoiceController {
   @Get('dashboard/:id/payments')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List payments for an invoice (dashboard / JWT auth)' })
+  @ApiOperation({
+    summary: 'List payments for an invoice (dashboard / JWT auth)',
+  })
   async listPaymentsDashboard(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.paymentService.listPayments(id, ctx.tenantId);

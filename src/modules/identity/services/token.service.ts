@@ -113,10 +113,13 @@ export class TokenService {
     // can scope the candidate query to a single user rather than fetching up to
     // 100 platform-wide tokens and bcrypt-comparing each one.
     const pipeIdx1 = rawRefreshToken.indexOf('|');
-    const pipeIdx2 = pipeIdx1 !== -1 ? rawRefreshToken.indexOf('|', pipeIdx1 + 1) : -1;
+    const pipeIdx2 =
+      pipeIdx1 !== -1 ? rawRefreshToken.indexOf('|', pipeIdx1 + 1) : -1;
 
     const hasPrefix = pipeIdx1 !== -1 && pipeIdx2 !== -1;
-    const prefixUserId = hasPrefix ? rawRefreshToken.substring(0, pipeIdx1) : null;
+    const prefixUserId = hasPrefix
+      ? rawRefreshToken.substring(0, pipeIdx1)
+      : null;
     const prefixTenantId = hasPrefix
       ? rawRefreshToken.substring(pipeIdx1 + 1, pipeIdx2)
       : null;

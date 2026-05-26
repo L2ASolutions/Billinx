@@ -648,8 +648,9 @@ export class UserService {
   async deactivateUser(userId: string, tenantId: string): Promise<void> {
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundException('User not found');
-    if (user.tenantId !== tenantId) throw new NotFoundException('User not found');
-    await this.userRepository.update(userId, { isActive: false } as any);
+    if (user.tenantId !== tenantId)
+      throw new NotFoundException('User not found');
+    await this.userRepository.update(userId, { isActive: false });
   }
 
   // â"€â"€ Remove role â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
