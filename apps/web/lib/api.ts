@@ -124,11 +124,14 @@ export const authApi = {
     }>('/v1/auth/login', { email, password }),
   refresh: () => api.post<{ accessToken: string }>('/v1/auth/refresh'),
   revoke: () => api.post('/v1/auth/revoke', { all: true }),
-  verifyMfa: (mfaToken: string, code: string) =>
+  verifyMfa: (mfaToken: string, code: string, isBackupCode = false) =>
     api.post<{ accessToken: string }>('/v1/auth/mfa/challenge', {
       mfaToken,
       code,
+      ...(isBackupCode && { type: 'backup' }),
     }),
+  resendMfa: (mfaToken: string) =>
+    api.post('/v1/auth/mfa/resend', { mfaToken }),
   setupMfa: () =>
     request<{ qrCodeBase64: string; manualKey: string }>(
       '/v1/auth/mfa/setup',
@@ -285,10 +288,12 @@ export const userApi = {
 // API Keys — use JWT-guarded /users/api-keys routes (BUG-004)
 // BUG-016: backend stores as `name`, not `label` — translate at the API boundary
 export const apiKeyApi = {
-  list: () =>
-    api.get<{ data: unknown[]; total: number }>('/v1/users/api-keys'),
+  list: () => api.get<{ data: unknown[]; total: number }>('/v1/users/api-keys'),
   create: (label: string, environment: string) =>
-    api.post<{ key: string }>('/v1/users/api-keys', { name: label, environment }),
+    api.post<{ key: string }>('/v1/users/api-keys', {
+      name: label,
+      environment,
+    }),
   revoke: (id: string) => api.delete(`/v1/users/api-keys/${id}`),
   rotate: (id: string) =>
     api.post<{ key: string }>(`/v1/users/api-keys/${id}/rotate`),
