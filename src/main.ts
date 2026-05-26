@@ -102,7 +102,7 @@ async function bootstrap() {
   if (!process.env.ADMIN_ALLOWED_IPS) {
     logger.warn(
       '⚠️  ADMIN_ALLOWED_IPS is not set — all /v1/admin routes are reachable from any IP. ' +
-      'Set this env var in production to a comma-separated list of allowed CIDRs (e.g. "10.0.0.0/8,203.0.113.5").',
+        'Set this env var in production to a comma-separated list of allowed CIDRs (e.g. "10.0.0.0/8,203.0.113.5").',
     );
   }
 
