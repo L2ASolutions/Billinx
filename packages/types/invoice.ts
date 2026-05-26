@@ -32,6 +32,10 @@ export interface InvoiceFilterParams {
   to?: string;
   page?: number;
   limit?: number;
+  // Dashboard filters (BUG-012)
+  search?: string;
+  paymentStatus?: string;
+  isOverdue?: boolean;
 }
 
 export interface InvoiceResponse {

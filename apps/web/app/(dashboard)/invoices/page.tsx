@@ -14,6 +14,7 @@ const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-600",
   QUEUED: "bg-blue-50 text-blue-600",
   SUBMITTING: "bg-yellow-50 text-yellow-700",
+  SUBMITTED: "bg-blue-50 text-blue-700",
   VALIDATION_FAILED: "bg-red-50 text-red-600",
   SUBMISSION_FAILED: "bg-red-50 text-red-600",
   DEAD_LETTERED: "bg-red-100 text-red-700",
@@ -22,7 +23,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_OPTIONS = [
-  "ALL", "DRAFT", "VALIDATING", "QUEUED", "SUBMITTING",
+  "ALL", "DRAFT", "VALIDATING", "QUEUED", "SUBMITTING", "SUBMITTED",
   "ACCEPTED", "REJECTED", "VALIDATION_FAILED", "SUBMISSION_FAILED",
   "DEAD_LETTERED", "CANCELLED",
 ];
@@ -56,12 +57,21 @@ interface BulkBatchStatus {
 
 function BulkUploadModal({ onClose }: { onClose: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  // BUG-017: store the polling interval in a ref so it can be cleared on unmount
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<BulkBatchStatus | null>(null);
+
+  // Clear the polling interval whenever the modal unmounts (BUG-017)
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -89,15 +99,16 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
   }
 
   function pollBatch(id: string) {
-    const interval = setInterval(async () => {
+    // BUG-017: store in ref so the cleanup useEffect can cancel on unmount
+    intervalRef.current = setInterval(async () => {
       try {
         const status = await invoiceApi.getBulkStatus(id) as BulkBatchStatus;
         setBatchStatus(status);
         if (status.percentComplete >= 100 || ["COMPLETED", "FAILED"].includes(status.status)) {
-          clearInterval(interval);
+          if (intervalRef.current) clearInterval(intervalRef.current);
         }
       } catch {
-        clearInterval(interval);
+        if (intervalRef.current) clearInterval(intervalRef.current);
       }
     }, 2000);
   }

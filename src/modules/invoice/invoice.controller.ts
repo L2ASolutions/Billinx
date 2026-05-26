@@ -408,9 +408,20 @@ export class InvoiceController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List invoices from dashboard (JWT auth)' })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'paymentStatus', required: false })
+  @ApiQuery({ name: 'isOverdue', required: false, type: Boolean })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
   async listInvoicesDashboard(
     @Req() req: Request,
     @Query('status') status?: InvoiceStatus,
+    @Query('search') search?: string,
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('isOverdue') isOverdue?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('page') page?: number,
@@ -419,6 +430,9 @@ export class InvoiceController {
     const ctx = this.getCtx(req);
     return this.invoiceService.listInvoices(ctx.tenantId, {
       status,
+      search,
+      paymentStatus,
+      isOverdue: isOverdue === 'true',
       from,
       to,
       page: page ? Number(page) : 1,
@@ -433,5 +447,94 @@ export class InvoiceController {
   async getDashboardStats(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getDashboardStats(ctx.tenantId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Single-invoice dashboard routes (JWT auth)
+  // These mirror the ApiKeyGuard :id routes so the dashboard UI can view,
+  // cancel, and manage payments on individual invoices without an API key.
+  // Static segments above (dashboard/list, dashboard/stats) take priority over
+  // the dynamic :id segment — no route conflict.
+  // ---------------------------------------------------------------------------
+
+  @Get('dashboard/:id')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get a single invoice by ID (dashboard / JWT auth)' })
+  async getDashboardInvoice(@Param('id') id: string, @Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.getInvoice(id, ctx.tenantId);
+  }
+
+  @Get('dashboard/:id/xml')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @Header('Content-Type', 'application/xml')
+  @ApiProduces('application/xml')
+  @ApiOperation({ summary: 'Download invoice as NRS XML (dashboard / JWT auth)' })
+  async getDashboardInvoiceXml(@Param('id') id: string, @Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.exportAsXml(id, ctx.tenantId);
+  }
+
+  @Get('dashboard/:id/status')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get invoice lifecycle status (dashboard / JWT auth)' })
+  async getDashboardInvoiceStatus(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.getInvoiceStatus(id, ctx.tenantId);
+  }
+
+  @Patch('dashboard/:id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Cancel an invoice (dashboard / JWT auth)' })
+  async cancelInvoiceDashboard(
+    @Param('id') id: string,
+    @Body() body: Record<string, any>,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.cancelInvoice(
+      id,
+      ctx.tenantId,
+      ctx.actor,
+      body as any,
+    );
+  }
+
+  @Post('dashboard/:id/payments')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Record a payment against an invoice (dashboard / JWT auth)' })
+  async recordPaymentDashboard(
+    @Param('id') id: string,
+    @Body() body: Record<string, any>,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.paymentService.recordPayment(id, ctx.tenantId, ctx.actor, {
+      amount: body.amount,
+      reference: body.reference,
+      provider: body.provider,
+      paidAt: body.paidAt,
+      notes: body.notes,
+      metadata: body.metadata,
+    });
+  }
+
+  @Get('dashboard/:id/payments')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List payments for an invoice (dashboard / JWT auth)' })
+  async listPaymentsDashboard(@Param('id') id: string, @Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.paymentService.listPayments(id, ctx.tenantId);
   }
 }

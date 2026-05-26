@@ -7,6 +7,7 @@ import {
 import { Request } from 'express';
 import { TokenService } from '../services/token.service';
 import { RequestContext } from '../../../../packages/types/identity';
+import { runWithContext } from '../../../shared/context/request-context';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -36,6 +37,7 @@ export class JwtGuard implements CanActivate {
     };
 
     (request as any)._billinxContext = requestContext;
-    return true;
+    // Populate AsyncLocalStorage so getRequestContext() works in service layers.
+    return runWithContext(requestContext, () => true);
   }
 }
