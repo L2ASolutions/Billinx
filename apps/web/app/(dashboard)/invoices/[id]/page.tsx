@@ -15,6 +15,7 @@ const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-600 border-gray-200",
   QUEUED: "bg-blue-50 text-blue-600 border-blue-200",
   SUBMITTING: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  SUBMITTED: "bg-blue-50 text-blue-700 border-blue-200",
   VALIDATION_FAILED: "bg-red-50 text-red-600 border-red-200",
   SUBMISSION_FAILED: "bg-red-50 text-red-600 border-red-200",
   DEAD_LETTERED: "bg-red-100 text-red-700 border-red-300",

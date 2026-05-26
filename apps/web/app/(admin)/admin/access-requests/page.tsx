@@ -45,17 +45,22 @@ const TABS: Array<{ label: string; value: string }> = [
 export default function AccessRequestsPage() {
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeTab, setActiveTab] = useState("PENDING");
   const [selected, setSelected] = useState<AccessRequest | null>(null);
   const [rejectReason, setRejectReason] = useState("");
-  const [approveForm, setApproveForm] = useState({ adapter: "mock", environment: "test" });
+  // BUG-006: backend reads body.appAdapterKey, not body.adapter
+  const [approveForm, setApproveForm] = useState({ appAdapterKey: "mock", environment: "test" });
   const [actioning, setActioning] = useState(false);
 
   async function load(status: string) {
     setLoading(true);
+    setLoadError("");
     try {
       const res = await adminApi.accessRequests(status);
       setRequests(res.data as AccessRequest[]);
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : "Failed to load access requests");
     } finally {
       setLoading(false);
     }
@@ -95,6 +100,10 @@ export default function AccessRequestsPage() {
   return (
     <div className="space-y-4 max-w-5xl">
       <h1 className="text-2xl font-bold text-dark">Access Requests</h1>
+
+      {loadError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{loadError}</div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-2">
@@ -163,8 +172,8 @@ export default function AccessRequestsPage() {
                 <label className="block text-sm font-medium text-dark mb-1">Adapter</label>
                 <select
                   className="w-full px-3 py-2.5 rounded-lg border border-border bg-white text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green"
-                  value={approveForm.adapter}
-                  onChange={(e) => setApproveForm((f) => ({ ...f, adapter: e.target.value }))}
+                  value={approveForm.appAdapterKey}
+                  onChange={(e) => setApproveForm((f) => ({ ...f, appAdapterKey: e.target.value }))}
                 >
                   <option value="mock">Mock (development)</option>
                   <option value="interswitch">Interswitch (production)</option>

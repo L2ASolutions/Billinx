@@ -29,15 +29,19 @@ const EVENT_COLORS: Record<string, string> = {
 export default function ActivityPage() {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError("");
     try {
       const res = await adminApi.activity({ page: String(page), limit: "50" });
       setEvents(res.data as ActivityEvent[]);
       setTotal(res.total);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load activity");
     } finally {
       setLoading(false);
     }
@@ -50,6 +54,10 @@ export default function ActivityPage() {
   return (
     <div className="space-y-4 max-w-6xl">
       <h1 className="text-2xl font-bold text-dark">Platform Activity</h1>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>
+      )}
 
       <div className="bg-white rounded-xl border border-border">
         {loading ? (

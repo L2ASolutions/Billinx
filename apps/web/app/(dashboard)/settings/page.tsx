@@ -14,7 +14,7 @@ type Tab = "profile" | "apikeys" | "reminders";
 
 interface ApiKey {
   id: string;
-  label: string;
+  name: string; // BUG-016: backend field is `name`, not `label`
   environment: string;
   keyPrefix: string;
   requestCount: number;
@@ -80,8 +80,8 @@ function ApiKeysTab() {
     }
   }
 
-  async function handleRevoke(id: string, label: string) {
-    if (!confirm(`Revoke key "${label}"? This cannot be undone.`)) return;
+  async function handleRevoke(id: string, name: string) {
+    if (!confirm(`Revoke key "${name}"? This cannot be undone.`)) return;
     try {
       await apiKeyApi.revoke(id);
       setKeys((k) => k.filter((x) => x.id !== id));
@@ -89,6 +89,8 @@ function ApiKeysTab() {
       alert(err instanceof Error ? err.message : "Revoke failed");
     }
   }
+
+  // BUG-016: pass key.name (not key.label) to revoke confirmation
 
   return (
     <div className="space-y-6">
@@ -153,7 +155,7 @@ function ApiKeysTab() {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-dark">{key.label}</span>
+                    <span className="text-sm font-medium text-dark">{key.name}</span>
                     <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${key.environment === "live" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>
                       {key.environment}
                     </span>
@@ -181,7 +183,7 @@ function ApiKeysTab() {
                   <Button
                     variant="danger"
                     size="sm"
-                    onClick={() => handleRevoke(key.id, key.label)}
+                    onClick={() => handleRevoke(key.id, key.name)}
                   >
                     Revoke
                   </Button>
@@ -202,7 +204,7 @@ interface ReminderRule {
   name: string;
   triggerType: string;
   triggerDays: number;
-  message: string;
+  reminderMessage: string; // BUG-011: backend field is reminderMessage, not message
   isActive: boolean;
   isDefault: boolean;
   createdAt: string;
@@ -212,7 +214,7 @@ interface ReminderForm {
   name: string;
   triggerType: string;
   triggerDays: string;
-  message: string;
+  reminderMessage: string; // BUG-011
 }
 
 const TRIGGER_TYPES = [
@@ -225,7 +227,7 @@ const EMPTY_RULE: ReminderForm = {
   name: "",
   triggerType: "BEFORE_DUE",
   triggerDays: "3",
-  message: "",
+  reminderMessage: "",
 };
 
 function RemindersTab() {
@@ -289,7 +291,7 @@ function RemindersTab() {
       name: r.name,
       triggerType: r.triggerType,
       triggerDays: String(r.triggerDays),
-      message: r.message,
+      reminderMessage: r.reminderMessage,
     });
     setFormError("");
     setShowModal(true);
@@ -303,7 +305,7 @@ function RemindersTab() {
         name: form.name,
         triggerType: form.triggerType,
         triggerDays: parseInt(form.triggerDays, 10),
-        message: form.message,
+        reminderMessage: form.reminderMessage,
       };
       if (editRule) {
         await reminderApi.update(editRule.id, payload);
@@ -367,8 +369,8 @@ function RemindersTab() {
                     {TRIGGER_TYPES.find((t) => t.value === rule.triggerType)?.label ?? rule.triggerType}
                     {" — "}{rule.triggerDays} day{rule.triggerDays !== 1 ? "s" : ""}
                   </p>
-                  {rule.message && (
-                    <p className="text-xs text-muted mt-1 italic line-clamp-1">&ldquo;{rule.message}&rdquo;</p>
+                  {rule.reminderMessage && (
+                    <p className="text-xs text-muted mt-1 italic line-clamp-1">&ldquo;{rule.reminderMessage}&rdquo;</p>
                   )}
                 </div>
                 {!rule.isDefault && (
@@ -427,8 +429,8 @@ function RemindersTab() {
                 <textarea
                   className="w-full px-3 py-2.5 rounded-lg border border-border text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green resize-none"
                   rows={3}
-                  value={form.message}
-                  onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
+                  value={form.reminderMessage}
+                  onChange={(e) => setForm((f) => ({ ...f, reminderMessage: e.target.value }))}
                   placeholder="Reminder message sent to buyer..."
                 />
               </div>

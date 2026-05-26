@@ -95,6 +95,17 @@ async function bootstrap() {
     });
   }
 
+  // BUG-018: Warn loudly on startup when admin IP allowlist is not configured.
+  // AdminIpGuard already logs this warning at construction time, but it can
+  // scroll past during module initialisation. Repeat it here so it's the last
+  // thing operators see before the service goes live.
+  if (!process.env.ADMIN_ALLOWED_IPS) {
+    logger.warn(
+      '⚠️  ADMIN_ALLOWED_IPS is not set — all /v1/admin routes are reachable from any IP. ' +
+      'Set this env var in production to a comma-separated list of allowed CIDRs (e.g. "10.0.0.0/8,203.0.113.5").',
+    );
+  }
+
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
   logger.log(`Billinx API running on port ${port}`);

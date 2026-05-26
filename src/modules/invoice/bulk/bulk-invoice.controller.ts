@@ -24,6 +24,7 @@ import {
 import { Request } from 'express';
 import { BulkInvoiceService } from './bulk-invoice.service';
 import { ApiKeyGuard } from '../../identity/guards/api-key.guard';
+import { JwtGuard } from '../../identity/guards/jwt.guard';
 
 @ApiTags('Invoices')
 @Controller('v1/invoices/bulk')
@@ -123,6 +124,67 @@ export class BulkInvoiceController {
     summary: 'Get processing progress for a bulk submission batch',
   })
   async getBatchStatus(@Param('batchId') batchId: string, @Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.bulkService.getBatchStatus(ctx.tenantId, batchId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dashboard bulk routes (JWT auth — for the dashboard upload modal)
+  // ---------------------------------------------------------------------------
+
+  @Post('dashboard/csv')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiOperation({ summary: 'Upload CSV for bulk submission (dashboard / JWT auth)' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (
+          file.mimetype === 'text/csv' ||
+          file.originalname.toLowerCase().endsWith('.csv')
+        ) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Only CSV files are accepted'), false);
+        }
+      },
+    }),
+  )
+  async bulkSubmitCsvDashboard(
+    @UploadedFile() file: any,
+    @Req() req: Request,
+  ) {
+    if (!file) {
+      throw new BadRequestException('A CSV file is required (field name: file)');
+    }
+    const ctx = this.getCtx(req);
+    return this.bulkService.processBulkCsv(
+      ctx.tenantId,
+      ctx.environment,
+      ctx.actor,
+      file.buffer,
+      file.originalname,
+    );
+  }
+
+  @Get('dashboard/:batchId/status')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiParam({ name: 'batchId', description: 'Bulk batch ID' })
+  @ApiOperation({ summary: 'Get bulk batch status (dashboard / JWT auth)' })
+  async getBatchStatusDashboard(
+    @Param('batchId') batchId: string,
+    @Req() req: Request,
+  ) {
     const ctx = this.getCtx(req);
     return this.bulkService.getBatchStatus(ctx.tenantId, batchId);
   }

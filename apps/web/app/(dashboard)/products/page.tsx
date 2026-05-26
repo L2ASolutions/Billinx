@@ -15,7 +15,7 @@ interface Product {
   productCategory?: string;
   unitPrice: number;
   currency: string;
-  taxCategory?: string;
+  taxCategoryId?: string; // BUG-015: backend returns taxCategoryId, not taxCategory
   isActive: boolean;
   createdAt: string;
 }
@@ -27,7 +27,7 @@ interface ProductForm {
   productCategory: string;
   unitPrice: string;
   currency: string;
-  taxCategory: string;
+  taxCategoryId: string; // BUG-015
 }
 
 const EMPTY_FORM: ProductForm = {
@@ -37,7 +37,7 @@ const EMPTY_FORM: ProductForm = {
   productCategory: "",
   unitPrice: "",
   currency: "NGN",
-  taxCategory: "",
+  taxCategoryId: "",
 };
 
 const TAX_CATEGORIES = ["STANDARD", "ZERO_RATED", "EXEMPT", "REVERSE_CHARGE"];
@@ -92,7 +92,7 @@ export default function ProductsPage() {
       productCategory: p.productCategory ?? "",
       unitPrice: String(p.unitPrice),
       currency: p.currency ?? "NGN",
-      taxCategory: p.taxCategory ?? "",
+      taxCategoryId: p.taxCategoryId ?? "",
     });
     setFormError("");
     setShowModal(true);
@@ -109,7 +109,7 @@ export default function ProductsPage() {
         productCategory: form.productCategory || undefined,
         unitPrice: parseFloat(form.unitPrice),
         currency: form.currency,
-        taxCategory: form.taxCategory || undefined,
+        taxCategoryId: form.taxCategoryId || undefined,
       };
       if (editProduct) {
         await productApi.update(editProduct.id, payload);
@@ -209,7 +209,7 @@ export default function ProductsPage() {
                 )}
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
                   {p.hsnCode && <span>HSN: <span className="text-dark font-mono">{p.hsnCode}</span></span>}
-                  {p.taxCategory && <span>Tax: <span className="text-dark">{p.taxCategory.replace(/_/g, " ")}</span></span>}
+                  {p.taxCategoryId && <span>Tax: <span className="text-dark">{p.taxCategoryId.replace(/_/g, " ")}</span></span>}
                 </div>
                 <div className="flex gap-2 pt-1 border-t border-border">
                   <Button size="sm" variant="secondary" onClick={() => openEdit(p)}>Edit</Button>
@@ -279,8 +279,8 @@ export default function ProductsPage() {
                 <label className="block text-sm font-medium text-dark mb-1">Tax Category</label>
                 <select
                   className="w-full px-3 py-2.5 rounded-lg border border-border bg-white text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green"
-                  value={form.taxCategory}
-                  onChange={f("taxCategory")}
+                  value={form.taxCategoryId}
+                  onChange={f("taxCategoryId")}
                 >
                   <option value="">— None —</option>
                   {TAX_CATEGORIES.map((t) => (

@@ -63,6 +63,7 @@ const PILL: Record<string, { label: string; cls: string }> = {
   DRAFT: { label: 'Draft', cls: 'bg-gray-100 text-gray-500' },
   QUEUED: { label: 'Pending', cls: 'bg-amber-50 text-amber-700' },
   SUBMITTING: { label: 'Submitting', cls: 'bg-amber-50 text-amber-700' },
+  SUBMITTED: { label: 'Submitted', cls: 'bg-blue-50 text-blue-700' },
   VALIDATING: { label: 'Pending', cls: 'bg-amber-50 text-amber-700' },
   VALIDATION_FAILED: { label: 'Invalid', cls: 'bg-red-50 text-red-600' },
   SUBMISSION_FAILED: { label: 'Failed', cls: 'bg-red-50 text-red-600' },
