@@ -120,7 +120,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Management",
     items: [
-      { label: "Team", href: "/team", icon: <TeamIcon /> },
+      { label: "Team members", href: "/team", icon: <TeamIcon /> },
       { label: "Company profile", href: "/settings?tab=company", icon: <CompanyIcon />, exact: true },
       { label: "Products", href: "/products", icon: <ProductsIcon /> },
       { label: "Reports", href: "/reports", icon: <ReportsIcon /> },
