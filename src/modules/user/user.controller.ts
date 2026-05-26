@@ -6,19 +6,13 @@ import {
   Delete,
   Body,
   Param,
-  Query,
   HttpCode,
   HttpStatus,
   UseGuards,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-  ApiQuery,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
 import { UserService } from './services/user.service';
 import { MfaService } from './services/mfa.service';
@@ -29,9 +23,6 @@ import {
   RegisterTenantRequest,
   InviteUserRequest,
   AcceptInvitationRequest,
-  LoginRequest,
-  ForgotPasswordRequest,
-  ResetPasswordRequest,
   ChangePasswordRequest,
   UpdateUserRequest,
   UserRoleType,
@@ -43,7 +34,6 @@ import {
   RegisterDto,
   ForgotPasswordDto,
   ResetPasswordDto,
-  ChangePasswordDto,
 } from './dto/auth.dto';
 
 @ApiTags('Users')
@@ -61,7 +51,9 @@ export class UserController {
   @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Self-serve tenant and owner registration' })
   async register(@Body() body: RegisterDto) {
-    return this.userService.registerTenant(body as unknown as RegisterTenantRequest);
+    return this.userService.registerTenant(
+      body as unknown as RegisterTenantRequest,
+    );
   }
 
   @Post('auth/login')
@@ -79,7 +71,7 @@ export class UserController {
     }
     return this.userService.login(
       tenantId,
-      body as unknown as LoginRequest,
+      body,
       req.ip,
       req.headers['user-agent'],
     );
@@ -96,21 +88,25 @@ export class UserController {
     if (!tenantId && body.email) {
       const found = await this.userService.findUserByEmail(body.email);
       if (!found) {
-        return { message: 'If that email is registered, a reset link has been sent.' };
+        return {
+          message: 'If that email is registered, a reset link has been sent.',
+        };
       }
       tenantId = found.tenantId;
     }
     if (!tenantId) {
-      return { message: 'If that email is registered, a reset link has been sent.' };
+      return {
+        message: 'If that email is registered, a reset link has been sent.',
+      };
     }
-    return this.userService.forgotPassword(tenantId, body as unknown as ForgotPasswordRequest);
+    return this.userService.forgotPassword(tenantId, body);
   }
 
   @Post('auth/reset-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password using reset token' })
   async resetPassword(@Body() body: ResetPasswordDto) {
-    return this.userService.resetPassword(body as unknown as ResetPasswordRequest);
+    return this.userService.resetPassword(body);
   }
 
   @Post('auth/accept-invitation')
