@@ -26,7 +26,6 @@ import { AuthRateLimitGuard } from '../../shared/guards/auth-rate-limit.guard';
 import { getRequestContext } from '../../shared/context/request-context';
 import {
   CreateApiKeyRequest,
-  TokenRequest,
   RevokeTokenRequest,
 } from '../../../packages/types/identity';
 
@@ -45,28 +44,6 @@ export class IdentityController {
     private readonly apiKeyService: ApiKeyService,
     private readonly tokenService: TokenService,
   ) {}
-
-  @Post('auth/token')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthRateLimitGuard)
-  @ApiOperation({ summary: 'Issue access token and refresh token' })
-  async issueToken(
-    @Body() body: TokenRequest,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const { tokenResponse, refreshToken } =
-      await this.tokenService.issueTokenPair(
-        body.email,
-        body.tenantId,
-        'PRODUCTION',
-        'STANDARD',
-        'member',
-      );
-
-    res.cookie(REFRESH_COOKIE_NAME, refreshToken, COOKIE_OPTIONS);
-
-    return tokenResponse;
-  }
 
   @Post('auth/refresh')
   @HttpCode(HttpStatus.OK)
@@ -157,6 +134,52 @@ export class IdentityController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Revoke an API key' })
   async revokeApiKey(@Param('keyId') keyId: string) {
+    const ctx = getRequestContext();
+    await this.apiKeyService.revokeApiKey(ctx.tenantId, keyId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dashboard API key management (JWT auth — for the settings page)
+  // Mirror of the ApiKeyGuard routes above, protected by JWT so dashboard
+  // users can manage their tenant's API keys without needing a key to bootstrap.
+  // ---------------------------------------------------------------------------
+
+  @Post('users/api-keys')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new API key (dashboard / JWT auth)' })
+  @ApiHeader({ name: 'Idempotency-Key', required: false })
+  async createApiKeyDashboard(@Body() body: CreateApiKeyRequest) {
+    const ctx = getRequestContext();
+    return this.apiKeyService.createApiKey(ctx.tenantId, body);
+  }
+
+  @Get('users/api-keys')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List API keys for the tenant (dashboard / JWT auth)' })
+  async listApiKeysDashboard() {
+    const ctx = getRequestContext();
+    return this.apiKeyService.listApiKeys(ctx.tenantId);
+  }
+
+  @Post('users/api-keys/:keyId/rotate')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Rotate an API key (dashboard / JWT auth)' })
+  async rotateApiKeyDashboard(@Param('keyId') keyId: string) {
+    const ctx = getRequestContext();
+    return this.apiKeyService.rotateApiKey(ctx.tenantId, keyId);
+  }
+
+  @Delete('users/api-keys/:keyId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke an API key (dashboard / JWT auth)' })
+  async revokeApiKeyDashboard(@Param('keyId') keyId: string) {
     const ctx = getRequestContext();
     await this.apiKeyService.revokeApiKey(ctx.tenantId, keyId);
   }

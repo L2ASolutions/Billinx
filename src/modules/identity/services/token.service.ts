@@ -50,7 +50,9 @@ export class TokenService {
     tier: RateLimitTier,
     role: 'admin' | 'member',
   ): Promise<{ tokenResponse: TokenResponse; refreshToken: string }> {
-    const refreshToken = this.generateRefreshToken();
+    // BUG-013: embed userId|tenantId prefix so rotateRefreshToken can scope
+    // the DB query to this user instead of scanning all active tokens platform-wide.
+    const refreshToken = this.generateRefreshToken(userId, tenantId);
 
     const payload: Omit<JwtPayload, 'iat' | 'exp'> = {
       sub: userId,
@@ -107,18 +109,38 @@ export class TokenService {
   async rotateRefreshToken(
     rawRefreshToken: string,
   ): Promise<{ tokenResponse: TokenResponse; newRefreshToken: string }> {
+    // BUG-013 fix: tokens now carry a "userId|tenantId|<random>" prefix so we
+    // can scope the candidate query to a single user rather than fetching up to
+    // 100 platform-wide tokens and bcrypt-comparing each one.
+    const pipeIdx1 = rawRefreshToken.indexOf('|');
+    const pipeIdx2 = pipeIdx1 !== -1 ? rawRefreshToken.indexOf('|', pipeIdx1 + 1) : -1;
+
+    const hasPrefix = pipeIdx1 !== -1 && pipeIdx2 !== -1;
+    const prefixUserId = hasPrefix ? rawRefreshToken.substring(0, pipeIdx1) : null;
+    const prefixTenantId = hasPrefix
+      ? rawRefreshToken.substring(pipeIdx1 + 1, pipeIdx2)
+      : null;
+
+    const candidateWhere: any = {
+      isRevoked: false,
+      expiresAt: { gt: new Date() },
+    };
+    if (prefixUserId && prefixTenantId) {
+      // Narrow to this specific user — O(sessions per user) not O(platform)
+      candidateWhere.userId = prefixUserId;
+      candidateWhere.tenantId = prefixTenantId;
+    }
+
     const candidates = await this.prisma.asAdmin(async (tx) => {
       return tx.refreshToken.findMany({
-        where: {
-          isRevoked: false,
-          expiresAt: { gt: new Date() },
-        },
+        where: candidateWhere,
         include: {
           tenant: {
             select: { environment: true, rateLimitTier: true },
           },
         },
-        take: 100,
+        // Grace limit: keep a hard cap in case of old-format tokens without prefix
+        take: hasPrefix ? 10 : 100,
       });
     });
 
@@ -165,7 +187,10 @@ export class TokenService {
     });
   }
 
-  private generateRefreshToken(): string {
-    return crypto.randomBytes(64).toString('base64url');
+  // BUG-013: prefix with userId|tenantId| so rotateRefreshToken can scope the
+  // DB query to this user instead of scanning all tokens platform-wide.
+  private generateRefreshToken(userId: string, tenantId: string): string {
+    const random = crypto.randomBytes(64).toString('base64url');
+    return `${userId}|${tenantId}|${random}`;
   }
 }

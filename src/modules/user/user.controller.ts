@@ -17,14 +17,12 @@ import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
-  ApiHeader,
   ApiQuery,
 } from '@nestjs/swagger';
 import { Request } from 'express';
 import { UserService } from './services/user.service';
 import { MfaService } from './services/mfa.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';
-import { AdminKeyGuard } from '../identity/guards/admin-key.guard';
 import { AuthRateLimitGuard } from '../../shared/guards/auth-rate-limit.guard';
 import { getRequestContext } from '../../shared/context/request-context';
 import {
@@ -38,6 +36,15 @@ import {
   UpdateUserRequest,
   UserRoleType,
 } from '../../../packages/types/user';
+// BUG-019: Typed DTOs so the global ValidationPipe runs class-validator rules
+// on these security-critical endpoints.
+import {
+  LoginDto,
+  RegisterDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  ChangePasswordDto,
+} from './dto/auth.dto';
 
 @ApiTags('Users')
 @Controller('v1')
@@ -53,15 +60,15 @@ export class UserController {
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Self-serve tenant and owner registration' })
-  async register(@Body() body: Record<string, any>) {
-    return this.userService.registerTenant(body as RegisterTenantRequest);
+  async register(@Body() body: RegisterDto) {
+    return this.userService.registerTenant(body as unknown as RegisterTenantRequest);
   }
 
   @Post('auth/login')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Login with email and password' })
-  async login(@Body() body: Record<string, any>, @Req() req: Request) {
+  async login(@Body() body: LoginDto, @Req() req: Request) {
     let tenantId = body.tenantId;
     if (!tenantId) {
       const found = await this.userService.findUserByEmail(body.email);
@@ -72,7 +79,7 @@ export class UserController {
     }
     return this.userService.login(
       tenantId,
-      body as LoginRequest,
+      body as unknown as LoginRequest,
       req.ip,
       req.headers['user-agent'],
     );
@@ -82,18 +89,28 @@ export class UserController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Request password reset email' })
-  async forgotPassword(@Body() body: Record<string, any>) {
-    return this.userService.forgotPassword(
-      body.tenantId,
-      body as ForgotPasswordRequest,
-    );
+  async forgotPassword(@Body() body: ForgotPasswordDto) {
+    // BUG-014: frontend sends only {email}; look up tenantId if not supplied.
+    // Return generic success regardless to prevent user-enumeration.
+    let tenantId = body.tenantId;
+    if (!tenantId && body.email) {
+      const found = await this.userService.findUserByEmail(body.email);
+      if (!found) {
+        return { message: 'If that email is registered, a reset link has been sent.' };
+      }
+      tenantId = found.tenantId;
+    }
+    if (!tenantId) {
+      return { message: 'If that email is registered, a reset link has been sent.' };
+    }
+    return this.userService.forgotPassword(tenantId, body as unknown as ForgotPasswordRequest);
   }
 
   @Post('auth/reset-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password using reset token' })
-  async resetPassword(@Body() body: Record<string, any>) {
-    return this.userService.resetPassword(body as ResetPasswordRequest);
+  async resetPassword(@Body() body: ResetPasswordDto) {
+    return this.userService.resetPassword(body as unknown as ResetPasswordRequest);
   }
 
   @Post('auth/accept-invitation')
@@ -293,6 +310,17 @@ export class UserController {
   async removeRole(@Param('id') id: string, @Param('role') role: string) {
     return this.userService.removeRole(id, role as UserRoleType);
   }
+
+  @Delete('users/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Deactivate (soft-delete) a user from the tenant' })
+  async deactivateUser(@Param('id') id: string) {
+    const ctx = getRequestContext();
+    await this.userService.deactivateUser(id, ctx.tenantId);
+  }
+
   // ── Public: request access ────────────────────────────────────────────────
   @Post('request-access')
   @HttpCode(HttpStatus.CREATED)
@@ -302,48 +330,6 @@ export class UserController {
       body as any,
       req.ip,
       req.headers['user-agent'],
-    );
-  }
-
-  // ── Admin: list access requests ───────────────────────────────────────────
-  @Get('admin/access-requests')
-  @UseGuards(AdminKeyGuard)
-  @ApiOperation({ summary: 'Admin: list all access requests' })
-  @ApiHeader({ name: 'X-Admin-Key', required: true })
-  @ApiQuery({ name: 'status', required: false })
-  async listAccessRequests(@Query('status') status?: string) {
-    return this.userService.listAccessRequests(status);
-  }
-
-  @Patch('admin/access-requests/:id/approve')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AdminKeyGuard)
-  @ApiOperation({ summary: 'Admin: approve an access request' })
-  @ApiHeader({ name: 'X-Admin-Key', required: true })
-  async approveAccessRequest(
-    @Param('id') id: string,
-    @Body() body: Record<string, any>,
-  ) {
-    return this.userService.approveAccessRequest(
-      id,
-      body.reviewedBy ?? 'admin',
-      body.reviewNote,
-    );
-  }
-
-  @Patch('admin/access-requests/:id/reject')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(AdminKeyGuard)
-  @ApiOperation({ summary: 'Admin: reject an access request' })
-  @ApiHeader({ name: 'X-Admin-Key', required: true })
-  async rejectAccessRequest(
-    @Param('id') id: string,
-    @Body() body: Record<string, any>,
-  ) {
-    return this.userService.rejectAccessRequest(
-      id,
-      body.reviewedBy ?? 'admin',
-      body.reviewNote,
     );
   }
 

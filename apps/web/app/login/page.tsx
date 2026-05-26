@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AuthCard } from "@/components/auth/AuthCard";
@@ -16,6 +16,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // BUG-021: Show session-expired message if the API client redirected here
+  // after a 401 rather than silently clearing state.
+  useEffect(() => {
+    const authError = sessionStorage.getItem("authError");
+    if (authError) {
+      setError(authError);
+      sessionStorage.removeItem("authError");
+    }
+  }, []);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

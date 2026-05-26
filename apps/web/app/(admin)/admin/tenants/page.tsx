@@ -31,11 +31,13 @@ const ENV_COLORS: Record<string, string> = {
 export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     adminApi.tenants()
       .then((res) => setTenants(res.data as Tenant[]))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load tenants"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -47,6 +49,10 @@ export default function TenantsPage() {
   return (
     <div className="space-y-4 max-w-6xl">
       <h1 className="text-2xl font-bold text-dark">Tenants</h1>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>
+      )}
 
       <div className="flex gap-3">
         <input
