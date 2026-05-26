@@ -124,11 +124,14 @@ export const authApi = {
     }>('/v1/auth/login', { email, password }),
   refresh: () => api.post<{ accessToken: string }>('/v1/auth/refresh'),
   revoke: () => api.post('/v1/auth/revoke', { all: true }),
-  verifyMfa: (mfaToken: string, code: string) =>
+  verifyMfa: (mfaToken: string, code: string, isBackupCode = false) =>
     api.post<{ accessToken: string }>('/v1/auth/mfa/challenge', {
       mfaToken,
       code,
+      ...(isBackupCode && { type: 'backup' }),
     }),
+  resendMfa: (mfaToken: string) =>
+    api.post('/v1/auth/mfa/resend', { mfaToken }),
   setupMfa: () =>
     request<{ qrCodeBase64: string; manualKey: string }>(
       '/v1/auth/mfa/setup',

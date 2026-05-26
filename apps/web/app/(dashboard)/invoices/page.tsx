@@ -8,25 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { invoiceApi } from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
-const STATUS_COLORS: Record<string, string> = {
-  ACCEPTED: "bg-green-50 text-green-700",
-  REJECTED: "bg-red-50 text-red-600",
-  DRAFT: "bg-gray-100 text-gray-600",
-  QUEUED: "bg-blue-50 text-blue-600",
-  SUBMITTING: "bg-yellow-50 text-yellow-700",
-  SUBMITTED: "bg-blue-50 text-blue-700",
-  VALIDATION_FAILED: "bg-red-50 text-red-600",
-  SUBMISSION_FAILED: "bg-red-50 text-red-600",
-  DEAD_LETTERED: "bg-red-100 text-red-700",
-  CANCELLED: "bg-gray-100 text-gray-500",
-  VALIDATING: "bg-blue-50 text-blue-600",
-};
-
-const STATUS_OPTIONS = [
-  "ALL", "DRAFT", "VALIDATING", "QUEUED", "SUBMITTING", "SUBMITTED",
-  "ACCEPTED", "REJECTED", "VALIDATION_FAILED", "SUBMISSION_FAILED",
-  "DEAD_LETTERED", "CANCELLED",
-];
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Invoice {
   id: string;
@@ -36,6 +18,8 @@ interface Invoice {
   currency: string;
   status: string;
   invoiceType: string;
+  firsConfirmedIrn?: string;
+  paymentStatus?: string;
   isOverdue?: boolean;
   paymentDueDate?: string;
   createdAt: string;
@@ -53,11 +37,44 @@ interface BulkBatchStatus {
   status: string;
 }
 
-// ─── Bulk Upload Modal ───────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const STATUS_TABS = [
+  { key: "ALL",      label: "All" },
+  { key: "ACCEPTED", label: "Accepted" },
+  { key: "PENDING",  label: "Pending" },
+  { key: "REJECTED", label: "Rejected" },
+  { key: "DRAFT",    label: "Draft" },
+  { key: "OVERDUE",  label: "Overdue" },
+] as const;
+
+type StatusTab = typeof STATUS_TABS[number]["key"];
+
+const STATUS_COLORS: Record<string, string> = {
+  ACCEPTED:          "bg-green-50 text-green-700",
+  REJECTED:          "bg-red-50 text-red-600",
+  DRAFT:             "bg-gray-100 text-gray-600",
+  QUEUED:            "bg-blue-50 text-blue-600",
+  SUBMITTING:        "bg-amber-50 text-amber-700",
+  SUBMITTED:         "bg-blue-50 text-blue-700",
+  VALIDATION_FAILED: "bg-red-50 text-red-600",
+  SUBMISSION_FAILED: "bg-red-50 text-red-600",
+  DEAD_LETTERED:     "bg-red-100 text-red-700",
+  CANCELLED:         "bg-gray-100 text-gray-500",
+  VALIDATING:        "bg-blue-50 text-blue-600",
+};
+
+const PAYMENT_STATUS_COLORS: Record<string, string> = {
+  PAID:    "bg-green-50 text-green-700",
+  PARTIAL: "bg-blue-50 text-blue-600",
+  UNPAID:  "bg-amber-50 text-amber-700",
+  OVERDUE: "bg-red-50 text-red-600",
+};
+
+// ── Bulk Upload Modal ─────────────────────────────────────────────────────────
 
 function BulkUploadModal({ onClose }: { onClose: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  // BUG-017: store the polling interval in a ref so it can be cleared on unmount
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -66,11 +83,8 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<BulkBatchStatus | null>(null);
 
-  // Clear the polling interval whenever the modal unmounts (BUG-017)
   useEffect(() => {
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);
 
   function handleDrop(e: React.DragEvent) {
@@ -99,7 +113,6 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
   }
 
   function pollBatch(id: string) {
-    // BUG-017: store in ref so the cleanup useEffect can cancel on unmount
     intervalRef.current = setInterval(async () => {
       try {
         const status = await invoiceApi.getBulkStatus(id) as BulkBatchStatus;
@@ -117,9 +130,11 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <h2 className="font-semibold text-dark">Bulk Invoice Import</h2>
+          <h2 className="font-semibold text-dark">Import CSV</h2>
           <button onClick={onClose} className="text-muted hover:text-dark">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
         <div className="p-6 space-y-4">
@@ -128,7 +143,6 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
               {error && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{error}</div>
               )}
-              {/* Drop zone */}
               <div
                 className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
                   dragging ? "border-green bg-green-light" : "border-border hover:border-green/50"
@@ -138,17 +152,10 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
                 onDrop={handleDrop}
                 onClick={() => fileRef.current?.click()}
               >
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) setFile(f);
-                  }}
-                />
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto text-muted mb-3">
+                <input ref={fileRef} type="file" accept=".csv" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); }} />
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="1.5" className="mx-auto text-muted mb-3">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
@@ -157,12 +164,10 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
                 ) : (
                   <>
                     <p className="text-sm font-medium text-dark">Drop your CSV file here</p>
-                    <p className="text-xs text-muted mt-1">or click to browse (max 500 invoices, 5 MB)</p>
+                    <p className="text-xs text-muted mt-1">or click to browse — max 500 invoices, 5 MB</p>
                   </>
                 )}
               </div>
-
-              {/* Format hint */}
               <div className="p-3 bg-surface rounded-lg border border-border">
                 <p className="text-xs font-medium text-dark mb-1">Required CSV columns:</p>
                 <p className="text-xs text-muted font-mono">
@@ -171,7 +176,6 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
               </div>
             </>
           ) : (
-            /* Batch progress */
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 border-2 border-green border-t-transparent rounded-full animate-spin" />
@@ -180,14 +184,12 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
               {batchStatus && (
                 <>
                   <div className="w-full bg-gray-100 rounded-full h-3">
-                    <div
-                      className="bg-green h-3 rounded-full transition-all duration-500"
-                      style={{ width: `${batchStatus.percentComplete}%` }}
-                    />
+                    <div className="bg-green h-3 rounded-full transition-all duration-500"
+                      style={{ width: `${batchStatus.percentComplete}%` }} />
                   </div>
                   <div className="grid grid-cols-3 gap-3 text-center">
                     {[
-                      { label: "Total", value: batchStatus.total, color: "text-dark" },
+                      { label: "Total",    value: batchStatus.total,    color: "text-dark" },
                       { label: "Accepted", value: batchStatus.accepted, color: "text-green-600" },
                       { label: "Rejected", value: batchStatus.rejected, color: "text-red-600" },
                     ].map((s) => (
@@ -209,12 +211,10 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
         <div className="px-6 py-4 border-t border-border flex gap-3 justify-end">
-          <Button variant="secondary" onClick={onClose}>
-            {batchId ? "Close" : "Cancel"}
-          </Button>
+          <Button variant="secondary" onClick={onClose}>{batchId ? "Close" : "Cancel"}</Button>
           {!batchId && (
             <Button loading={uploading} disabled={!file} onClick={handleUpload}>
-              Upload & Import
+              Upload &amp; Import
             </Button>
           )}
         </div>
@@ -223,14 +223,14 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("ALL");
+  const [activeTab, setActiveTab] = useState<StatusTab>("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showBulk, setShowBulk] = useState(false);
@@ -240,21 +240,25 @@ export default function InvoicesPage() {
     setError("");
     try {
       const params: Record<string, string | number> = { page, limit: 20 };
-      if (status !== "ALL") params.status = status;
+      if (activeTab === "PENDING") {
+        params.status = "QUEUED,SUBMITTING,VALIDATING";
+      } else if (activeTab === "OVERDUE") {
+        params.isOverdue = "true";
+      } else if (activeTab !== "ALL") {
+        params.status = activeTab;
+      }
       if (search) params.search = search;
       const res = await invoiceApi.list(params);
       setInvoices(res.data as Invoice[]);
       setTotal(res.total);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to load invoices";
-      console.error("[Invoices] load error:", err);
-      setError(msg);
+      setError(err instanceof Error ? err.message : "Failed to load invoices");
       setInvoices([]);
       setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [page, status, search]);
+  }, [page, activeTab, search]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -267,14 +271,15 @@ export default function InvoicesPage() {
         actions={
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" onClick={() => setShowBulk(true)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 inline">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="2" className="mr-1.5 inline">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
               </svg>
               Import CSV
             </Button>
             <Link href="/invoices/new">
-              <Button size="sm">+ New Invoice</Button>
+              <Button size="sm">+ Create invoice</Button>
             </Link>
           </div>
         }
@@ -282,35 +287,37 @@ export default function InvoicesPage() {
 
       <div className="p-6 space-y-4">
         {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
-            {error}
-          </div>
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>
         )}
 
-        {/* Filters */}
-        <div className="flex gap-3 items-end">
-          <div className="flex-1 max-w-xs">
-            <Input
-              placeholder="Search by IRN, buyer name..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            />
-          </div>
-          <div>
-            <select
-              className="px-3 py-2.5 rounded-lg border border-border bg-white text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green"
-              value={status}
-              onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>{s === "ALL" ? "All statuses" : s.replace(/_/g, " ")}</option>
+        {/* Filter tabs + search */}
+        <div className="bg-white rounded-xl border border-border overflow-hidden">
+          <div className="flex items-center justify-between px-4 border-b border-border">
+            <div className="flex">
+              {STATUS_TABS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => { setActiveTab(key); setPage(1); }}
+                  className={`px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === key
+                      ? "border-green text-green"
+                      : "border-transparent text-muted hover:text-dark"
+                  }`}
+                >
+                  {label}
+                </button>
               ))}
-            </select>
+            </div>
+            <div className="py-2 w-56">
+              <Input
+                placeholder="Search IRN, buyer…"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              />
+            </div>
           </div>
-        </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-xl border border-border">
+          {/* Table */}
           {loading ? (
             <div className="p-12 flex justify-center">
               <div className="w-6 h-6 border-2 border-green border-t-transparent rounded-full animate-spin" />
@@ -318,54 +325,90 @@ export default function InvoicesPage() {
           ) : invoices.length === 0 ? (
             <div className="p-12 text-center">
               <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center mx-auto mb-3">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-muted">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="1.8" className="text-muted">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 </svg>
               </div>
               <p className="text-muted text-sm">No invoices found.</p>
             </div>
           ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">IRN</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Type</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Buyer</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Amount</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Status</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => (
-                  <tr key={inv.id} className={`border-b border-border last:border-0 transition-colors ${inv.isOverdue ? "bg-red-50/30 hover:bg-red-50/50" : "hover:bg-surface"}`}>
-                    <td className="px-6 py-3">
-                      <div className="flex items-center gap-2">
-                        <Link href={`/invoices/${inv.id}`} className="text-sm font-mono text-green hover:underline">
-                          {inv.platformIrn ? inv.platformIrn.slice(0, 20) + "…" : inv.id.slice(0, 8) + "…"}
-                        </Link>
-                        {inv.isOverdue && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-600">
-                            Overdue
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-3 text-sm text-muted">{inv.invoiceType}</td>
-                    <td className="px-6 py-3 text-sm text-dark">{inv.buyerName}</td>
-                    <td className="px-6 py-3 text-sm text-dark font-medium">
-                      {formatCurrency(inv.totalAmount, inv.currency)}
-                    </td>
-                    <td className="px-6 py-3">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[inv.status] ?? "bg-gray-100 text-gray-600"}`}>
-                        {inv.status.replace(/_/g, " ")}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-sm text-muted">{formatDate(inv.createdAt)}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    {["Invoice", "Buyer", "Date", "FIRS Status", "IRN", "Payment", "Amount"].map((col, i) => (
+                      <th key={col}
+                        className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${i === 6 ? "text-right" : "text-left"}`}>
+                        {col}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {invoices.map((inv) => (
+                    <tr key={inv.id}
+                      className={`border-b border-border last:border-0 transition-colors ${
+                        inv.isOverdue ? "bg-red-50/30 hover:bg-red-50/50" : "hover:bg-surface"
+                      }`}>
+                      {/* Invoice # */}
+                      <td className="px-6 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <Link href={`/invoices/${inv.id}`}
+                            className="text-sm font-mono text-green hover:underline">
+                            {inv.id.slice(0, 8)}…
+                          </Link>
+                          {inv.isOverdue && (
+                            <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-600">
+                              Overdue
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted mt-0.5">{inv.invoiceType}</p>
+                      </td>
+                      {/* Buyer */}
+                      <td className="px-6 py-3 text-sm text-dark">{inv.buyerName}</td>
+                      {/* Date */}
+                      <td className="px-6 py-3 text-sm text-muted whitespace-nowrap">{formatDate(inv.createdAt)}</td>
+                      {/* FIRS Status */}
+                      <td className="px-6 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[inv.status] ?? "bg-gray-100 text-gray-600"}`}>
+                          {inv.status.replace(/_/g, " ")}
+                        </span>
+                      </td>
+                      {/* IRN */}
+                      <td className="px-6 py-3">
+                        {inv.firsConfirmedIrn ? (
+                          <span className="text-xs font-mono text-green-700 truncate block max-w-[120px]">
+                            {inv.firsConfirmedIrn.slice(0, 16)}…
+                          </span>
+                        ) : inv.platformIrn ? (
+                          <span className="text-xs font-mono text-muted truncate block max-w-[120px]">
+                            {inv.platformIrn.slice(0, 16)}…
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted">—</span>
+                        )}
+                      </td>
+                      {/* Payment */}
+                      <td className="px-6 py-3">
+                        {inv.paymentStatus ? (
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_STATUS_COLORS[inv.paymentStatus] ?? "bg-gray-100 text-gray-600"}`}>
+                            {inv.paymentStatus}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted">—</span>
+                        )}
+                      </td>
+                      {/* Amount */}
+                      <td className="px-6 py-3 text-sm font-medium text-dark text-right">
+                        {formatCurrency(inv.totalAmount, inv.currency)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
