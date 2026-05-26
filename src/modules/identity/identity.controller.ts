@@ -158,7 +158,9 @@ export class IdentityController {
   @Get('users/api-keys')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List API keys for the tenant (dashboard / JWT auth)' })
+  @ApiOperation({
+    summary: 'List API keys for the tenant (dashboard / JWT auth)',
+  })
   async listApiKeysDashboard() {
     const ctx = getRequestContext();
     return this.apiKeyService.listApiKeys(ctx.tenantId);

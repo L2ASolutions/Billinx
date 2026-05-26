@@ -143,7 +143,9 @@ export class BulkInvoiceController {
       properties: { file: { type: 'string', format: 'binary' } },
     },
   })
-  @ApiOperation({ summary: 'Upload CSV for bulk submission (dashboard / JWT auth)' })
+  @ApiOperation({
+    summary: 'Upload CSV for bulk submission (dashboard / JWT auth)',
+  })
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: 5 * 1024 * 1024 },
@@ -159,12 +161,11 @@ export class BulkInvoiceController {
       },
     }),
   )
-  async bulkSubmitCsvDashboard(
-    @UploadedFile() file: any,
-    @Req() req: Request,
-  ) {
+  async bulkSubmitCsvDashboard(@UploadedFile() file: any, @Req() req: Request) {
     if (!file) {
-      throw new BadRequestException('A CSV file is required (field name: file)');
+      throw new BadRequestException(
+        'A CSV file is required (field name: file)',
+      );
     }
     const ctx = this.getCtx(req);
     return this.bulkService.processBulkCsv(

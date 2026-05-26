@@ -7,15 +7,27 @@ import { Input } from "@/components/ui/Input";
 import { userApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
-const ROLES = ["VIEWER", "ACCOUNTANT", "API_MANAGER", "ADMIN", "OWNER"];
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const ROLES = ["VIEWER", "ACCOUNTANT", "API_MANAGER", "ADMIN"] as const;
 
 const ROLE_COLORS: Record<string, string> = {
-  OWNER: "bg-purple-50 text-purple-700",
-  ADMIN: "bg-blue-50 text-blue-700",
-  ACCOUNTANT: "bg-green-50 text-green-700",
-  API_MANAGER: "bg-yellow-50 text-yellow-700",
-  VIEWER: "bg-gray-100 text-gray-600",
+  OWNER:       "bg-purple-50 text-purple-700",
+  ADMIN:       "bg-blue-50 text-blue-700",
+  ACCOUNTANT:  "bg-green-50 text-green-700",
+  API_MANAGER: "bg-amber-50 text-amber-700",
+  VIEWER:      "bg-gray-100 text-gray-600",
 };
+
+const ROLE_DESC: Record<string, string> = {
+  VIEWER:      "Read-only access to invoices and reports",
+  ACCOUNTANT:  "Create and manage invoices, record payments",
+  API_MANAGER: "Manage API keys and webhook integrations",
+  ADMIN:       "Full access except billing and owner settings",
+  OWNER:       "Full access including billing and team management",
+};
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Member {
   id: string;
@@ -26,48 +38,129 @@ interface Member {
   isActive?: boolean;
 }
 
+interface Invitation {
+  id: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  expiresAt?: string;
+}
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+
+function Sk({ className = "" }: { className?: string }) {
+  return <div className={`animate-pulse bg-gray-100 rounded ${className}`} />;
+}
+
+// ── Invite modal ──────────────────────────────────────────────────────────────
+
+function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (email: string) => void }) {
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<string>("VIEWER");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      await userApi.invite(email, role);
+      onSuccess(email);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Invite failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <h2 className="font-semibold text-dark">Invite team member</h2>
+          <button onClick={onClose} className="text-muted hover:text-dark">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="p-6 space-y-4">
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{error}</div>
+            )}
+            <Input
+              label="Email address"
+              type="email"
+              placeholder="colleague@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoFocus
+            />
+            <div>
+              <label className="block text-sm font-medium text-dark mb-2">Role</label>
+              <div className="space-y-2">
+                {ROLES.map((r) => (
+                  <label key={r}
+                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      role === r ? "border-green bg-green-light" : "border-border hover:bg-surface"
+                    }`}>
+                    <input
+                      type="radio"
+                      name="role"
+                      value={r}
+                      checked={role === r}
+                      onChange={() => setRole(r)}
+                      className="mt-0.5 text-green focus:ring-green/30"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-dark">{r.replace(/_/g, " ")}</p>
+                      <p className="text-xs text-muted">{ROLE_DESC[r]}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="px-6 py-4 border-t border-border flex gap-3 justify-end">
+            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button type="submit" loading={loading} disabled={!email}>Send invitation</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function TeamPage() {
   const [members, setMembers] = useState<Member[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showInvite, setShowInvite] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("VIEWER");
-  const [inviting, setInviting] = useState(false);
-  const [inviteError, setInviteError] = useState("");
-  const [inviteSuccess, setInviteSuccess] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [showInvite, setShowInvite] = useState(false);
+  const [successMsg, setSuccessMsg] = useState("");
 
   async function load() {
     setLoading(true);
     setLoadError("");
     try {
       const res = await userApi.list();
-      setMembers(res.data as Member[]);
+      const data = res.data as (Member & { status?: string })[];
+      setMembers(data.filter((u) => !u.status || u.status === "ACTIVE"));
+      // Surface pending invitations if backend returns them in the same list
+      setInvitations(data.filter((u) => u.status === "PENDING") as unknown as Invitation[]);
     } catch (err: unknown) {
-      setLoadError(err instanceof Error ? err.message : "Failed to load team members");
+      setLoadError(err instanceof Error ? err.message : "Failed to load team");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => { load(); }, []);
-
-  async function handleInvite(e: FormEvent) {
-    e.preventDefault();
-    setInviteError("");
-    setInviteSuccess("");
-    setInviting(true);
-    try {
-      await userApi.invite(inviteEmail, inviteRole);
-      setInviteSuccess(`Invitation sent to ${inviteEmail}`);
-      setInviteEmail("");
-      setShowInvite(false);
-    } catch (err: unknown) {
-      setInviteError(err instanceof Error ? err.message : "Invite failed");
-    } finally {
-      setInviting(false);
-    }
-  }
 
   async function handleRemove(id: string, name: string) {
     if (!confirm(`Remove ${name} from the team?`)) return;
@@ -79,86 +172,66 @@ export default function TeamPage() {
     }
   }
 
+  function handleInviteSuccess(email: string) {
+    setShowInvite(false);
+    setSuccessMsg(`Invitation sent to ${email}`);
+    setTimeout(() => setSuccessMsg(""), 5000);
+  }
+
+  const activeMembers = members.filter((m) => m.isActive !== false);
+  const inactiveMembers = members.filter((m) => m.isActive === false);
+
   return (
     <>
       <Topbar
-        title="Team"
+        title="Team members"
         actions={
-          <Button size="sm" onClick={() => setShowInvite(!showInvite)}>
+          <Button size="sm" onClick={() => setShowInvite(true)}>
             + Invite member
           </Button>
         }
       />
 
-      <div className="p-6 space-y-4">
+      <div className="p-6 space-y-6">
         {loadError && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
-            {loadError}
-          </div>
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{loadError}</div>
+        )}
+        {successMsg && (
+          <div className="p-3 bg-green-light border border-green/20 rounded-xl text-sm text-dark">{successMsg}</div>
         )}
 
-        {inviteSuccess && (
-          <div className="p-3 bg-green-light border border-green/20 rounded-xl text-sm text-dark">
-            {inviteSuccess}
-          </div>
-        )}
-
-        {showInvite && (
-          <div className="bg-white rounded-xl border border-border p-6">
-            <h2 className="font-semibold text-dark mb-4">Invite team member</h2>
-            <form onSubmit={handleInvite} className="flex gap-3 items-end">
-              <div className="flex-1">
-                <Input
-                  label="Email address"
-                  type="email"
-                  placeholder="colleague@company.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  required
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-dark mb-1">Role</label>
-                <select
-                  className="px-3 py-2.5 rounded-lg border border-border bg-white text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green"
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value)}
-                >
-                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <Button type="submit" loading={inviting}>Send invite</Button>
-              <Button type="button" variant="ghost" onClick={() => setShowInvite(false)}>Cancel</Button>
-            </form>
-            {inviteError && (
-              <p className="text-sm text-red-500 mt-2">{inviteError}</p>
+        {/* Active members */}
+        <div className="bg-white rounded-xl border border-border overflow-hidden">
+          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+            <h2 className="font-semibold text-dark">Active members</h2>
+            {!loading && (
+              <span className="text-sm text-muted">{activeMembers.length} member{activeMembers.length !== 1 ? "s" : ""}</span>
             )}
           </div>
-        )}
-
-        <div className="bg-white rounded-xl border border-border">
           {loading ? (
-            <div className="p-12 flex justify-center">
-              <div className="w-6 h-6 border-2 border-green border-t-transparent rounded-full animate-spin" />
+            <div className="p-6 space-y-3">
+              {[0, 1, 2].map((i) => <Sk key={i} className="h-14 w-full" />)}
             </div>
+          ) : activeMembers.length === 0 ? (
+            <div className="py-12 text-center text-muted text-sm">No active members.</div>
           ) : (
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Name</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Email</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Role</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Joined</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide"></th>
+                  {["Member", "Email", "Role", "Joined", ""].map((col, i) => (
+                    <th key={col}
+                      className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${i === 4 ? "text-right" : "text-left"}`}>
+                      {col}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {members.map((m) => (
+                {activeMembers.map((m) => (
                   <tr key={m.id} className="border-b border-border last:border-0 hover:bg-surface transition-colors">
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-green-light flex items-center justify-center text-green text-sm font-bold">
+                        <div className="w-8 h-8 rounded-full bg-green-light flex items-center justify-center text-green text-sm font-bold shrink-0">
                           {m.name?.[0]?.toUpperCase() ?? "?"}
                         </div>
                         <span className="text-sm font-medium text-dark">{m.name}</span>
@@ -167,7 +240,7 @@ export default function TeamPage() {
                     <td className="px-6 py-3 text-sm text-muted">{m.email}</td>
                     <td className="px-6 py-3">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[m.role] ?? "bg-gray-100 text-gray-600"}`}>
-                        {m.role}
+                        {m.role.replace(/_/g, " ")}
                       </span>
                     </td>
                     <td className="px-6 py-3 text-sm text-muted">{formatDate(m.createdAt)}</td>
@@ -175,8 +248,7 @@ export default function TeamPage() {
                       {m.role !== "OWNER" && (
                         <button
                           onClick={() => handleRemove(m.id, m.name)}
-                          className="text-xs text-red-400 hover:text-red-600 transition-colors"
-                        >
+                          className="text-xs text-red-400 hover:text-red-600 transition-colors">
                           Remove
                         </button>
                       )}
@@ -187,7 +259,84 @@ export default function TeamPage() {
             </table>
           )}
         </div>
+
+        {/* Pending invitations */}
+        {(invitations.length > 0 || (!loading && members.length === 0)) && (
+          <div className="bg-white rounded-xl border border-border overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="font-semibold text-dark">Pending invitations</h2>
+            </div>
+            {invitations.length === 0 ? (
+              <div className="py-10 text-center">
+                <p className="text-sm text-muted">No pending invitations</p>
+                <button onClick={() => setShowInvite(true)}
+                  className="mt-2 text-sm text-green hover:underline font-medium">
+                  Invite someone →
+                </button>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    {["Email", "Role", "Sent", "Expires"].map((col) => (
+                      <th key={col} className="px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide text-left">
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {invitations.map((inv) => (
+                    <tr key={inv.id} className="border-b border-border last:border-0">
+                      <td className="px-6 py-3 text-sm text-dark">{inv.email}</td>
+                      <td className="px-6 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[inv.role] ?? "bg-gray-100 text-gray-600"}`}>
+                          {inv.role.replace(/_/g, " ")}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3 text-sm text-muted">{formatDate(inv.createdAt)}</td>
+                      <td className="px-6 py-3 text-sm text-muted">
+                        {inv.expiresAt ? formatDate(inv.expiresAt) : "7 days"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* Inactive / deactivated members */}
+        {inactiveMembers.length > 0 && (
+          <div className="bg-white rounded-xl border border-border overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="font-semibold text-dark text-muted">Deactivated</h2>
+            </div>
+            <table className="w-full">
+              <tbody>
+                {inactiveMembers.map((m) => (
+                  <tr key={m.id} className="border-b border-border last:border-0 opacity-50">
+                    <td className="px-6 py-3 text-sm text-dark">{m.name}</td>
+                    <td className="px-6 py-3 text-sm text-muted">{m.email}</td>
+                    <td className="px-6 py-3">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
+                        {m.role.replace(/_/g, " ")}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3">
+                      <span className="text-xs text-muted">Deactivated</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      {showInvite && (
+        <InviteModal onClose={() => setShowInvite(false)} onSuccess={handleInviteSuccess} />
+      )}
     </>
   );
 }

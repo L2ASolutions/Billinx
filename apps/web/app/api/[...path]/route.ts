@@ -68,7 +68,9 @@ async function proxy(
     return NextResponse.json(
       {
         statusCode: isTimeout ? 504 : 502,
-        message: isTimeout ? 'Upstream timed out' : `Upstream unreachable: ${msg}`,
+        message: isTimeout
+          ? 'Upstream timed out'
+          : `Upstream unreachable: ${msg}`,
       },
       { status: isTimeout ? 504 : 502 },
     );
