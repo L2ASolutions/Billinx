@@ -26,12 +26,25 @@ export class PrismaService
     this.$use(async (params, next) => {
       const ctx = getOptionalRequestContext();
 
-      // Skip when inside a transaction — asAdmin() already handles RLS there,
-      // and calling this.$executeRaw from within a tx runs on a different
-      // connection (a no-op for RLS and risks connection-pool contention).
-      if (ctx?.tenantId && !ctx.isAdmin && !params.runInTransaction) {
-        await this
-          .$executeRaw`SET LOCAL app.current_tenant_id = ${ctx.tenantId}`;
+      // Skip when inside a transaction — asAdmin() handles RLS with
+      // SET LOCAL row_security = OFF inside the transaction.
+      // Skip for raw queries ($executeRaw / $queryRaw) — params.model is
+      // undefined for raw operations. Without this guard, calling $executeRaw
+      // from the middleware re-triggers the middleware, creating an infinite
+      // async chain that exhausts the heap.
+      if (
+        ctx?.tenantId &&
+        !ctx.isAdmin &&
+        !params.runInTransaction &&
+        params.model
+      ) {
+        // $executeRaw uses parameterized queries ($1 placeholders), but
+        // Postgres SET does not support prepared-statement parameters.
+        // $executeRawUnsafe sends the literal string; tenantId is a
+        // database-generated UUID so there is no injection risk.
+        await this.$executeRawUnsafe(
+          `SET LOCAL app.current_tenant_id = '${ctx.tenantId}'`,
+        );
       }
 
       return next(params);

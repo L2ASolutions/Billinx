@@ -73,20 +73,20 @@ export class InvoiceRepository {
       where.paymentStatus = { not: 'PAID' };
     }
 
+    // Single asAdmin() with sequential awaits. Concurrent $transaction calls
+    // each hold ~200 MB in Prisma's query engine. Sequential queries inside
+    // one transaction are safe and memory-efficient.
     const [data, total] = await this.prisma.asAdmin(async (tx) => {
-      return Promise.all([
-        tx.invoice.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy: { createdAt: 'desc' },
-          // stateHistory is intentionally excluded from list queries — full
-          // history is only needed on the single-invoice detail view (findById).
-          // Including it here caused N extra sub-queries per page load and
-          // was the primary cause of 504 timeouts on the dashboard list.
-        }),
-        tx.invoice.count({ where }),
-      ]);
+      const data = await tx.invoice.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        // stateHistory excluded from list queries — full history is only
+        // needed on the single-invoice detail view (findById).
+      });
+      const total = await tx.invoice.count({ where });
+      return [data, total] as const;
     });
 
     return { data, total, page, limit };
@@ -131,12 +131,17 @@ export class InvoiceRepository {
 
   async countByTenant(tenantId: string) {
     return this.prisma.asAdmin(async (tx) => {
-      return Promise.all([
-        tx.invoice.count({ where: { tenantId } }),
-        tx.invoice.count({ where: { tenantId, status: 'ACCEPTED' } }),
-        tx.invoice.count({ where: { tenantId, status: 'REJECTED' } }),
-        tx.invoice.count({ where: { tenantId, status: 'DRAFT' } }),
-      ]);
+      const total = await tx.invoice.count({ where: { tenantId } });
+      const accepted = await tx.invoice.count({
+        where: { tenantId, status: 'ACCEPTED' },
+      });
+      const rejected = await tx.invoice.count({
+        where: { tenantId, status: 'REJECTED' },
+      });
+      const draft = await tx.invoice.count({
+        where: { tenantId, status: 'DRAFT' },
+      });
+      return [total, accepted, rejected, draft] as const;
     });
   }
 }
