@@ -256,8 +256,12 @@ function NewInvoiceForm() {
   const [showPreview, setShowPreview] = useState(false);
   const [showCatalog, setShowCatalog] = useState<number | null>(null); // line index
   const [draftLoaded, setDraftLoaded] = useState(false);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
 
   const draftId = params.get("id");
+  // Track the active draft ID — may be set after "Save draft" on a new invoice
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(draftId);
 
   const [form, setForm] = useState({
     invoiceType: params.get("type") ?? "STANDARD",
@@ -380,6 +384,64 @@ function NewInvoiceForm() {
 
   const needsOriginalIrn = ["CREDIT_NOTE", "DEBIT_NOTE"].includes(form.invoiceType);
 
+  async function doSaveDraft() {
+    setDraftSaving(true);
+    setError("");
+    try {
+      const typeCodeMap: Record<string, string> = {
+        STANDARD: "380", CREDIT_NOTE: "381", DEBIT_NOTE: "383", PROFORMA: "325",
+      };
+      const payload = {
+        invoiceTypeCode: typeCodeMap[form.invoiceType] ?? "380",
+        invoiceKind: form.invoiceKind,
+        currency: form.currency,
+        issueDate: new Date(form.issueDate).toISOString(),
+        dueDate: form.paymentDueDate ? new Date(form.paymentDueDate).toISOString() : undefined,
+        sourceReference: form.sourceReference || undefined,
+        originalIrn: form.originalIrn || undefined,
+        seller: {
+          tin: form.sellerTin || undefined,
+          partyName: form.sellerName || undefined,
+          address: form.sellerAddress || undefined,
+        },
+        buyer: {
+          partyName: form.buyerName || undefined,
+          tin: form.buyerTin || undefined,
+          email: form.buyerEmail || undefined,
+          address: form.buyerAddress || undefined,
+        },
+        lineItems: lineItems
+          .filter((li) => li.description)
+          .map((item) => ({
+            ...item,
+            totalPrice: item.quantity * item.unitPrice * (1 + item.vatRate / 100),
+            vatAmount: item.quantity * item.unitPrice * (item.vatRate / 100),
+          })),
+        taxTotal: [{ taxAmount: totals.tax }],
+        legalMonetaryTotal: {
+          lineExtensionAmount: totals.subtotal,
+          taxExclusiveAmount: totals.subtotal,
+          taxInclusiveAmount: totals.total,
+          payableAmount: totals.total,
+        },
+      };
+
+      let saved: any;
+      if (activeDraftId) {
+        saved = await invoiceApi.updateDraftFields(activeDraftId, payload);
+      } else {
+        saved = await invoiceApi.saveDraft(payload);
+        setActiveDraftId((saved as any).id);
+      }
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 3000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save draft");
+    } finally {
+      setDraftSaving(false);
+    }
+  }
+
   async function doSubmit() {
     setError("");
     setLoading(true);
@@ -424,11 +486,12 @@ function NewInvoiceForm() {
         },
       };
 
-      // When resuming a draft (?id= param), submit the EXISTING draft invoice
-      // (update its fields + queue for FIRS) instead of creating a new record.
+      // When resuming a draft (?id= param OR after saving a new draft in this
+      // session), submit the EXISTING draft invoice (update fields + queue for
+      // FIRS) instead of creating a new record.
       // This prevents the duplicate: original-DRAFT + new-QUEUED scenario.
-      const invoice = draftId
-        ? await invoiceApi.submitDraft(draftId, payload) as { id: string }
+      const invoice = activeDraftId
+        ? await invoiceApi.submitDraft(activeDraftId, payload) as { id: string }
         : await invoiceApi.create(payload) as { id: string };
 
       router.push(`/invoices/${invoice.id}`);
@@ -625,9 +688,26 @@ function NewInvoiceForm() {
             <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>
           )}
 
-          <div className="flex gap-3">
+          {draftSaved && (
+            <div className="p-3 bg-green-50 border border-green/20 rounded-xl text-sm text-green-700 flex items-center gap-2">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              Draft saved — you can resume it from the invoices list.
+            </div>
+          )}
+          <div className="flex gap-3 flex-wrap">
             <Button type="submit" size="lg">
               Preview &amp; submit →
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              loading={draftSaving}
+              onClick={doSaveDraft}
+            >
+              {draftSaved ? "✓ Saved" : "Save draft"}
             </Button>
             <Button type="button" variant="secondary" size="lg" onClick={() => router.push("/invoices")}>
               Cancel

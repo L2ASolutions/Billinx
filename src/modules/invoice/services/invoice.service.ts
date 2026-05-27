@@ -698,6 +698,16 @@ export class InvoiceService {
   }
 
   private mapToResponse(invoice: any): InvoiceResponse {
+    const typeNameMap: Record<string, string> = {
+      STANDARD: 'STANDARD',
+      CREDIT_NOTE: 'CREDIT_NOTE',
+      DEBIT_NOTE: 'DEBIT_NOTE',
+      PROFORMA: 'PROFORMA',
+      '380': 'STANDARD',
+      '381': 'CREDIT_NOTE',
+      '383': 'DEBIT_NOTE',
+      '325': 'PROFORMA',
+    };
     return {
       id: invoice.id,
       tenantId: invoice.tenantId,
@@ -705,6 +715,8 @@ export class InvoiceService {
       firsConfirmedIrn: invoice.firsConfirmedIrn ?? undefined,
       sourceReference: invoice.sourceReference ?? undefined,
       invoiceTypeCode: invoice.invoiceTypeCode,
+      invoiceType: typeNameMap[invoice.invoiceTypeCode] ?? invoice.invoiceTypeCode,
+      invoiceKind: invoice.invoiceKind ?? undefined,
       status: invoice.status,
       sellerTin: invoice.sellerTin,
       sellerName: invoice.sellerName,
@@ -715,7 +727,15 @@ export class InvoiceService {
       currency: invoice.currency,
       subtotal: Number(invoice.subtotal),
       vatAmount: Number(invoice.vatAmount),
+      taxAmount: Number(invoice.vatAmount),
       totalAmount: Number(invoice.totalAmount),
+      amountPaid: Number(invoice.amountPaid ?? 0),
+      paymentStatus: invoice.paymentStatus ?? undefined,
+      paymentDueDate:
+        invoice.paymentDueDate instanceof Date
+          ? invoice.paymentDueDate.toISOString()
+          : invoice.paymentDueDate ?? undefined,
+      isOverdue: invoice.isOverdue ?? false,
       lineItems: invoice.lineItems as any[],
       taxTotal: invoice.taxTotal as any[],
       legalMonetaryTotal: invoice.legalMonetaryTotal,
@@ -723,6 +743,29 @@ export class InvoiceService {
       allowanceCharges: invoice.allowanceCharges as any[],
       note: invoice.note ?? undefined,
       qrCodeBase64: invoice.qrCodeBase64 ?? undefined,
+      stateHistory: invoice.stateHistory
+        ? (invoice.stateHistory as any[]).map((h) => ({
+            fromStatus: h.fromStatus ?? null,
+            toStatus: h.toStatus,
+            createdAt:
+              h.createdAt instanceof Date
+                ? h.createdAt.toISOString()
+                : h.createdAt,
+            reason: h.reason ?? null,
+          }))
+        : undefined,
+      submissionAttempts: invoice.submissionAttempts
+        ? (invoice.submissionAttempts as any[]).map((a) => ({
+            id: a.id,
+            attemptNumber: a.attemptNumber,
+            status: a.status,
+            createdAt:
+              a.createdAt instanceof Date
+                ? a.createdAt.toISOString()
+                : a.createdAt,
+            errorMessage: a.errorMessage ?? null,
+          }))
+        : undefined,
       submittedAt: invoice.submittedAt?.toISOString(),
       acceptedAt: invoice.acceptedAt?.toISOString(),
       rejectedAt: invoice.rejectedAt?.toISOString(),
@@ -730,5 +773,167 @@ export class InvoiceService {
       createdAt: invoice.createdAt.toISOString(),
       updatedAt: invoice.updatedAt.toISOString(),
     };
+  }
+
+  async saveDraftInvoice(
+    tenantId: string,
+    environment: string,
+    actor: string,
+    request: Record<string, any>,
+  ): Promise<InvoiceResponse> {
+    const tenant = await this.prisma.asAdmin((tx) =>
+      tx.tenant.findUnique({ where: { id: tenantId }, select: { tin: true } }),
+    );
+    const platformIrn = await this.irnService.generateUniqueIrn(
+      tenant?.tin ?? tenantId,
+    );
+
+    const invoice = await this.invoiceRepository.create({
+      tenantId,
+      environment,
+      schemaVersion: request.schemaVersion ?? '2.0',
+      invoiceTypeCode: this.mapInvoiceTypeCode(
+        request.invoiceTypeCode ?? '380',
+      ),
+      platformIrn,
+      sourceReference: request.sourceReference ?? null,
+      buyerReference: null,
+      orderReference: null,
+      accountingCost: null,
+      sellerTin: request.seller?.tin ?? '',
+      sellerName: request.seller?.partyName ?? '',
+      buyerTin: request.buyer?.tin ?? null,
+      buyerName: request.buyer?.partyName ?? '',
+      issueDate: request.issueDate ? new Date(request.issueDate) : new Date(),
+      dueDate: request.dueDate ? new Date(request.dueDate) : null,
+      currency: request.currency ?? 'NGN',
+      subtotal: request.legalMonetaryTotal?.lineExtensionAmount ?? 0,
+      vatAmount: (request.taxTotal ?? []).reduce(
+        (sum: number, t: any) => sum + (t.taxAmount ?? 0),
+        0,
+      ),
+      totalAmount: request.legalMonetaryTotal?.payableAmount ?? 0,
+      lineItems: JSON.parse(JSON.stringify(request.lineItems ?? [])),
+      taxTotal: JSON.parse(JSON.stringify(request.taxTotal ?? [])),
+      legalMonetaryTotal: JSON.parse(
+        JSON.stringify(request.legalMonetaryTotal ?? {}),
+      ),
+      invoiceKind: request.invoiceKind ?? null,
+      paymentStatus: null,
+      originalIrn: request.originalIrn ?? null,
+      note: request.note ?? null,
+      metadata: JSON.parse(
+        JSON.stringify({
+          ...(request.metadata ?? {}),
+          sellerParty: request.seller ?? null,
+          buyerParty: request.buyer ?? null,
+        }),
+      ),
+      status: 'DRAFT',
+    });
+
+    await this.invoiceRepository.addStateHistory({
+      invoiceId: invoice.id,
+      tenantId,
+      toStatus: 'DRAFT',
+      actor,
+      reason: 'Draft saved',
+    });
+
+    this.activityService.track({
+      tenantId,
+      eventType: 'INVOICE_CREATED',
+      actor,
+      entityType: 'Invoice',
+      entityId: invoice.id,
+      payload: { invoiceId: invoice.id, platformIrn, action: 'draft_saved' },
+    });
+
+    return this.mapToResponse(invoice);
+  }
+
+  async updateDraftFields(
+    id: string,
+    tenantId: string,
+    actor: string,
+    body: Record<string, any>,
+  ): Promise<InvoiceResponse> {
+    const invoice = await this.prisma.asAdmin((tx) =>
+      tx.invoice.findUnique({ where: { id } }),
+    );
+
+    if (!invoice || invoice.tenantId !== tenantId) {
+      throw new NotFoundException(`Invoice ${id} not found`);
+    }
+
+    if (invoice.status !== 'DRAFT') {
+      throw new BadRequestException('Only DRAFT invoices can be updated');
+    }
+
+    const updated = await this.prisma.asAdmin((tx) =>
+      tx.invoice.update({
+        where: { id },
+        data: {
+          sellerTin: body.seller?.tin ?? invoice.sellerTin,
+          sellerName: body.seller?.partyName ?? invoice.sellerName,
+          buyerTin: body.buyer?.tin ?? invoice.buyerTin,
+          buyerName: body.buyer?.partyName ?? invoice.buyerName,
+          issueDate: body.issueDate
+            ? new Date(body.issueDate)
+            : invoice.issueDate,
+          dueDate: body.dueDate ? new Date(body.dueDate) : invoice.dueDate,
+          currency: body.currency ?? invoice.currency,
+          invoiceKind: body.invoiceKind ?? invoice.invoiceKind,
+          subtotal:
+            body.legalMonetaryTotal?.lineExtensionAmount ?? invoice.subtotal,
+          vatAmount: body.taxTotal
+            ? (body.taxTotal as any[]).reduce(
+                (sum: number, t: any) => sum + (t.taxAmount ?? 0),
+                0,
+              )
+            : invoice.vatAmount,
+          totalAmount:
+            body.legalMonetaryTotal?.payableAmount ?? invoice.totalAmount,
+          lineItems: body.lineItems
+            ? JSON.parse(JSON.stringify(body.lineItems))
+            : invoice.lineItems,
+          taxTotal: body.taxTotal
+            ? JSON.parse(JSON.stringify(body.taxTotal))
+            : invoice.taxTotal,
+          legalMonetaryTotal: body.legalMonetaryTotal
+            ? JSON.parse(JSON.stringify(body.legalMonetaryTotal))
+            : invoice.legalMonetaryTotal,
+          sourceReference:
+            body.sourceReference !== undefined
+              ? body.sourceReference
+              : invoice.sourceReference,
+          originalIrn:
+            body.originalIrn !== undefined
+              ? body.originalIrn
+              : invoice.originalIrn,
+          metadata:
+            body.seller || body.buyer
+              ? JSON.parse(
+                  JSON.stringify({
+                    ...((invoice.metadata as any) ?? {}),
+                    sellerParty: body.seller ?? null,
+                    buyerParty: body.buyer ?? null,
+                  }),
+                )
+              : invoice.metadata,
+        },
+      }),
+    );
+
+    this.activityService.track({
+      tenantId,
+      eventType: 'INVOICE_CREATED',
+      actor,
+      entityType: 'Invoice',
+      entityId: id,
+      payload: { invoiceId: id, action: 'draft_updated' },
+    });
+
+    return this.mapToResponse(updated);
   }
 }
