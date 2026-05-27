@@ -18,7 +18,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { WebhookService } from './services/webhook.service';
-import { ApiKeyGuard } from '../identity/guards/api-key.guard';
+import { FlexAuthGuard } from '../identity/guards/flex-auth.guard';
 import { getRequestContext } from '../../shared/context/request-context';
 import {
   CreateSubscriptionRequest,
@@ -28,7 +28,7 @@ import {
 
 @ApiTags('Webhooks')
 @ApiBearerAuth()
-@UseGuards(ApiKeyGuard)
+@UseGuards(FlexAuthGuard)
 @Controller('v1/webhooks')
 export class WebhookController {
   constructor(private readonly webhookService: WebhookService) {}

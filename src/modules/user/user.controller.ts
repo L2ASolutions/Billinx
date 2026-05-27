@@ -16,6 +16,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
 import { UserService } from './services/user.service';
 import { MfaService } from './services/mfa.service';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';
 import { AuthRateLimitGuard } from '../../shared/guards/auth-rate-limit.guard';
 import { getRequestContext } from '../../shared/context/request-context';
@@ -42,6 +43,7 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly mfaService: MfaService,
+    private readonly prisma: PrismaService,
   ) {}
 
   // ── Public endpoints (no auth required) ───────────────────────────────────
@@ -242,6 +244,35 @@ export class UserController {
     return this.userService.changePassword(
       userId,
       body as ChangePasswordRequest,
+    );
+  }
+
+  // ── Tenant self-service endpoints (JWT auth) ─────────────────────────────
+
+  @Get('tenants/me')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current tenant profile' })
+  async getMyTenant() {
+    const ctx = getRequestContext();
+    return this.prisma.asAdmin((tx) =>
+      tx.tenant.findUniqueOrThrow({ where: { id: ctx.tenantId } }),
+    );
+  }
+
+  @Patch('tenants/me')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update current tenant profile' })
+  async updateMyTenant(@Body() body: Record<string, any>) {
+    const ctx = getRequestContext();
+    const allowed = ['name', 'contactEmail', 'contactPhone', 'address'] as const;
+    const data: Record<string, any> = {};
+    for (const key of allowed) {
+      if (body[key] !== undefined) data[key] = body[key];
+    }
+    return this.prisma.asAdmin((tx) =>
+      tx.tenant.update({ where: { id: ctx.tenantId }, data }),
     );
   }
 
