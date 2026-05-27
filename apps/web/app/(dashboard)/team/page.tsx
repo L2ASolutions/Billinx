@@ -149,8 +149,19 @@ export default function TeamPage() {
     setLoadError("");
     try {
       const res = await userApi.list();
-      const data = res.data as (Member & { status?: string })[];
-      setMembers(data.filter((u) => !u.status || u.status === "ACTIVE"));
+      // Backend returns { data: UserResponse[], total } where UserResponse has
+      // fullName (not name) and roles: string[] (not role: string).
+      const rawData = Array.isArray(res) ? res : ((res as any).data ?? []);
+      const data: (Member & { status?: string })[] = (rawData as any[]).map((u: any) => ({
+        id: u.id,
+        name: u.fullName ?? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() ?? u.name ?? "",
+        email: u.email ?? "",
+        role: u.role ?? u.roles?.[0] ?? "VIEWER",
+        createdAt: u.createdAt,
+        isActive: u.isActive ?? true,
+        status: u.status,
+      }));
+      setMembers(data.filter((u) => u.isActive !== false));
       // Surface pending invitations if backend returns them in the same list
       setInvitations(data.filter((u) => u.status === "PENDING") as unknown as Invitation[]);
     } catch (err: unknown) {
@@ -240,7 +251,7 @@ export default function TeamPage() {
                     <td className="px-6 py-3 text-sm text-muted">{m.email}</td>
                     <td className="px-6 py-3">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[m.role] ?? "bg-gray-100 text-gray-600"}`}>
-                        {m.role.replace(/_/g, " ")}
+                        {m.role?.replace(/_/g, " ") ?? m.role}
                       </span>
                     </td>
                     <td className="px-6 py-3 text-sm text-muted">{formatDate(m.createdAt)}</td>
@@ -291,7 +302,7 @@ export default function TeamPage() {
                       <td className="px-6 py-3 text-sm text-dark">{inv.email}</td>
                       <td className="px-6 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[inv.role] ?? "bg-gray-100 text-gray-600"}`}>
-                          {inv.role.replace(/_/g, " ")}
+                          {inv.role?.replace(/_/g, " ") ?? inv.role}
                         </span>
                       </td>
                       <td className="px-6 py-3 text-sm text-muted">{formatDate(inv.createdAt)}</td>
@@ -320,7 +331,7 @@ export default function TeamPage() {
                     <td className="px-6 py-3 text-sm text-muted">{m.email}</td>
                     <td className="px-6 py-3">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
-                        {m.role.replace(/_/g, " ")}
+                        {m.role?.replace(/_/g, " ") ?? m.role}
                       </span>
                     </td>
                     <td className="px-6 py-3">

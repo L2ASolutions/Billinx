@@ -381,8 +381,10 @@ export default function InvoiceDetailPage() {
   }
 
   const isAccepted = invoice.status === "ACCEPTED";
+  const isDraft = invoice.status === "DRAFT";
   const isRejected = ["REJECTED", "SUBMISSION_FAILED", "DEAD_LETTERED", "VALIDATION_FAILED"].includes(invoice.status);
   const canCancel = ["DRAFT", "QUEUED", "VALIDATION_FAILED", "ACCEPTED"].includes(invoice.status);
+  // Show Record payment for any ACCEPTED invoice that is not fully PAID.
   const canRecordPayment = isAccepted && invoice.paymentStatus !== "PAID";
   const amountOutstanding = invoice.totalAmount - (invoice.amountPaid ?? 0);
 
@@ -393,6 +395,11 @@ export default function InvoiceDetailPage() {
         actions={
           <div className="flex gap-2 flex-wrap">
             <Link href="/invoices"><Button variant="secondary" size="sm">← Back</Button></Link>
+            {isDraft && (
+              <Link href={`/invoices/new?id=${invoice.id}`}>
+                <Button size="sm" variant="secondary">Edit draft →</Button>
+              </Link>
+            )}
             {isAccepted && (
               <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadXml}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"

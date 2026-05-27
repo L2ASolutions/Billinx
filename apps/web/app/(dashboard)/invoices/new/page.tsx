@@ -255,6 +255,9 @@ function NewInvoiceForm() {
   const [error, setError] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [showCatalog, setShowCatalog] = useState<number | null>(null); // line index
+  const [draftLoaded, setDraftLoaded] = useState(false);
+
+  const draftId = params.get("id");
 
   const [form, setForm] = useState({
     invoiceType: params.get("type") ?? "STANDARD",
@@ -277,6 +280,41 @@ function NewInvoiceForm() {
   useEffect(() => {
     if (user?.tenantName) setForm((f) => ({ ...f, sellerName: user.tenantName ?? "" }));
   }, [user]);
+
+  // Pre-load an existing DRAFT invoice when ?id= param is present
+  useEffect(() => {
+    if (!draftId) return;
+    invoiceApi.get(draftId).then((data: any) => {
+      if (!data || data.status !== "DRAFT") return;
+      setForm({
+        invoiceType: data.invoiceType ?? "STANDARD",
+        invoiceKind: data.invoiceKind ?? "B2B",
+        currency: data.currency ?? "NGN",
+        issueDate: data.issueDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+        paymentDueDate: data.paymentDueDate?.slice(0, 10) ?? "",
+        sellerName: data.sellerName ?? "",
+        sellerTin: data.sellerTin ?? "",
+        sellerAddress: data.sellerAddress ?? "",
+        buyerName: data.buyerName ?? "",
+        buyerTin: data.buyerTin ?? "",
+        buyerEmail: data.buyerEmail ?? "",
+        buyerAddress: data.buyerAddress ?? "",
+        originalIrn: data.originalIrn ?? "",
+        sourceReference: data.sourceReference ?? "",
+      });
+      if (Array.isArray(data.lineItems) && data.lineItems.length > 0) {
+        setLineItems(data.lineItems.map((li: any) => ({
+          description: li.description ?? "",
+          quantity: li.quantity ?? 1,
+          unitPrice: li.unitPrice ?? 0,
+          vatRate: li.vatRate ?? 7.5,
+          hsnCode: li.hsnCode ?? "",
+        })));
+      }
+      setDraftLoaded(true);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftId]);
 
   const [lineItems, setLineItems] = useState<LineItem[]>([{ ...EMPTY_LINE }]);
 
@@ -390,8 +428,16 @@ function NewInvoiceForm() {
 
   return (
     <>
-      <Topbar title="Create invoice" />
+      <Topbar title={draftLoaded ? "Continue editing draft" : "Create invoice"} />
       <div className="p-6">
+        {draftLoaded && (
+          <div className="max-w-4xl mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex items-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            Resuming a saved draft — review the details and submit when ready.
+          </div>
+        )}
         <form onSubmit={handleFormSubmit} className="max-w-4xl space-y-6">
 
           {/* ── Invoice details ─────────────────────────────────────────────── */}
