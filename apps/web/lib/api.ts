@@ -186,6 +186,10 @@ export const invoiceApi = {
   getXml: (id: string) => requestBlob(`/v1/invoices/dashboard/${id}/xml`),
   getStatus: (id: string) =>
     api.get<unknown>(`/v1/invoices/dashboard/${id}/status`),
+  // Submit an existing DRAFT invoice without creating a duplicate.
+  // Updates the draft's fields then queues it for FIRS submission.
+  submitDraft: (id: string, data: unknown) =>
+    api.post<unknown>(`/v1/invoices/dashboard/${id}/submit`, data),
   // Payments — dashboard routes (BUG-002)
   recordPayment: (
     id: string,

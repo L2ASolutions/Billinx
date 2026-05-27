@@ -547,4 +547,21 @@ export class InvoiceController {
     const ctx = this.getCtx(req);
     return this.paymentService.listPayments(id, ctx.tenantId);
   }
+
+  @Post('dashboard/:id/submit')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Submit an existing DRAFT invoice (update fields + queue for FIRS submission)',
+  })
+  async submitDraftDashboard(
+    @Param('id') id: string,
+    @Body() body: Record<string, any>,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.submitDraft(id, ctx.tenantId, ctx.actor, body);
+  }
 }
