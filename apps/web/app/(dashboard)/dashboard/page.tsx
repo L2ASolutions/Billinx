@@ -149,22 +149,20 @@ export default function DashboardPage() {
     setStatsLoading(true);
     setQueueLoading(true);
 
-    // Call 1 — stats (feeds all 4 metric cards + recent-invoices table)
-    try {
-      const statsData = await invoiceApi.stats();
-      setStats(statsData as Stats);
-    } catch {
-      setStats(null);
-    }
+    // Fire both requests in parallel — previously sequential, costing 2× latency.
+    const [statsResult, listResult] = await Promise.allSettled([
+      invoiceApi.stats(),
+      invoiceApi.list({ page: 1, limit: 5 } as Record<string, string | number>),
+    ]);
+
+    setStats(statsResult.status === 'fulfilled' ? (statsResult.value as Stats) : null);
     setStatsLoading(false);
 
-    // Call 2 — list (feeds submission queue + recent activity panels)
-    try {
-      const listData = await invoiceApi.list({ page: 1, limit: 5 } as Record<string, string | number>);
-      setQueue((listData as { data: QueueInvoice[] }).data ?? []);
-    } catch {
-      setQueue([]);
-    }
+    setQueue(
+      listResult.status === 'fulfilled'
+        ? ((listResult.value as { data: QueueInvoice[] }).data ?? [])
+        : [],
+    );
     setQueueLoading(false);
 
     setLastRefreshed(new Date());
