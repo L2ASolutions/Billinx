@@ -80,7 +80,10 @@ export class InvoiceRepository {
           skip,
           take: limit,
           orderBy: { createdAt: 'desc' },
-          include: { stateHistory: { orderBy: { createdAt: 'asc' } } },
+          // stateHistory is intentionally excluded from list queries — full
+          // history is only needed on the single-invoice detail view (findById).
+          // Including it here caused N extra sub-queries per page load and
+          // was the primary cause of 504 timeouts on the dashboard list.
         }),
         tx.invoice.count({ where }),
       ]);
