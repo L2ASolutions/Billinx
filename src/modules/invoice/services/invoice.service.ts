@@ -462,35 +462,44 @@ export class InvoiceService {
       'SUBMISSION_FAILED',
     ] as const;
 
+    // Run all queries inside a single asAdmin() transaction with sequential
+    // awaits. Concurrent $transaction calls (via Promise.all) each hold ~200 MB
+    // in Prisma's query engine, causing a ~1.2 GB heap spike per request.
+    // Promise.all *inside* a single $transaction is also unsafe (concurrent
+    // ops confuse the interactive-transaction state machine). Sequential awaits
+    // inside one transaction is both safe and memory-efficient.
     const [total, accepted, rejected, pending, amountAgg, recentInvoices] =
-      await this.prisma.asAdmin(async (tx) =>
-        Promise.all([
-          tx.invoice.count({ where: { tenantId } }),
-          tx.invoice.count({ where: { tenantId, status: 'ACCEPTED' } }),
-          tx.invoice.count({ where: { tenantId, status: 'REJECTED' } }),
-          tx.invoice.count({
-            where: { tenantId, status: { in: PENDING_STATUSES as any } },
-          }),
-          tx.invoice.aggregate({
-            where: { tenantId },
-            _sum: { totalAmount: true },
-          }),
-          tx.invoice.findMany({
-            where: { tenantId },
-            orderBy: { createdAt: 'desc' },
-            take: 5,
-            select: {
-              id: true,
-              platformIrn: true,
-              buyerName: true,
-              totalAmount: true,
-              currency: true,
-              status: true,
-              createdAt: true,
-            },
-          }),
-        ]),
-      );
+      await this.prisma.asAdmin(async (tx) => {
+        const total = await tx.invoice.count({ where: { tenantId } });
+        const accepted = await tx.invoice.count({
+          where: { tenantId, status: 'ACCEPTED' },
+        });
+        const rejected = await tx.invoice.count({
+          where: { tenantId, status: 'REJECTED' },
+        });
+        const pending = await tx.invoice.count({
+          where: { tenantId, status: { in: PENDING_STATUSES as any } },
+        });
+        const amountAgg = await tx.invoice.aggregate({
+          where: { tenantId },
+          _sum: { totalAmount: true },
+        });
+        const recentInvoices = await tx.invoice.findMany({
+          where: { tenantId },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            platformIrn: true,
+            buyerName: true,
+            totalAmount: true,
+            currency: true,
+            status: true,
+            createdAt: true,
+          },
+        });
+        return [total, accepted, rejected, pending, amountAgg, recentInvoices] as const;
+      });
 
     return {
       total,

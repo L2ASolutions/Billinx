@@ -15,6 +15,7 @@ import { Response } from 'express';
 import { ActivityService } from './services/activity.service';
 import { AdminJwtGuard } from '../admin/guards/admin-jwt.guard';
 import { ApiKeyGuard } from '../identity/guards/api-key.guard';
+import { FlexAuthGuard } from '../identity/guards/flex-auth.guard';
 import {
   ActivityEventType,
   ErrorSeverity,
@@ -28,7 +29,7 @@ export class ActivityController {
   // ── Activity endpoints (tenant-scoped) ─────────────────────────────────────
 
   @Get('activity')
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(FlexAuthGuard)
   @ApiOperation({ summary: 'List activity events for authenticated tenant' })
   @ApiHeader({ name: 'Authorization', required: true })
   @ApiQuery({ name: 'eventType', required: false })
@@ -60,7 +61,7 @@ export class ActivityController {
   }
 
   @Get('activity/export')
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(FlexAuthGuard)
   @ApiOperation({ summary: 'Export activity as CSV for authenticated tenant' })
   @ApiHeader({ name: 'Authorization', required: true })
   async exportTenantActivity(
