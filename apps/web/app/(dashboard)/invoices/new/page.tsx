@@ -6,7 +6,7 @@ import { Suspense } from "react";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { invoiceApi, productApi } from "@/lib/api";
+import { api, invoiceApi, productApi } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 
@@ -276,10 +276,24 @@ function NewInvoiceForm() {
     sourceReference: "",
   });
 
-  // Pre-fill seller from tenant profile
+  // Pre-fill seller from tenant profile (name + TIN).
+  // Only applied for new invoices — draft loading below overwrites these anyway.
   useEffect(() => {
-    if (user?.tenantName) setForm((f) => ({ ...f, sellerName: user.tenantName ?? "" }));
-  }, [user]);
+    if (draftId) return; // draft load handles its own pre-fill
+    api.get<{ name?: string; tin?: string }>("/v1/tenants/me")
+      .then((t) => {
+        setForm((f) => ({
+          ...f,
+          sellerName: t?.name ?? f.sellerName,
+          sellerTin:  t?.tin  ?? f.sellerTin,
+        }));
+      })
+      .catch(() => {
+        // Fallback: use tenantName from JWT if available
+        if (user?.tenantName) setForm((f) => ({ ...f, sellerName: user.tenantName ?? "" }));
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftId]);
 
   // Pre-load an existing DRAFT invoice when ?id= param is present
   useEffect(() => {
@@ -410,7 +424,13 @@ function NewInvoiceForm() {
         },
       };
 
-      const invoice = await invoiceApi.create(payload) as { id: string };
+      // When resuming a draft (?id= param), submit the EXISTING draft invoice
+      // (update its fields + queue for FIRS) instead of creating a new record.
+      // This prevents the duplicate: original-DRAFT + new-QUEUED scenario.
+      const invoice = draftId
+        ? await invoiceApi.submitDraft(draftId, payload) as { id: string }
+        : await invoiceApi.create(payload) as { id: string };
+
       router.push(`/invoices/${invoice.id}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to create invoice";
