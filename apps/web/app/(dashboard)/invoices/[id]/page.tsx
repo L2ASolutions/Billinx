@@ -33,6 +33,13 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
 
 const PROVIDERS = ["MANUAL", "PAYSTACK", "FLUTTERWAVE", "BANK_TRANSFER"] as const;
 
+const PROVIDER_BADGE: Record<string, string> = {
+  MANUAL:        "bg-gray-100 text-gray-600",
+  BANK_TRANSFER: "bg-blue-50 text-blue-700",
+  PAYSTACK:      "bg-green-50 text-green-700",
+  FLUTTERWAVE:   "bg-orange-50 text-orange-700",
+};
+
 const REJECTION_FIXES: Record<string, string> = {
   "INVALID_TIN":           "Verify the buyer or seller TIN is in the format 12345678-0001 and is registered with FIRS.",
   "MISSING_HSN":           "Add the HSN/HS code for each line item. This is required for all B2B invoices.",
@@ -572,8 +579,8 @@ export default function InvoiceDetailPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-dark">{formatCurrency(p.amount, p.currency)}</span>
-                        <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
-                          {p.provider.replace(/_/g, " ")}
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${PROVIDER_BADGE[p.provider] ?? "bg-gray-100 text-gray-600"}`}>
+                          {p.provider === "BANK_TRANSFER" ? "Bank Transfer" : p.provider.charAt(0) + p.provider.slice(1).toLowerCase()}
                         </span>
                       </div>
                       <p className="text-xs text-muted mt-0.5">

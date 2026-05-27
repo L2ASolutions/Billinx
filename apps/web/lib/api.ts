@@ -190,6 +190,12 @@ export const invoiceApi = {
   // Updates the draft's fields then queues it for FIRS submission.
   submitDraft: (id: string, data: unknown) =>
     api.post<unknown>(`/v1/invoices/dashboard/${id}/submit`, data),
+  // Save incomplete form as DRAFT without submitting to FIRS.
+  saveDraft: (data: unknown) =>
+    api.post<unknown>('/v1/invoices/dashboard/save-draft', data),
+  // Update an existing DRAFT's fields without submitting.
+  updateDraftFields: (id: string, data: unknown) =>
+    api.patch<unknown>(`/v1/invoices/dashboard/${id}`, data),
   // Payments — dashboard routes (BUG-002)
   recordPayment: (
     id: string,

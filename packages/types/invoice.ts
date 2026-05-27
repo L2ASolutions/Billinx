@@ -45,6 +45,8 @@ export interface InvoiceResponse {
   firsConfirmedIrn?: string;
   sourceReference?: string;
   invoiceTypeCode: InvoiceTypeCode;
+  invoiceType?: string;
+  invoiceKind?: string;
   status: InvoiceStatus;
   sellerTin: string;
   sellerName: string;
@@ -55,7 +57,12 @@ export interface InvoiceResponse {
   currency: string;
   subtotal: number;
   vatAmount: number;
+  taxAmount?: number;
   totalAmount: number;
+  amountPaid?: number;
+  paymentStatus?: string;
+  paymentDueDate?: string;
+  isOverdue?: boolean;
   lineItems: any[];
   taxTotal: any[];
   legalMonetaryTotal: any;
@@ -63,6 +70,8 @@ export interface InvoiceResponse {
   allowanceCharges?: any[];
   note?: string;
   qrCodeBase64?: string;
+  stateHistory?: any[];
+  submissionAttempts?: any[];
   submittedAt?: string;
   acceptedAt?: string;
   rejectedAt?: string;
