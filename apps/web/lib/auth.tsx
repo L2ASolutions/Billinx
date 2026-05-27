@@ -1,8 +1,14 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useState, useCallback, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { authApi } from "./api";
+
+// useLayoutEffect fires synchronously after DOM mutations, before the browser
+// paints — so auth resolves before the first visible frame.  On the server
+// it degrades to useEffect (effects never run server-side anyway).
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 interface User {
   id: string;
@@ -74,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const token = localStorage.getItem("accessToken");
     if (token) {
       hydrateFromToken(token);
