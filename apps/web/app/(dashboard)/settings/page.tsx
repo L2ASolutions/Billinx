@@ -58,7 +58,9 @@ function ApiKeysTab() {
     setLoadError("");
     try {
       const res = await apiKeyApi.list();
-      setKeys(res.data as ApiKey[]);
+      // Backend returns ApiKey[] directly (not { data: [] }) — handle both shapes.
+      const arr = (Array.isArray(res) ? res : (res as any).data ?? []) as ApiKey[];
+      setKeys(arr);
     } catch (err: unknown) {
       setLoadError(err instanceof Error ? err.message : "Failed to load API keys");
     } finally {
@@ -176,7 +178,7 @@ function ApiKeysTab() {
                   </div>
                   <p className="text-xs text-muted mt-1">
                     <span className="font-mono">{key.keyPrefix}••••</span>
-                    {" · "}{key.requestCount.toLocaleString()} requests
+                    {" · "}{(key.requestCount ?? 0).toLocaleString()} requests
                     {" · "}Created {formatDate(key.createdAt)}
                     {key.lastUsedAt && ` · Last used ${formatDate(key.lastUsedAt)}`}
                     {key.expiresAt && ` · Expires ${formatDate(key.expiresAt)}`}
@@ -220,7 +222,10 @@ function WebhooksTab() {
     setError("");
     try {
       const res = await webhookApi.list();
-      setWebhooks(res.data as Webhook[]);
+      // Backend returns WebhookSubscriptionResponse[] directly (not { data: [] })
+      // and uses "eventTypes" not "events" — normalise both.
+      const arr = (Array.isArray(res) ? res : (res as any).data ?? []) as any[];
+      setWebhooks(arr.map((w: any) => ({ ...w, events: w.events ?? w.eventTypes ?? [] })));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load webhooks");
     } finally {
@@ -242,7 +247,8 @@ function WebhooksTab() {
     setError("");
     setCreating(true);
     try {
-      await webhookApi.create(form);
+      // Backend CreateSubscriptionRequest expects "eventTypes" not "events".
+      await webhookApi.create({ url: form.url, eventTypes: form.events });
       setShowCreate(false);
       setForm({ url: "", events: [] });
       loadWebhooks();
