@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -226,6 +227,7 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function InvoicesPage() {
+  const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -337,8 +339,8 @@ export default function InvoicesPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    {["Invoice", "Buyer", "Date", "FIRS Status", "IRN", "Payment", "Amount"].map((col, i) => (
-                      <th key={col}
+                    {["Invoice", "Buyer", "Date", "FIRS Status", "IRN", "Payment", "Amount", ""].map((col, i) => (
+                      <th key={col + i}
                         className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${i === 6 ? "text-right" : "text-left"}`}>
                         {col}
                       </th>
@@ -403,6 +405,17 @@ export default function InvoicesPage() {
                       {/* Amount */}
                       <td className="px-6 py-3 text-sm font-medium text-dark text-right">
                         {formatCurrency(inv.totalAmount, inv.currency)}
+                      </td>
+                      {/* Actions — continue editing DRAFT invoices */}
+                      <td className="px-6 py-3 text-right whitespace-nowrap">
+                        {inv.status === "DRAFT" && (
+                          <button
+                            onClick={() => router.push(`/invoices/new?id=${inv.id}`)}
+                            className="text-xs font-medium text-green hover:text-green-dark hover:underline transition-colors"
+                          >
+                            Continue →
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
