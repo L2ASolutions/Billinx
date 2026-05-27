@@ -227,16 +227,20 @@ export default function PaymentsPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    {["Invoice", "Buyer", "Amount", "Due date", "FIRS status", "Payment", ""].map((col, i) => (
+                    {["Invoice", "Buyer", "Amount", "Outstanding", "Due date", "FIRS status", "Payment", ""].map((col, i) => (
                       <th key={col}
-                        className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${i === 2 ? "text-right" : "text-left"}`}>
+                        className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${[2, 3].includes(i) ? "text-right" : "text-left"}`}>
                         {col}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {invoices.map((inv) => (
+                  {invoices.map((inv) => {
+                    const outstanding = inv.paymentStatus === "PAID"
+                      ? 0
+                      : Math.max(0, Number(inv.totalAmount ?? 0) - Number(inv.amountPaid ?? 0));
+                    return (
                     <tr key={inv.id}
                       className={`border-b border-border last:border-0 transition-colors ${
                         inv.isOverdue ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-surface"
@@ -254,6 +258,11 @@ export default function PaymentsPage() {
                       <td className="px-6 py-3 text-sm text-dark">{inv.buyerName}</td>
                       <td className="px-6 py-3 text-sm font-medium text-dark text-right">
                         {formatCurrency(inv.totalAmount, inv.currency)}
+                      </td>
+                      <td className="px-6 py-3 text-sm text-right">
+                        <span className={outstanding === 0 ? "text-green-700 font-medium" : "text-dark font-medium"}>
+                          {formatCurrency(outstanding, inv.currency)}
+                        </span>
                       </td>
                       <td className="px-6 py-3 text-sm text-muted">
                         {inv.paymentDueDate ? formatDate(inv.paymentDueDate) : "—"}
@@ -277,7 +286,7 @@ export default function PaymentsPage() {
                           <Button size="sm" variant="secondary" onClick={() => {
                             setRecordFor(inv);
                             setForm({
-                              amount: String(Math.max(0, inv.totalAmount - (inv.amountPaid ?? 0))),
+                              amount: String(outstanding > 0 ? outstanding : inv.totalAmount),
                               provider: "MANUAL", reference: "",
                               paidAt: new Date().toISOString().slice(0, 10), notes: "",
                             });
@@ -288,7 +297,8 @@ export default function PaymentsPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -378,6 +378,38 @@ export class InvoiceController {
   // Dashboard routes (JWT auth)
   // ---------------------------------------------------------------------------
 
+  @Post('dashboard/save-draft')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Save a new DRAFT invoice without queuing for FIRS submission' })
+  async saveDraftDashboard(
+    @Body() body: Record<string, any>,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.saveDraftInvoice(
+      ctx.tenantId,
+      ctx.environment,
+      ctx.actor,
+      body,
+    );
+  }
+
+  @Patch('dashboard/:id')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update fields of an existing DRAFT invoice without submitting' })
+  async updateDraftDashboard(
+    @Param('id') id: string,
+    @Body() body: Record<string, any>,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.updateDraftFields(id, ctx.tenantId, ctx.actor, body);
+  }
+
   @Post('dashboard')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()

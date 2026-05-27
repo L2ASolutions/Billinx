@@ -18,7 +18,10 @@ export class InvoiceRepository {
     return this.prisma.asAdmin(async (tx) => {
       return tx.invoice.findUnique({
         where: { id },
-        include: { stateHistory: { orderBy: { createdAt: 'asc' } } },
+        include: {
+          stateHistory: { orderBy: { createdAt: 'asc' } },
+          submissionAttempts: { orderBy: { createdAt: 'asc' } },
+        },
       });
     });
   }
