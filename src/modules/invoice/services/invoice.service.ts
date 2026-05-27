@@ -256,6 +256,120 @@ export class InvoiceService {
     return { invoice: this.mapToResponse(invoice), isDuplicate: false };
   }
 
+  // ── Submit an existing DRAFT invoice ─────────────────────────────────────────
+  // Updates the draft's fields with the latest form data, then queues it for
+  // FIRS submission. This avoids creating a duplicate when resuming a draft.
+  async submitDraft(
+    invoiceId: string,
+    tenantId: string,
+    actor: string,
+    request: any,
+  ): Promise<InvoiceResponse> {
+    const invoice = await this.invoiceRepository.findById(invoiceId);
+    if (!invoice) {
+      throw new NotFoundException('Invoice not found');
+    }
+    if (invoice.tenantId !== tenantId) {
+      throw new NotFoundException('Invoice not found');
+    }
+    if (invoice.status !== 'DRAFT') {
+      throw new BadRequestException(
+        `Invoice cannot be submitted: current status is ${invoice.status}`,
+      );
+    }
+
+    // Apply any field updates the user made before submitting.
+    await this.prisma.asAdmin(async (tx) => {
+      await tx.invoice.update({
+        where: { id: invoiceId },
+        data: {
+          sellerTin: request.seller?.tin ?? invoice.sellerTin,
+          sellerName: request.seller?.partyName ?? invoice.sellerName,
+          buyerTin: request.buyer?.tin ?? (invoice as any).buyerTin,
+          buyerName: request.buyer?.partyName ?? invoice.buyerName,
+          issueDate: request.issueDate
+            ? new Date(request.issueDate)
+            : invoice.issueDate,
+          dueDate: request.dueDate
+            ? new Date(request.dueDate)
+            : (invoice as any).dueDate,
+          currency: request.currency ?? invoice.currency,
+          invoiceKind: request.invoiceKind ?? (invoice as any).invoiceKind,
+          subtotal:
+            request.legalMonetaryTotal?.lineExtensionAmount ??
+            invoice.subtotal,
+          vatAmount:
+            request.taxTotal?.length
+              ? (request.taxTotal as any[]).reduce(
+                  (s: number, t: any) => s + (t.taxAmount ?? 0),
+                  0,
+                )
+              : invoice.vatAmount,
+          totalAmount:
+            request.legalMonetaryTotal?.payableAmount ?? invoice.totalAmount,
+          lineItems: request.lineItems
+            ? JSON.parse(JSON.stringify(request.lineItems))
+            : invoice.lineItems,
+          taxTotal: request.taxTotal
+            ? JSON.parse(JSON.stringify(request.taxTotal))
+            : invoice.taxTotal,
+          legalMonetaryTotal: request.legalMonetaryTotal
+            ? JSON.parse(JSON.stringify(request.legalMonetaryTotal))
+            : invoice.legalMonetaryTotal,
+          originalIrn:
+            request.originalIrn ?? (invoice as any).originalIrn,
+          sourceReference:
+            request.sourceReference ?? (invoice as any).sourceReference,
+          metadata: JSON.parse(
+            JSON.stringify({
+              ...((invoice as any).metadata ?? {}),
+              sellerParty: request.seller ?? null,
+              buyerParty: request.buyer ?? null,
+            }),
+          ),
+        },
+      });
+    });
+
+    this.activityService.track({
+      tenantId,
+      eventType: 'INVOICE_CREATED',
+      actor,
+      entityType: 'Invoice',
+      entityId: invoiceId,
+      payload: {
+        invoiceId,
+        platformIrn: invoice.platformIrn,
+        action: 'draft_submitted',
+      },
+    });
+
+    const tenantData = await this.prisma.asAdmin(async (tx) =>
+      tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { appAdapterKey: true, interswitchClientId: true },
+      }),
+    );
+
+    const adapterKey = tenantData?.interswitchClientId
+      ? 'interswitch'
+      : (tenantData?.appAdapterKey ?? 'mock');
+
+    this.submissionService
+      .queueInvoice(
+        invoiceId,
+        tenantId,
+        invoice.platformIrn,
+        adapterKey as any,
+      )
+      .catch((err) =>
+        this.logger.error(`Failed to queue draft invoice: ${err.message}`),
+      );
+
+    const updated = await this.invoiceRepository.findById(invoiceId);
+    return this.mapToResponse(updated!);
+  }
+
   async validateInvoice(request: any): Promise<ValidationResponse> {
     const errors: any[] = [];
     const warnings: any[] = [];
