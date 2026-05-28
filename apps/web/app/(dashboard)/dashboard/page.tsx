@@ -420,7 +420,7 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {stats.recentInvoices.map((inv) => {
-                    const pill = PILL[inv.status] ?? { label: inv.status.replace(/_/g, ' '), cls: 'bg-gray-100 text-gray-600' };
+                    const pill = PILL[inv.status ?? ''] ?? { label: (inv.status ?? '').replace(/_/g, ' '), cls: 'bg-gray-100 text-gray-600' };
                     return (
                       <tr key={inv.id}
                         className="border-b border-border last:border-0 hover:bg-surface transition-colors">
