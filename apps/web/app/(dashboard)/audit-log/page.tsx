@@ -211,7 +211,7 @@ export default function AuditLogPage() {
                   {filtered.map((event) => (
                     <tr key={event.id} className="border-b border-border last:border-0 hover:bg-surface transition-colors">
                       <td className="px-6 py-3 text-sm font-medium text-dark">
-                        {event.eventType.replace(/_/g, ' ')}
+                        {(event.eventType ?? '').replace(/_/g, ' ')}
                       </td>
                       <td className="px-6 py-3 text-sm text-muted font-mono">
                         {event.actor}
