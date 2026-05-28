@@ -444,7 +444,7 @@ export default function InvoiceDetailPage() {
         <div className="bg-white rounded-xl border border-border p-6">
           <div className="flex items-center gap-3 flex-wrap mb-4">
             <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${STATUS_COLORS[invoice.status] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
-              {invoice.status.replace(/_/g, " ")}
+              {(invoice.status ?? '').replace(/_/g, " ")}
             </span>
             {invoice.paymentStatus && (
               <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${PAYMENT_STATUS_COLORS[invoice.paymentStatus] ?? "bg-gray-100 text-gray-600"}`}>
@@ -627,9 +627,9 @@ export default function InvoiceDetailPage() {
               {invoice.stateHistory.map((h, i) => (
                 <div key={i} className="flex items-center gap-3 text-sm">
                   <span className="text-muted w-40 shrink-0">{formatDateTime(h.createdAt)}</span>
-                  <span className="text-muted">{h.fromStatus.replace(/_/g, " ")}</span>
+                  <span className="text-muted">{(h.fromStatus ?? '').replace(/_/g, " ")}</span>
                   <span className="text-muted">→</span>
-                  <span className="text-dark font-medium">{h.toStatus.replace(/_/g, " ")}</span>
+                  <span className="text-dark font-medium">{(h.toStatus ?? '').replace(/_/g, " ")}</span>
                   {h.reason && <span className="text-muted">— {h.reason}</span>}
                 </div>
               ))}
