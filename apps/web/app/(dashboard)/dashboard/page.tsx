@@ -1,11 +1,29 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/auth';
 import { invoiceApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+
+// ── Dashboard prefs ───────────────────────────────────────────────────────────
+
+const PREFS_KEY = 'billinx_dashboard_prefs';
+
+interface DashboardPrefs {
+  showRecentInvoices: boolean;
+  showSubmissionQueue: boolean;
+  showRecentActivity: boolean;
+  showFirsStatus: boolean;
+}
+
+const DEFAULT_PREFS: DashboardPrefs = {
+  showRecentInvoices: true,
+  showSubmissionQueue: true,
+  showRecentActivity: true,
+  showFirsStatus: true,
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -80,6 +98,22 @@ const PILL: Record<string, { label: string; cls: string }> = {
   CANCELLATION_REQUESTED:{ label: 'Cancelling',  cls: 'bg-gray-100 text-gray-500' },
 };
 
+// ── Toggle switch ─────────────────────────────────────────────────────────────
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 focus:outline-none ${checked ? 'bg-green' : 'bg-gray-200'}`}
+    >
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 mt-0.5 ${checked ? 'translate-x-4' : 'translate-x-0.5'}`} />
+    </button>
+  );
+}
+
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function Sk({ className = '' }: { className?: string }) {
@@ -144,6 +178,36 @@ export default function DashboardPage() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+
+  const [prefs, setPrefs] = useState<DashboardPrefs>(DEFAULT_PREFS);
+  const [customiseOpen, setCustomiseOpen] = useState(false);
+  const customiseRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(PREFS_KEY);
+      if (stored) setPrefs(JSON.parse(stored));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!customiseOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (customiseRef.current && !customiseRef.current.contains(e.target as Node)) {
+        setCustomiseOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [customiseOpen]);
+
+  function togglePref(key: keyof DashboardPrefs) {
+    setPrefs(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      localStorage.setItem(PREFS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
 
   const loadData = useCallback(async () => {
     setStatsLoading(true);
@@ -228,6 +292,37 @@ export default function DashboardPage() {
               {refreshing ? 'Refreshing…' : lastRefreshedLabel ? `Updated ${lastRefreshedLabel}` : 'Refresh'}
             </span>
           </button>
+          <div className="relative" ref={customiseRef}>
+            <button
+              onClick={() => setCustomiseOpen(o => !o)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm text-muted hover:bg-surface hover:text-dark transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+              Customise
+            </button>
+            {customiseOpen && (
+              <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-xl border border-border shadow-lg z-50 p-4">
+                <p className="text-xs font-semibold text-dark uppercase tracking-wide mb-3">Dashboard widgets</p>
+                <div className="space-y-3">
+                  {(
+                    [
+                      { key: 'showRecentInvoices', label: 'Recent invoices' },
+                      { key: 'showSubmissionQueue', label: 'Submission queue' },
+                      { key: 'showRecentActivity', label: 'Recent activity' },
+                      { key: 'showFirsStatus', label: 'FIRS status bar' },
+                    ] as const
+                  ).map(({ key, label }) => (
+                    <div key={key} className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-dark">{label}</span>
+                      <Toggle checked={prefs[key]} onChange={() => togglePref(key)} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           <Link href="/invoices/new">
             <Button size="sm">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -272,19 +367,21 @@ export default function DashboardPage() {
         </div>
 
         {/* ── FIRS status bar ─────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-border px-5 py-3.5 flex flex-wrap items-center gap-x-6 gap-y-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
-            <span className="text-sm font-medium text-dark">FIRS MBS connection active</span>
+        {prefs.showFirsStatus && (
+          <div className="bg-white rounded-xl border border-border px-5 py-3.5 flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
+              <span className="text-sm font-medium text-dark">FIRS MBS connection active</span>
+            </div>
+            <span className="text-sm text-muted">All submissions routing via Interswitch NRS</span>
+            {lastRefreshedLabel && (
+              <span className="text-sm text-muted lg:ml-auto">Last checked {lastRefreshedLabel}</span>
+            )}
           </div>
-          <span className="text-sm text-muted">All submissions routing via Interswitch NRS</span>
-          {lastRefreshedLabel && (
-            <span className="text-sm text-muted lg:ml-auto">Last checked {lastRefreshedLabel}</span>
-          )}
-        </div>
+        )}
 
         {/* ── Recent invoices table ───────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-border overflow-hidden">
+        {prefs.showRecentInvoices && <div className="bg-white rounded-xl border border-border overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <h2 className="font-semibold text-dark">Recent invoices</h2>
             <Link href="/invoices" className="text-sm text-green font-medium hover:underline">
@@ -350,105 +447,110 @@ export default function DashboardPage() {
               </table>
             </div>
           )}
-        </div>
+        </div>}
 
         {/* ── Bottom row: Submission queue + Recent activity ──────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Submission queue */}
-          <div className="bg-white rounded-xl border border-border overflow-hidden">
-            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <h2 className="font-semibold text-dark">Submission queue</h2>
-                {!queueLoading && stats && (
-                  <span className="px-2 py-0.5 rounded-full bg-surface text-xs font-medium text-muted border border-border">
-                    {stats.pending} pending
-                  </span>
-                )}
-              </div>
-              <Link href="/submissions" className="text-sm text-green font-medium hover:underline">
-                View all →
-              </Link>
-            </div>
-            {queueLoading ? (
-              <div className="p-4 space-y-2">
-                {[0, 1, 2].map((i) => <Sk key={i} className="h-12 w-full" />)}
-              </div>
-            ) : queue.length === 0 ? (
-              <div className="py-12 text-center">
-                <p className="text-sm text-muted">No recent invoices</p>
-              </div>
-            ) : (
-              <ul className="divide-y divide-border">
-                {queue.map((inv) => {
-                  const pill = PILL[inv.status] ?? { label: inv.status, cls: 'bg-gray-100 text-gray-600' };
-                  return (
-                    <li key={inv.id}
-                      className="px-6 py-3.5 flex items-center justify-between gap-3 hover:bg-surface transition-colors">
-                      <div className="min-w-0">
-                        <Link href={`/invoices/${inv.id}`}
-                          className="text-sm font-mono text-green hover:underline block truncate">
-                          {inv.platformIrn ? inv.platformIrn.slice(0, 18) + '…' : inv.id.slice(0, 8) + '…'}
-                        </Link>
-                        <p className="text-xs text-muted truncate mt-0.5">
-                          {inv.buyerName} · {formatCurrency(inv.totalAmount, inv.currency)}
-                        </p>
-                      </div>
-                      <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${pill.cls}`}>
-                        {pill.label}
+        {(prefs.showSubmissionQueue || prefs.showRecentActivity) && (
+          <div className={`grid grid-cols-1 gap-6 ${prefs.showSubmissionQueue && prefs.showRecentActivity ? 'lg:grid-cols-2' : ''}`}>
+            {/* Submission queue */}
+            {prefs.showSubmissionQueue && (
+              <div className="bg-white rounded-xl border border-border overflow-hidden">
+                <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <h2 className="font-semibold text-dark">Submission queue</h2>
+                    {!queueLoading && stats && (
+                      <span className="px-2 py-0.5 rounded-full bg-surface text-xs font-medium text-muted border border-border">
+                        {stats.pending} pending
                       </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          {/* Recent activity — derived from the same queue list; zero extra API calls */}
-          <div className="bg-white rounded-xl border border-border overflow-hidden">
-            <div className="px-6 py-4 border-b border-border">
-              <h2 className="font-semibold text-dark">Recent activity</h2>
-            </div>
-            {queueLoading ? (
-              <div className="p-4 space-y-2">
-                {[0, 1, 2].map((i) => <Sk key={i} className="h-10 w-full" />)}
-              </div>
-            ) : queue.length === 0 ? (
-              <div className="py-12 text-center">
-                <p className="text-sm text-muted">No recent activity</p>
-              </div>
-            ) : (
-              <ul className="divide-y divide-border">
-                {queue.map((inv) => {
-                  const pill = PILL[inv.status] ?? { label: inv.status, cls: 'bg-gray-100 text-gray-600' };
-                  const isRejected = ['REJECTED', 'SUBMISSION_FAILED', 'DEAD_LETTERED', 'VALIDATION_FAILED'].includes(inv.status);
-                  const isAccepted = inv.status === 'ACCEPTED';
-                  return (
-                    <li key={inv.id}
-                      className="px-6 py-3 flex items-start gap-3 hover:bg-surface transition-colors">
-                      {/* Status dot */}
-                      <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${isAccepted ? 'bg-green-500' : isRejected ? 'bg-red-500' : 'bg-amber-400'}`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Link href={`/invoices/${inv.id}`}
-                            className="text-sm text-dark font-medium hover:text-green transition-colors truncate">
-                            {inv.buyerName}
-                          </Link>
-                          <span className={`shrink-0 inline-flex px-1.5 py-0.5 rounded text-xs font-medium ${pill.cls}`}>
+                    )}
+                  </div>
+                  <Link href="/submissions" className="text-sm text-green font-medium hover:underline">
+                    View all →
+                  </Link>
+                </div>
+                {queueLoading ? (
+                  <div className="p-4 space-y-2">
+                    {[0, 1, 2].map((i) => <Sk key={i} className="h-12 w-full" />)}
+                  </div>
+                ) : queue.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <p className="text-sm text-muted">No recent invoices</p>
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {queue.map((inv) => {
+                      const pill = PILL[inv.status] ?? { label: inv.status, cls: 'bg-gray-100 text-gray-600' };
+                      return (
+                        <li key={inv.id}
+                          className="px-6 py-3.5 flex items-center justify-between gap-3 hover:bg-surface transition-colors">
+                          <div className="min-w-0">
+                            <Link href={`/invoices/${inv.id}`}
+                              className="text-sm font-mono text-green hover:underline block truncate">
+                              {inv.platformIrn ? inv.platformIrn.slice(0, 18) + '…' : inv.id.slice(0, 8) + '…'}
+                            </Link>
+                            <p className="text-xs text-muted truncate mt-0.5">
+                              {inv.buyerName} · {formatCurrency(inv.totalAmount, inv.currency)}
+                            </p>
+                          </div>
+                          <span className={`shrink-0 inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${pill.cls}`}>
                             {pill.label}
                           </span>
-                        </div>
-                        <p className="text-xs text-muted mt-0.5">
-                          {formatCurrency(inv.totalAmount, inv.currency)}
-                          {inv.updatedAt ? ` · ${formatDate(inv.updatedAt)}` : ''}
-                        </p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {/* Recent activity — derived from the same queue list; zero extra API calls */}
+            {prefs.showRecentActivity && (
+              <div className="bg-white rounded-xl border border-border overflow-hidden">
+                <div className="px-6 py-4 border-b border-border">
+                  <h2 className="font-semibold text-dark">Recent activity</h2>
+                </div>
+                {queueLoading ? (
+                  <div className="p-4 space-y-2">
+                    {[0, 1, 2].map((i) => <Sk key={i} className="h-10 w-full" />)}
+                  </div>
+                ) : queue.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <p className="text-sm text-muted">No recent activity</p>
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {queue.map((inv) => {
+                      const pill = PILL[inv.status] ?? { label: inv.status, cls: 'bg-gray-100 text-gray-600' };
+                      const isRejected = ['REJECTED', 'SUBMISSION_FAILED', 'DEAD_LETTERED', 'VALIDATION_FAILED'].includes(inv.status);
+                      const isAccepted = inv.status === 'ACCEPTED';
+                      return (
+                        <li key={inv.id}
+                          className="px-6 py-3 flex items-start gap-3 hover:bg-surface transition-colors">
+                          <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${isAccepted ? 'bg-green-500' : isRejected ? 'bg-red-500' : 'bg-amber-400'}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Link href={`/invoices/${inv.id}`}
+                                className="text-sm text-dark font-medium hover:text-green transition-colors truncate">
+                                {inv.buyerName}
+                              </Link>
+                              <span className={`shrink-0 inline-flex px-1.5 py-0.5 rounded text-xs font-medium ${pill.cls}`}>
+                                {pill.label}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted mt-0.5">
+                              {formatCurrency(inv.totalAmount, inv.currency)}
+                              {inv.updatedAt ? ` · ${formatDate(inv.updatedAt)}` : ''}
+                            </p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
