@@ -180,13 +180,19 @@ export default function DashboardPage() {
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
   const [prefs, setPrefs] = useState<DashboardPrefs>(DEFAULT_PREFS);
+  const [pendingPrefs, setPendingPrefs] = useState<DashboardPrefs>(DEFAULT_PREFS);
   const [customiseOpen, setCustomiseOpen] = useState(false);
+  const [savedConfirm, setSavedConfirm] = useState(false);
   const customiseRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem(PREFS_KEY);
-      if (stored) setPrefs(JSON.parse(stored));
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setPrefs(parsed);
+        setPendingPrefs(parsed);
+      }
     } catch {}
   }, []);
 
@@ -194,19 +200,34 @@ export default function DashboardPage() {
     if (!customiseOpen) return;
     function handleClickOutside(e: MouseEvent) {
       if (customiseRef.current && !customiseRef.current.contains(e.target as Node)) {
+        setPendingPrefs(prefs);
         setCustomiseOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [customiseOpen]);
+  }, [customiseOpen, prefs]);
 
-  function togglePref(key: keyof DashboardPrefs) {
-    setPrefs(prev => {
-      const next = { ...prev, [key]: !prev[key] };
-      localStorage.setItem(PREFS_KEY, JSON.stringify(next));
-      return next;
-    });
+  function openCustomise() {
+    setPendingPrefs(prefs);
+    setSavedConfirm(false);
+    setCustomiseOpen(o => !o);
+  }
+
+  function togglePendingPref(key: keyof DashboardPrefs) {
+    setPendingPrefs(prev => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  function savePrefs() {
+    setPrefs(pendingPrefs);
+    localStorage.setItem(PREFS_KEY, JSON.stringify(pendingPrefs));
+    setSavedConfirm(true);
+    setTimeout(() => setSavedConfirm(false), 2000);
+  }
+
+  function cancelPrefs() {
+    setPendingPrefs(prefs);
+    setCustomiseOpen(false);
   }
 
   const loadData = useCallback(async () => {
@@ -294,7 +315,7 @@ export default function DashboardPage() {
           </button>
           <div className="relative" ref={customiseRef}>
             <button
-              onClick={() => setCustomiseOpen(o => !o)}
+              onClick={openCustomise}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm text-muted hover:bg-surface hover:text-dark transition-colors"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -303,7 +324,7 @@ export default function DashboardPage() {
               Customise
             </button>
             {customiseOpen && (
-              <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-xl border border-border shadow-lg z-50 p-4">
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl border border-border shadow-lg z-50 p-4">
                 <p className="text-xs font-semibold text-dark uppercase tracking-wide mb-3">Dashboard widgets</p>
                 <div className="space-y-3">
                   {(
@@ -316,9 +337,23 @@ export default function DashboardPage() {
                   ).map(({ key, label }) => (
                     <div key={key} className="flex items-center justify-between gap-3">
                       <span className="text-sm text-dark">{label}</span>
-                      <Toggle checked={prefs[key]} onChange={() => togglePref(key)} />
+                      <Toggle checked={pendingPrefs[key]} onChange={() => togglePendingPref(key)} />
                     </div>
                   ))}
+                </div>
+                <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
+                  <button
+                    onClick={cancelPrefs}
+                    className="text-sm text-muted hover:text-dark transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={savePrefs}
+                    className="px-3 py-1.5 rounded-lg bg-green text-white text-sm font-medium hover:bg-green-dark transition-colors"
+                  >
+                    {savedConfirm ? 'Saved ✓' : 'Save preferences'}
+                  </button>
                 </div>
               </div>
             )}
