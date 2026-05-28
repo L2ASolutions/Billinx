@@ -848,4 +848,34 @@ export class UserService {
   async requestErasure(userId: string, tenantId: string, email: string) {
     return this.consentService.requestErasure({ userId, tenantId, email });
   }
+
+  async getPreferences(userId: string): Promise<{ dashboardWidgets: Record<string, boolean> }> {
+    const row = await this.prisma.asAdmin((tx) =>
+      tx.userPreference.findUnique({ where: { userId } }),
+    );
+    const prefs = (row?.preferences as Record<string, unknown>) ?? {};
+    return { dashboardWidgets: (prefs.dashboardWidgets as Record<string, boolean>) ?? {} };
+  }
+
+  async upsertPreferences(
+    userId: string,
+    tenantId: string,
+    body: { dashboardWidgets?: Record<string, boolean> },
+  ): Promise<{ dashboardWidgets: Record<string, boolean> }> {
+    const existing = await this.prisma.asAdmin((tx) =>
+      tx.userPreference.findUnique({ where: { userId } }),
+    );
+    const current = (existing?.preferences as Record<string, unknown>) ?? {};
+    const merged = { ...current, ...body };
+
+    await this.prisma.asAdmin((tx) =>
+      tx.userPreference.upsert({
+        where: { userId },
+        create: { userId, tenantId, preferences: merged },
+        update: { preferences: merged },
+      }),
+    );
+
+    return { dashboardWidgets: (merged.dashboardWidgets as Record<string, boolean>) ?? {} };
+  }
 }

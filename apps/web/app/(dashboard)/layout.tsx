@@ -5,13 +5,7 @@ import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { useAuth } from "@/lib/auth";
 import { userApi } from "@/lib/api";
-
-interface UserProfile {
-  firstName?: string;
-  lastName?: string;
-  fullName?: string;
-  roles?: string[];
-}
+import { UserProfileProvider, type UserProfile } from "@/lib/userProfile";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -46,11 +40,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const role = profile?.roles?.[0];
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <Sidebar fullName={fullName} role={role} />
-      <main className="flex-1 ml-64 min-h-screen">
-        {children}
-      </main>
-    </div>
+    <UserProfileProvider profile={profile}>
+      <div className="flex min-h-screen bg-surface">
+        <Sidebar fullName={fullName} role={role} />
+        <main className="flex-1 ml-64 min-h-screen">
+          {children}
+        </main>
+      </div>
+    </UserProfileProvider>
   );
 }
