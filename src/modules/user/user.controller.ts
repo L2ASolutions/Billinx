@@ -247,6 +247,28 @@ export class UserController {
     );
   }
 
+  // ── User preferences (JWT required) ──────────────────────────────────────
+
+  @Get('users/me/preferences')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current user dashboard preferences' })
+  async getPreferences() {
+    const ctx = getRequestContext();
+    const userId = ctx.actor.replace('user:', '');
+    return this.userService.getPreferences(userId);
+  }
+
+  @Patch('users/me/preferences')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Save current user dashboard preferences' })
+  async upsertPreferences(@Body() body: Record<string, any>) {
+    const ctx = getRequestContext();
+    const userId = ctx.actor.replace('user:', '');
+    return this.userService.upsertPreferences(userId, ctx.tenantId, body);
+  }
+
   // ── Tenant self-service endpoints (JWT auth) ─────────────────────────────
 
   @Get('tenants/me')

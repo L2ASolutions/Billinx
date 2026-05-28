@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/auth';
-import { invoiceApi } from '@/lib/api';
+import { invoiceApi, userApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { useUserProfile } from '@/lib/userProfile';
+import { NotificationBell } from '@/components/dashboard/NotificationBell';
 
 // ── Dashboard prefs ───────────────────────────────────────────────────────────
-
-const PREFS_KEY = 'billinx_dashboard_prefs';
 
 interface DashboardPrefs {
   showRecentInvoices: boolean;
@@ -169,6 +169,7 @@ function MetricCard({
 
 export default function DashboardPage() {
   const { user, isLoading: authLoading } = useRequireAuth();
+  const profile = useUserProfile();
 
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -186,14 +187,15 @@ export default function DashboardPage() {
   const customiseRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(PREFS_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setPrefs(parsed);
-        setPendingPrefs(parsed);
-      }
-    } catch {}
+    userApi.getPreferences()
+      .then(({ dashboardWidgets }) => {
+        if (dashboardWidgets && Object.keys(dashboardWidgets).length > 0) {
+          const merged = { ...DEFAULT_PREFS, ...dashboardWidgets } as DashboardPrefs;
+          setPrefs(merged);
+          setPendingPrefs(merged);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -220,9 +222,10 @@ export default function DashboardPage() {
 
   function savePrefs() {
     setPrefs(pendingPrefs);
-    localStorage.setItem(PREFS_KEY, JSON.stringify(pendingPrefs));
     setSavedConfirm(true);
     setTimeout(() => setSavedConfirm(false), 2000);
+    userApi.savePreferences({ dashboardWidgets: pendingPrefs as unknown as Record<string, boolean> })
+      .catch(() => {});
   }
 
   function cancelPrefs() {
@@ -265,7 +268,7 @@ export default function DashboardPage() {
     setRefreshing(false);
   };
 
-  const firstName = user?.name?.split(' ')[0] ?? 'there';
+  const firstName = profile?.firstName ?? user?.name?.split(' ')[0] ?? 'there';
   const tenantName = user?.tenantName ?? '';
   const acceptanceRate =
     stats && stats.total > 0 ? Math.round((stats.accepted / stats.total) * 100) : 0;
@@ -302,6 +305,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-2 mt-1">
+          <NotificationBell />
           <button
             onClick={() => void handleRefresh()}
             disabled={refreshing}
