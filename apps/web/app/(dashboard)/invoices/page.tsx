@@ -375,7 +375,7 @@ export default function InvoicesPage() {
                       {/* FIRS Status */}
                       <td className="px-6 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[inv.status] ?? "bg-gray-100 text-gray-600"}`}>
-                          {inv.status.replace(/_/g, " ")}
+                          {(inv.status ?? '').replace(/_/g, " ")}
                         </span>
                       </td>
                       {/* IRN */}
