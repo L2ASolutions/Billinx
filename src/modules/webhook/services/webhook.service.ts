@@ -10,6 +10,8 @@ import * as crypto from 'crypto';
 import { WebhookRepository } from '../repositories/webhook.repository';
 import { CredentialService } from '../../tenant/services/credential.service';
 import { SecretsService } from '../../../infrastructure/secrets/secrets.service';
+import { ActivityService } from '../../activity/services/activity.service';
+import { getRequestContext } from '../../../shared/context/request-context';
 import { addToWebhookQueue } from '../queues/webhook.queue';
 import {
   WebhookInvoiceEvent,
@@ -34,6 +36,7 @@ export class WebhookService {
     private readonly webhookRepository: WebhookRepository,
     private readonly credentialService: CredentialService,
     private readonly secretsService: SecretsService,
+    private readonly activityService: ActivityService,
   ) {}
 
   // ─── Subscription management ─────────────────────────────────────────────
@@ -60,6 +63,16 @@ export class WebhookService {
       signingIv: iv,
       eventTypes: request.eventTypes,
       description: request.description,
+    });
+
+    const ctx = getRequestContext();
+    this.activityService.track({
+      tenantId,
+      eventType: 'WEBHOOK_CREATED',
+      actor: ctx.actor,
+      entityType: 'WebhookSubscription',
+      entityId: subscription.id,
+      payload: { url: request.url, eventTypes: request.eventTypes },
     });
 
     return this.mapSubscription(subscription);

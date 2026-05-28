@@ -11,9 +11,10 @@ import { JwtGuard } from '../identity/guards/jwt.guard';
 import { ApiKeyGuard } from '../identity/guards/api-key.guard';
 import { FlexAuthGuard } from '../identity/guards/flex-auth.guard';
 import { EmailModule } from '../../shared/email/email.module';
+import { ActivityModule } from '../activity/activity.module';
 
 @Module({
-  imports: [EmailModule],
+  imports: [EmailModule, ActivityModule],
   controllers: [WebhookController],
   providers: [
     WebhookService,

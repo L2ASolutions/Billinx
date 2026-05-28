@@ -110,6 +110,15 @@ export class SubmissionService {
       });
     });
 
+    this.activityService.track({
+      tenantId,
+      eventType: 'INVOICE_SUBMITTED',
+      actor: 'system:submission-worker',
+      entityType: 'Invoice',
+      entityId: invoiceId,
+      payload: { invoiceId, platformIrn, adapterKey, attempt },
+    });
+
     const request: SubmissionRequest = {
       invoiceId,
       tenantId,
