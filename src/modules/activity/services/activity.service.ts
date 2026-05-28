@@ -121,18 +121,47 @@ export class ActivityService {
         tx.activityEvent.count({ where }),
       ]);
     });
+
+    // Batch-resolve actor names for user: prefixed actors
+    const userIds = [
+      ...new Set(
+        data
+          .map((e: any) => e.actor as string)
+          .filter((a: string) => a.startsWith('user:'))
+          .map((a: string) => a.replace('user:', '')),
+      ),
+    ];
+    const actorNameMap = new Map<string, string>();
+    if (userIds.length > 0) {
+      const users = await this.prisma.asAdmin((tx) =>
+        tx.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, firstName: true, lastName: true },
+        }),
+      );
+      for (const u of users) {
+        actorNameMap.set(u.id, `${u.firstName} ${u.lastName}`.trim());
+      }
+    }
+
     return {
-      data: data.map((e: any) => ({
-        id: e.id,
-        tenantId: e.tenantId ?? undefined,
-        eventType: e.eventType as ActivityEventType,
-        actor: e.actor,
-        actorEmail: e.actorEmail ?? undefined,
-        entityType: e.entityType ?? undefined,
-        entityId: e.entityId ?? undefined,
-        payload: e.payload as Record<string, unknown>,
-        occurredAt: e.occurredAt.toISOString(),
-      })),
+      data: data.map((e: any) => {
+        const actorId = (e.actor as string).startsWith('user:')
+          ? (e.actor as string).replace('user:', '')
+          : null;
+        return {
+          id: e.id,
+          tenantId: e.tenantId ?? undefined,
+          eventType: e.eventType as ActivityEventType,
+          actor: e.actor,
+          actorEmail: e.actorEmail ?? undefined,
+          actorName: actorId ? actorNameMap.get(actorId) : undefined,
+          entityType: e.entityType ?? undefined,
+          entityId: e.entityId ?? undefined,
+          payload: e.payload as Record<string, unknown>,
+          occurredAt: e.occurredAt.toISOString(),
+        };
+      }),
       total,
       page,
       limit,

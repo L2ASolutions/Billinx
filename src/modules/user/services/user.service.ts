@@ -365,7 +365,7 @@ export class UserService {
 
     this.activityService.track({
       tenantId,
-      eventType: 'USER_CREATED',
+      eventType: 'USER_INVITED',
       actor: invitedBy,
       entityType: 'UserInvitation',
       payload: {

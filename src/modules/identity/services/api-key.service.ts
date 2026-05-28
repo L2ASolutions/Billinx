@@ -8,6 +8,8 @@ import {
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { EmailService } from '../../../shared/email/email.service';
+import { ActivityService } from '../../activity/services/activity.service';
+import { getRequestContext } from '../../../shared/context/request-context';
 import {
   CreateApiKeyRequest,
   CreateApiKeyResponse,
@@ -30,6 +32,7 @@ export class ApiKeyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly activityService: ActivityService,
   ) {}
 
   private defaultExpiryDate(): Date | null {
@@ -68,6 +71,16 @@ export class ApiKeyService {
     });
 
     this.logger.log(`API key created for tenant ${tenantId} [${name}]`);
+
+    const ctx = getRequestContext();
+    this.activityService.track({
+      tenantId,
+      eventType: 'API_KEY_CREATED',
+      actor: ctx.actor,
+      entityType: 'ApiKey',
+      entityId: record.id,
+      payload: { keyName: name, environment, keyPrefix },
+    });
 
     return {
       id: record.id,
@@ -175,6 +188,16 @@ export class ApiKeyService {
     });
 
     this.logger.log(`API key ${keyId} revoked for tenant ${tenantId}`);
+
+    const ctx = getRequestContext();
+    this.activityService.track({
+      tenantId,
+      eventType: 'API_KEY_REVOKED',
+      actor: ctx.actor,
+      entityType: 'ApiKey',
+      entityId: keyId,
+      payload: { keyId, keyName: key.name },
+    });
   }
 
   async rotateApiKey(
