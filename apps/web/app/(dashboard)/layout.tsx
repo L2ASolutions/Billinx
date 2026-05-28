@@ -1,19 +1,35 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { useAuth } from "@/lib/auth";
+import { userApi } from "@/lib/api";
+
+interface UserProfile {
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  roles?: string[];
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push("/login");
     }
   }, [isAuthenticated, isLoading, router]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    userApi.me()
+      .then((data) => setProfile(data as UserProfile))
+      .catch(() => {});
+  }, [isAuthenticated]);
 
   if (isLoading) {
     return (
@@ -25,9 +41,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!isAuthenticated) return null;
 
+  const fullName = profile?.fullName
+    ?? (profile?.firstName && profile?.lastName ? `${profile.firstName} ${profile.lastName}` : undefined);
+  const role = profile?.roles?.[0];
+
   return (
     <div className="flex min-h-screen bg-surface">
-      <Sidebar />
+      <Sidebar fullName={fullName} role={role} />
       <main className="flex-1 ml-64 min-h-screen">
         {children}
       </main>

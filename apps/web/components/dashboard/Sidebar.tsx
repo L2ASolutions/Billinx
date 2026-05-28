@@ -145,9 +145,13 @@ const NAV_GROUPS: NavGroup[] = [
 export function Sidebar({
   invoiceBadge = 0,
   overdueBadge = 0,
+  fullName,
+  role: roleProp,
 }: {
   invoiceBadge?: number;
   overdueBadge?: number;
+  fullName?: string;
+  role?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -169,11 +173,13 @@ export function Sidebar({
     return 0;
   }
 
-  const nameParts = user?.name?.trim().split(/\s+/) ?? [];
+  const displayName = fullName ?? user?.name ?? '';
+  const nameParts = displayName.trim().split(/\s+/).filter(Boolean);
   const initials = nameParts.length >= 2
     ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
     : (nameParts[0]?.[0]?.toUpperCase() ?? 'U');
-  const displayRole = user?.role ? formatRole(user.role) : '';
+  const rawRole = roleProp ?? user?.role ?? '';
+  const displayRole = rawRole ? formatRole(rawRole) : '';
 
   return (
     <aside className="w-64 bg-dark flex flex-col h-screen fixed left-0 top-0 z-20">
@@ -239,7 +245,7 @@ export function Sidebar({
           </div>
           {/* Name / role */}
           <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-bold truncate">{user?.name ?? "—"}</p>
+            <p className="text-white text-sm font-bold truncate">{displayName || "—"}</p>
             <p className="text-white/40 text-xs truncate">{displayRole}</p>
           </div>
           {/* Sign out */}

@@ -68,6 +68,7 @@ interface InvoiceDetail {
   firsConfirmedIrn?: string;
   csid?: string;
   acceptedAt?: string;
+  qrCode?: string;
   qrCodeBase64?: string;
   status: string;
   invoiceType: string;
@@ -171,17 +172,18 @@ function AcceptedBanner({ invoice }: { invoice: InvoiceDetail }) {
             </div>
           )}
         </div>
-        {invoice.qrCodeBase64 && (
+        {(invoice.qrCode ?? invoice.qrCodeBase64) && invoice.status === 'ACCEPTED' && (
           <div className="shrink-0">
             <p className="text-xs text-green-600 mb-1 text-center font-medium uppercase tracking-wide">QR Code</p>
             <div className="p-2 bg-white border border-green/20 rounded-lg">
-              <Image
-                src={`data:image/png;base64,${invoice.qrCodeBase64}`}
-                alt="Invoice QR Code"
-                width={100}
-                height={100}
-                className="block"
-              />
+              {(() => {
+                const raw = invoice.qrCode ?? invoice.qrCodeBase64!;
+                const src = raw.startsWith('data:') ? raw : `data:image/png;base64,${raw}`;
+                return (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={src} alt="FIRS QR Code" width={150} height={150} className="block" />
+                );
+              })()}
             </div>
           </div>
         )}
