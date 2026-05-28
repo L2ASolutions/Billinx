@@ -282,6 +282,24 @@ export const productApi = {
     api.get<unknown>(`/v1/products/${id}/as-line-item`),
 };
 
+// Activity
+export interface ActivityEvent {
+  id: string;
+  eventType: string;
+  actorEmail?: string;
+  entityType?: string;
+  entityId?: string;
+  payload?: Record<string, unknown>;
+  occurredAt: string;
+}
+
+export const activityApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return api.get<{ data: ActivityEvent[]; total: number }>(`/v1/activity${qs}`);
+  },
+};
+
 // Team / Users
 export const userApi = {
   me: () => api.get<unknown>('/v1/users/me'),
@@ -293,6 +311,10 @@ export const userApi = {
     api.post(`/v1/users/${userId}/roles`, { role }),
   // BUG-009: DELETE /v1/users/:id now exists (soft-delete)
   remove: (userId: string) => api.delete(`/v1/users/${userId}`),
+  getPreferences: () =>
+    api.get<{ dashboardWidgets: Record<string, boolean> }>('/v1/users/me/preferences'),
+  savePreferences: (body: { dashboardWidgets: Record<string, boolean> }) =>
+    api.patch<{ dashboardWidgets: Record<string, boolean> }>('/v1/users/me/preferences', body),
 };
 
 // API Keys — use JWT-guarded /users/api-keys routes (BUG-004)
