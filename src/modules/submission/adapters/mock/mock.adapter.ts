@@ -5,6 +5,7 @@ import {
   SubmissionResult,
 } from '../../../../../packages/types/submission';
 import * as crypto from 'crypto';
+import * as QRCode from 'qrcode';
 
 @Injectable()
 export class MockAdapter implements AppAdapter {
@@ -41,7 +42,7 @@ export class MockAdapter implements AppAdapter {
     // Generate mock FIRS confirmed IRN and CSID
     const firsConfirmedIrn = this.generateFirsIrn(request.platformIrn);
     const csid = this.generateCsid();
-    const qrCodeBase64 = this.generateMockQrCode(firsConfirmedIrn);
+    const qrCodeBase64 = await this.generateMockQrCode(firsConfirmedIrn);
 
     this.logger.log(
       `[MockAdapter] Invoice ${request.platformIrn} accepted. FIRS IRN: ${firsConfirmedIrn}`,
@@ -91,12 +92,10 @@ export class MockAdapter implements AppAdapter {
     return `SHA256:${crypto.randomBytes(32).toString('hex')}`;
   }
 
-  private generateMockQrCode(firsIrn: string): string {
-    // In production this would be a real QR code image
-    // For sandbox we return a base64 placeholder
-    return Buffer.from(
-      `BILLINX_QR|${firsIrn}|${new Date().toISOString()}`,
-    ).toString('base64');
+  private async generateMockQrCode(firsIrn: string): Promise<string> {
+    const text = `BILLINX_QR|${firsIrn}|${new Date().toISOString()}`;
+    const buffer = await QRCode.toBuffer(text);
+    return buffer.toString('base64');
   }
 
   private delay(ms: number): Promise<void> {
