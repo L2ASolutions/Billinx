@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -92,6 +92,10 @@ const LogoutIcon = () => (
   </svg>
 );
 
+function formatRole(role: string): string {
+  return role.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
 // ── Nav structure ─────────────────────────────────────────────────────────────
 
 interface NavItem {
@@ -146,7 +150,13 @@ export function Sidebar({
   overdueBadge?: number;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
+
+  function handleLogout() {
+    logout();
+    router.push('/login');
+  }
 
   function isActive(item: NavItem): boolean {
     if (item.exact) return pathname === item.href || pathname + window.location.search === item.href;
@@ -159,14 +169,16 @@ export function Sidebar({
     return 0;
   }
 
-  const initials = user?.name
-    ? user.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
-    : "U";
+  const nameParts = user?.name?.trim().split(/\s+/) ?? [];
+  const initials = nameParts.length >= 2
+    ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+    : (nameParts[0]?.[0]?.toUpperCase() ?? 'U');
+  const displayRole = user?.role ? formatRole(user.role) : '';
 
   return (
-    <aside className="w-64 bg-dark flex flex-col min-h-screen fixed left-0 top-0 z-20">
+    <aside className="w-64 bg-dark flex flex-col h-screen fixed left-0 top-0 z-20">
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-white/10">
+      <div className="px-6 py-5 border-b border-white/10 flex-shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-md bg-green flex items-center justify-center">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -219,23 +231,20 @@ export function Sidebar({
       </nav>
 
       {/* User area */}
-      <div className="p-3 border-t border-white/10">
-        <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/5 transition-colors">
+      <div className="flex-shrink-0 border-t border-white/10 p-4">
+        <div className="flex items-center gap-3">
           {/* Avatar */}
-          <div className="w-9 h-9 rounded-full bg-green/20 flex items-center justify-center text-green text-sm font-bold shrink-0">
+          <div className="w-9 h-9 rounded-full bg-green flex items-center justify-center text-white text-sm font-bold shrink-0">
             {initials}
           </div>
           {/* Name / role */}
           <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-medium truncate">{user?.name ?? "—"}</p>
-            <p className="text-white/40 text-xs truncate">
-              {user?.role ?? ""}
-              {user?.tenantName ? ` · ${user.tenantName}` : ""}
-            </p>
+            <p className="text-white text-sm font-bold truncate">{user?.name ?? "—"}</p>
+            <p className="text-white/40 text-xs truncate">{displayRole}</p>
           </div>
           {/* Sign out */}
           <button
-            onClick={logout}
+            onClick={handleLogout}
             className="text-white/40 hover:text-white transition-colors shrink-0"
             title="Sign out"
             aria-label="Sign out"
