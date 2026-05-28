@@ -10,9 +10,10 @@ import { SecretsService } from '../../infrastructure/secrets/secrets.service';
 import { RedisService } from '../../shared/redis/redis.service';
 import { AuthRateLimitGuard } from '../../shared/guards/auth-rate-limit.guard';
 import { EmailService } from '../../shared/email/email.service';
+import { ActivityModule } from '../activity/activity.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot()],
+  imports: [ScheduleModule.forRoot(), ActivityModule],
   controllers: [IdentityController],
   providers: [
     ApiKeyService,
