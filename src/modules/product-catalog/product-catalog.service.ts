@@ -1,9 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { ActivityService } from '../activity/services/activity.service';
+import { getRequestContext } from '../../shared/context/request-context';
 
 @Injectable()
 export class ProductCatalogService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityService: ActivityService,
+  ) {}
 
   async createProduct(tenantId: string, data: Record<string, any>) {
     const product = await (this.prisma as any).productCatalog.create({
@@ -19,6 +24,17 @@ export class ProductCatalogService {
         isActive: data.isActive !== undefined ? data.isActive : true,
       },
     });
+
+    const ctx = getRequestContext();
+    this.activityService.track({
+      tenantId,
+      eventType: 'PRODUCT_CREATED',
+      actor: ctx.actor,
+      entityType: 'ProductCatalog',
+      entityId: product.id,
+      payload: { name: data.name, hsnCode: data.hsnCode, unitPrice: data.unitPrice },
+    });
+
     return this.mapProduct(product);
   }
 
@@ -54,7 +70,7 @@ export class ProductCatalogService {
 
     const products = await (this.prisma as any).productCatalog.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { name: 'asc' },
     });
 
     return {
@@ -90,6 +106,17 @@ export class ProductCatalogService {
           data.isActive !== undefined ? data.isActive : existing.isActive,
       },
     });
+
+    const ctx = getRequestContext();
+    this.activityService.track({
+      tenantId,
+      eventType: 'PRODUCT_UPDATED',
+      actor: ctx.actor,
+      entityType: 'ProductCatalog',
+      entityId: id,
+      payload: { name: updated.name },
+    });
+
     return this.mapProduct(updated);
   }
 

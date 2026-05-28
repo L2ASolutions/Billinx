@@ -2,8 +2,10 @@ export type ActivityEventType =
   | "USER_LOGIN"
   | "USER_LOGOUT"
   | "USER_LOGIN_FAILED"
+  | "USER_INVITED"
   | "API_KEY_CREATED"
   | "API_KEY_REVOKED"
+  | "WEBHOOK_CREATED"
   | "INVOICE_CREATED"
   | "INVOICE_VALIDATED"
   | "INVOICE_SUBMITTED"
@@ -100,6 +102,7 @@ export interface ActivityEventResponse {
   eventType: ActivityEventType;
   actor: string;
   actorEmail?: string;
+  actorName?: string;
   entityType?: string;
   entityId?: string;
   payload: Record<string, unknown>;

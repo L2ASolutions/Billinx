@@ -11,22 +11,26 @@ interface ActivityEvent {
   id: string;
   eventType: string;
   actor: string;
-  outcome: string;
+  actorEmail?: string;
+  actorName?: string;
+  entityType?: string;
+  entityId?: string;
+  payload?: Record<string, unknown>;
   occurredAt: string;
-  metadata?: Record<string, unknown>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-type FilterTab = 'all' | 'invoice' | 'submission' | 'user' | 'auth';
+type FilterTab = 'all' | 'invoice' | 'submission' | 'user' | 'auth' | 'api';
 type TimeRange = '7' | '30' | '90' | 'all';
 
 const TAB_OPTIONS: { key: FilterTab; label: string }[] = [
   { key: 'all', label: 'All events' },
-  { key: 'invoice', label: 'Invoice events' },
-  { key: 'submission', label: 'FIRS submissions' },
-  { key: 'user', label: 'User events' },
-  { key: 'auth', label: 'Auth events' },
+  { key: 'invoice', label: 'Invoice' },
+  { key: 'submission', label: 'Submissions' },
+  { key: 'user', label: 'Team' },
+  { key: 'auth', label: 'Auth' },
+  { key: 'api', label: 'API & Webhooks' },
 ];
 
 const TIME_OPTIONS: { key: TimeRange; label: string }[] = [
@@ -36,20 +40,63 @@ const TIME_OPTIONS: { key: TimeRange; label: string }[] = [
   { key: 'all', label: 'All time' },
 ];
 
+const EVENT_LABELS: Record<string, string> = {
+  USER_LOGIN: 'User login',
+  USER_LOGOUT: 'User logout',
+  USER_LOGIN_FAILED: 'Login failed',
+  USER_CREATED: 'User created',
+  USER_INVITED: 'User invited',
+  USER_DEACTIVATED: 'User deactivated',
+  INVOICE_CREATED: 'Invoice created',
+  INVOICE_VALIDATED: 'Invoice validated',
+  INVOICE_SUBMITTED: 'Invoice submitted',
+  INVOICE_ACCEPTED: 'Invoice accepted',
+  INVOICE_REJECTED: 'Invoice rejected',
+  INVOICE_CANCELLED: 'Invoice cancelled',
+  INVOICE_VIEWED: 'Invoice viewed',
+  INVOICE_OVERDUE: 'Invoice overdue',
+  PAYMENT_RECORDED: 'Payment recorded',
+  API_KEY_CREATED: 'API key created',
+  API_KEY_REVOKED: 'API key revoked',
+  WEBHOOK_CREATED: 'Webhook created',
+  WEBHOOK_DELIVERED: 'Webhook delivered',
+  WEBHOOK_FAILED: 'Webhook failed',
+  PRODUCT_CREATED: 'Product created',
+  PRODUCT_UPDATED: 'Product updated',
+  EXPORT_GENERATED: 'Export generated',
+  REMINDER_SENT: 'Reminder sent',
+  PASSWORD_RESET: 'Password reset',
+  TENANT_CREATED: 'Tenant created',
+  TENANT_UPDATED: 'Tenant updated',
+  SYSTEM_ERROR: 'System error',
+};
+
 function eventTypeToTab(eventType: string): FilterTab {
   const t = eventType.toLowerCase();
-  if (t.startsWith('invoice')) return 'invoice';
-  if (t.includes('submission') || t.includes('firs')) return 'submission';
-  if (t.startsWith('user') || t.startsWith('team') || t.startsWith('invite')) return 'user';
-  if (t.startsWith('login') || t.startsWith('logout') || t.startsWith('auth') || t.startsWith('password') || t.startsWith('mfa')) return 'auth';
+  if (t.includes('invoice_accepted') || t.includes('invoice_rejected') || t.includes('invoice_submitted')) return 'submission';
+  if (t.startsWith('invoice') || t.includes('payment')) return 'invoice';
+  if (t.includes('api_key') || t.includes('webhook')) return 'api';
+  if (t.startsWith('user') || t.startsWith('team') || t.includes('invite') || t.includes('product')) return 'user';
+  if (t.includes('login') || t.includes('logout') || t.includes('auth') || t.includes('password') || t.includes('mfa')) return 'auth';
   return 'all';
 }
 
-function outcomeBadge(outcome: string) {
-  const o = outcome?.toLowerCase() ?? '';
-  if (o === 'success' || o === 'accepted') return 'bg-green-50 text-green-700';
-  if (o === 'failure' || o === 'rejected' || o === 'failed') return 'bg-red-50 text-red-600';
-  return 'bg-gray-100 text-gray-600';
+function eventDotColor(eventType: string): string {
+  const t = eventType.toLowerCase();
+  if (t.includes('accepted') || t.includes('created') || t.includes('recorded')) return 'bg-green-500';
+  if (t.includes('rejected') || t.includes('failed') || t.includes('error')) return 'bg-red-500';
+  if (t.includes('cancelled') || t.includes('revoked') || t.includes('deactivated')) return 'bg-amber-500';
+  if (t.includes('submitted') || t.includes('login')) return 'bg-blue-500';
+  return 'bg-gray-400';
+}
+
+function displayActor(event: ActivityEvent): string {
+  if (event.actorName) return event.actorName;
+  if (event.actorEmail) return event.actorEmail;
+  const actor = event.actor ?? '';
+  if (actor.startsWith('user:')) return actor.replace('user:', '').substring(0, 8) + '…';
+  if (actor.startsWith('system:')) return actor.replace('system:', '') + ' (system)';
+  return actor;
 }
 
 function Sk({ className = '' }: { className?: string }) {
@@ -62,6 +109,7 @@ export default function AuditLogPage() {
   useRequireAuth();
 
   const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<FilterTab>('all');
@@ -71,7 +119,7 @@ export default function AuditLogPage() {
     setLoading(true);
     setError(null);
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, string> = { limit: '200' };
       if (timeRange !== 'all') {
         const since = new Date();
         since.setDate(since.getDate() - parseInt(timeRange));
@@ -81,6 +129,7 @@ export default function AuditLogPage() {
         '/v1/activity?' + new URLSearchParams(params).toString(),
       );
       setEvents((res as { data: ActivityEvent[] }).data ?? []);
+      setTotal((res as { total: number }).total ?? 0);
     } catch (e) {
       setError((e as Error).message ?? 'Failed to load audit log');
       setEvents([]);
@@ -97,11 +146,12 @@ export default function AuditLogPage() {
 
   const handleExport = () => {
     const rows = [
-      ['Action', 'Actor', 'Outcome', 'Time'],
+      ['Action', 'Actor', 'Actor Email', 'Entity', 'Time'],
       ...filtered.map((e) => [
-        e.eventType,
-        e.actor,
-        e.outcome ?? '',
+        EVENT_LABELS[e.eventType] ?? e.eventType,
+        displayActor(e),
+        e.actorEmail ?? '',
+        e.entityType ? `${e.entityType}${e.entityId ? ':' + e.entityId.substring(0, 8) : ''}` : '',
         new Date(e.occurredAt).toISOString(),
       ]),
     ];
@@ -121,7 +171,9 @@ export default function AuditLogPage() {
       <header className="bg-white border-b border-border px-6 py-5 flex items-center justify-between sticky top-0 z-10">
         <div>
           <h1 className="text-xl font-bold text-dark">Audit log</h1>
-          <p className="text-sm text-muted mt-0.5">Track all actions and events in your account</p>
+          <p className="text-sm text-muted mt-0.5">
+            {loading ? 'Loading…' : `${total.toLocaleString()} events total`}
+          </p>
         </div>
         <button
           onClick={handleExport}
@@ -136,11 +188,10 @@ export default function AuditLogPage() {
       </header>
 
       <div className="p-6">
-        {/* Filters */}
         <div className="bg-white rounded-xl border border-border overflow-hidden">
-          {/* Tab bar */}
+          {/* Tab bar + time range */}
           <div className="flex items-center justify-between px-4 border-b border-border">
-            <div className="flex">
+            <div className="flex overflow-x-auto">
               {TAB_OPTIONS.map(({ key, label }) => (
                 <button
                   key={key}
@@ -155,8 +206,7 @@ export default function AuditLogPage() {
                 </button>
               ))}
             </div>
-            {/* Time range */}
-            <div className="flex items-center gap-1 py-2">
+            <div className="flex items-center gap-1 py-2 shrink-0 ml-4">
               {TIME_OPTIONS.map(({ key, label }) => (
                 <button
                   key={key}
@@ -173,17 +223,13 @@ export default function AuditLogPage() {
             </div>
           </div>
 
-          {/* Error */}
           {error && (
-            <div className="m-4 px-4 py-3 rounded-lg bg-red-50 border border-red-100 text-sm text-red-700">
-              {error}
-            </div>
+            <div className="m-4 px-4 py-3 rounded-lg bg-red-50 border border-red-100 text-sm text-red-700">{error}</div>
           )}
 
-          {/* Table */}
           {loading ? (
             <div className="p-6 space-y-3">
-              {[0, 1, 2, 3, 4].map((i) => <Sk key={i} className="h-10 w-full" />)}
+              {[0, 1, 2, 3, 4, 5].map((i) => <Sk key={i} className="h-12 w-full" />)}
             </div>
           ) : filtered.length === 0 ? (
             <div className="py-20 flex flex-col items-center gap-3 text-center">
@@ -193,39 +239,51 @@ export default function AuditLogPage() {
                   <polyline points="14 2 14 8 20 8" />
                 </svg>
               </div>
-              <p className="text-sm text-muted">No events found for this filter</p>
+              <p className="text-sm text-muted">No events in this period</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-border">
-                    {['Action', 'Actor', 'Outcome', 'Time'].map((col, i) => (
-                      <th key={col} className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${i === 3 ? 'text-right' : 'text-left'}`}>
-                        {col}
-                      </th>
-                    ))}
+                  <tr className="border-b border-border bg-surface/50">
+                    <th className="px-4 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left w-5" />
+                    <th className="px-4 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Action</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Actor</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden md:table-cell">Entity</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Time</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((event) => (
-                    <tr key={event.id} className="border-b border-border last:border-0 hover:bg-surface transition-colors">
-                      <td className="px-6 py-3 text-sm font-medium text-dark">
-                        {(event.eventType ?? '').replace(/_/g, ' ')}
+                    <tr key={event.id} className="border-b border-border last:border-0 hover:bg-surface/40 transition-colors">
+                      <td className="px-4 py-3.5">
+                        <div className={`w-2 h-2 rounded-full ${eventDotColor(event.eventType)}`} />
                       </td>
-                      <td className="px-6 py-3 text-sm text-muted font-mono">
-                        {event.actor}
+                      <td className="px-4 py-3.5">
+                        <span className="text-sm font-medium text-dark">
+                          {EVENT_LABELS[event.eventType] ?? event.eventType.replace(/_/g, ' ')}
+                        </span>
                       </td>
-                      <td className="px-6 py-3">
-                        {event.outcome ? (
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${outcomeBadge(event.outcome)}`}>
-                            {event.outcome}
+                      <td className="px-4 py-3.5">
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm text-dark truncate max-w-[200px]">
+                            {displayActor(event)}
+                          </span>
+                          {event.actorName && event.actorEmail && (
+                            <span className="text-xs text-muted truncate max-w-[200px]">{event.actorEmail}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 hidden md:table-cell">
+                        {event.entityType ? (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface text-xs text-muted border border-border">
+                            {event.entityType}
                           </span>
                         ) : (
                           <span className="text-muted text-xs">—</span>
                         )}
                       </td>
-                      <td className="px-6 py-3 text-sm text-muted text-right whitespace-nowrap">
+                      <td className="px-4 py-3.5 text-sm text-muted text-right whitespace-nowrap">
                         {formatDate(event.occurredAt)}
                       </td>
                     </tr>
