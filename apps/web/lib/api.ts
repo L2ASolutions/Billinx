@@ -342,6 +342,31 @@ export const webhookApi = {
   delete: (id: string) => api.delete(`/v1/webhooks/subscriptions/${id}`),
 };
 
+// Incoming Invoices
+export const incomingInvoiceApi = {
+  list: (params?: {
+    status?: string;
+    supplierTin?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return api.get<{ data: unknown[]; total: number; page: number; limit: number }>(
+      `/v1/incoming-invoices${qs}`,
+    );
+  },
+  get: (id: string) => api.get<unknown>(`/v1/incoming-invoices/${id}`),
+  create: (data: unknown) => api.post<unknown>('/v1/incoming-invoices', data),
+  validate: (id: string) => api.patch<unknown>(`/v1/incoming-invoices/${id}/validate`),
+  approve: (id: string) => api.patch<unknown>(`/v1/incoming-invoices/${id}/approve`),
+  reject: (id: string, reason: string) =>
+    api.patch<unknown>(`/v1/incoming-invoices/${id}/reject`, { reason }),
+  markPaid: (
+    id: string,
+    data: { amount: number; reference: string; provider: string; paidAt: string },
+  ) => api.patch<unknown>(`/v1/incoming-invoices/${id}/mark-paid`, data),
+};
+
 function adminRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   return request<T>(path, options, true);
 }
