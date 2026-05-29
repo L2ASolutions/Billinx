@@ -5,6 +5,7 @@ import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { webhookApi } from "@/lib/api";
+import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { formatDate } from "@/lib/utils";
 
 const EVENT_TYPES = [
@@ -142,8 +143,8 @@ export default function WebhooksPage() {
 
         <div className="bg-white rounded-xl border border-border">
           {loading ? (
-            <div className="p-12 flex justify-center">
-              <div className="w-6 h-6 border-2 border-green border-t-transparent rounded-full animate-spin" />
+            <div className="p-6 space-y-3">
+              {[0,1,2].map(i => <SkeletonTableRow key={i} />)}
             </div>
           ) : webhooks.length === 0 ? (
             <div className="p-12 text-center text-muted text-sm">

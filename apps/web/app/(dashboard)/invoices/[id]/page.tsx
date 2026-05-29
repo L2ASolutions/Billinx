@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { invoiceApi } from "@/lib/api";
 import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils";
 
@@ -371,8 +372,25 @@ export default function InvoiceDetailPage() {
     return (
       <>
         <Topbar title="Invoice" />
-        <div className="p-12 flex justify-center">
-          <div className="w-8 h-8 border-2 border-green border-t-transparent rounded-full animate-spin" />
+        <div className="p-6 space-y-6">
+          <div className="bg-white rounded-xl border border-border p-6">
+            <Skeleton className="h-7 w-28 mb-4" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl border border-border p-6 space-y-3">
+              <Skeleton className="h-5 w-32 mb-2" />
+              {[0,1,2,3,4].map(i => <Skeleton key={i} className="h-4 w-full" />)}
+            </div>
+            <div className="bg-white rounded-xl border border-border p-6 space-y-3">
+              <Skeleton className="h-5 w-24 mb-2" />
+              {[0,1,2,3].map(i => <Skeleton key={i} className="h-4 w-full" />)}
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-border p-6 space-y-3">
+            <Skeleton className="h-5 w-32 mb-2" />
+            {[0,1,2,3,4].map(i => <Skeleton key={i} className="h-4 w-full" />)}
+          </div>
         </div>
       </>
     );
@@ -562,8 +580,8 @@ export default function InvoiceDetailPage() {
               )}
             </div>
             {paymentsLoading ? (
-              <div className="flex justify-center py-4">
-                <div className="w-5 h-5 border-2 border-green border-t-transparent rounded-full animate-spin" />
+              <div className="space-y-2 py-2">
+                {[0,1,2].map(i => <Skeleton key={i} className="h-14 w-full" />)}
               </div>
             ) : payments.length === 0 ? (
               <div className="text-center py-6">
