@@ -6,6 +6,7 @@ import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { apiKeyApi, reminderApi, webhookApi, api } from "@/lib/api";
+import { Skeleton, SkeletonTableRow } from "@/components/ui/Skeleton";
 import { useAuth } from "@/lib/auth";
 import { formatDate } from "@/lib/utils";
 
@@ -154,8 +155,8 @@ function ApiKeysTab() {
       {keyError && <p className="text-sm text-red-500">{keyError}</p>}
 
       {loading ? (
-        <div className="flex justify-center py-6">
-          <div className="w-6 h-6 border-2 border-green border-t-transparent rounded-full animate-spin" />
+        <div className="space-y-3 py-2">
+          {[0,1,2].map(i => <SkeletonTableRow key={i} />)}
         </div>
       ) : keys.length === 0 ? (
         <div className="p-8 text-center bg-surface rounded-xl border border-border">
@@ -315,8 +316,8 @@ function WebhooksTab() {
       )}
 
       {loading ? (
-        <div className="flex justify-center py-6">
-          <div className="w-6 h-6 border-2 border-green border-t-transparent rounded-full animate-spin" />
+        <div className="space-y-3 py-2">
+          {[0,1,2].map(i => <SkeletonTableRow key={i} />)}
         </div>
       ) : webhooks.length === 0 ? (
         <div className="p-8 text-center bg-surface rounded-xl border border-border">
@@ -459,8 +460,8 @@ function RemindersTab() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-8">
-          <div className="w-6 h-6 border-2 border-green border-t-transparent rounded-full animate-spin" />
+        <div className="space-y-3 py-2">
+          {[0,1,2].map(i => <SkeletonTableRow key={i} />)}
         </div>
       ) : rules.length === 0 ? (
         <div className="p-8 text-center bg-surface rounded-xl border border-border">
@@ -601,7 +602,22 @@ function CompanyTab() {
       setProfile((p) => ({ ...p, [field]: e.target.value }));
 
   if (loading) {
-    return <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-green border-t-transparent rounded-full animate-spin" /></div>;
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-xl border border-border p-6">
+          <Skeleton className="h-5 w-40 mb-4" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[0,1,2,3,4,5].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-border p-6">
+          <Skeleton className="h-5 w-40 mb-4" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[0,1,2,3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
