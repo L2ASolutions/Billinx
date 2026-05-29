@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { invoiceApi } from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -321,8 +322,8 @@ export default function InvoicesPage() {
 
           {/* Table */}
           {loading ? (
-            <div className="p-12 flex justify-center">
-              <div className="w-6 h-6 border-2 border-green border-t-transparent rounded-full animate-spin" />
+            <div className="px-6 py-4 space-y-2">
+              {[0,1,2,3,4,5].map(i => <SkeletonTableRow key={i} />)}
             </div>
           ) : invoices.length === 0 ? (
             <div className="p-12 text-center">

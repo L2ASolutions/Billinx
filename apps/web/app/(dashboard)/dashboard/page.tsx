@@ -120,18 +120,6 @@ function Sk({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse bg-gray-100 rounded ${className}`} />;
 }
 
-function RefreshIcon({ spinning }: { spinning: boolean }) {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-      className={spinning ? 'animate-spin' : ''}>
-      <polyline points="23 4 23 10 17 10" />
-      <polyline points="1 20 1 14 7 14" />
-      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-    </svg>
-  );
-}
-
 // ── Metric card ───────────────────────────────────────────────────────────────
 
 function MetricCard({
@@ -177,7 +165,6 @@ export default function DashboardPage() {
   const [queue, setQueue] = useState<QueueInvoice[]>([]);
   const [queueLoading, setQueueLoading] = useState(true);
 
-  const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
   const [prefs, setPrefs] = useState<DashboardPrefs>(DEFAULT_PREFS);
@@ -261,13 +248,6 @@ export default function DashboardPage() {
     void loadData();
   }, [authLoading, loadData]);
 
-  const handleRefresh = async () => {
-    if (refreshing) return;
-    setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
-  };
-
   const firstName = profile?.firstName ?? user?.name?.split(' ')[0] ?? 'there';
   const tenantName = user?.tenantName ?? '';
   const acceptanceRate =
@@ -306,17 +286,6 @@ export default function DashboardPage() {
 
         <div className="flex items-center gap-2 mt-1">
           <NotificationBell />
-          <button
-            onClick={() => void handleRefresh()}
-            disabled={refreshing}
-            title={lastRefreshedLabel ? `Last refreshed ${lastRefreshedLabel}` : 'Refresh dashboard'}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm text-muted hover:bg-surface hover:text-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshIcon spinning={refreshing} />
-            <span className="hidden sm:inline">
-              {refreshing ? 'Refreshing…' : lastRefreshedLabel ? `Updated ${lastRefreshedLabel}` : 'Refresh'}
-            </span>
-          </button>
           <div className="relative" ref={customiseRef}>
             <button
               onClick={openCustomise}
