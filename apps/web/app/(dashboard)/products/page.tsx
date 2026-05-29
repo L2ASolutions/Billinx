@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { productApi } from "@/lib/api";
+import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { formatCurrency } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -191,8 +192,8 @@ export default function ProductsPage() {
         {/* Table */}
         <div className="bg-white rounded-xl border border-border overflow-hidden">
           {loading ? (
-            <div className="p-12 flex justify-center">
-              <div className="w-6 h-6 border-2 border-green border-t-transparent rounded-full animate-spin" />
+            <div className="px-6 py-4 space-y-2">
+              {[0,1,2,3,4].map(i => <SkeletonTableRow key={i} />)}
             </div>
           ) : products.length === 0 ? (
             <div className="py-20 flex flex-col items-center gap-4 text-center px-6">
