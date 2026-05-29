@@ -44,6 +44,7 @@ users         User[]
   bulkBatches      BulkBatch[]
   reminderRules    ReminderRule[]
   reminderLogs     ReminderLog[]
+  incomingInvoices IncomingInvoice[]
 
   @@map("tenants")
 }
@@ -678,6 +679,11 @@ enum ActivityEventType {
   PAYMENT_RECORDED
   INVOICE_OVERDUE
   REMINDER_SENT
+  INCOMING_INVOICE_RECEIVED
+  INCOMING_INVOICE_VALIDATED
+  INCOMING_INVOICE_APPROVED
+  INCOMING_INVOICE_REJECTED
+  INCOMING_INVOICE_PAID
 }
 
 enum ReminderTriggerType {
@@ -793,4 +799,58 @@ model ReminderLog {
   @@index([tenantId])
   @@index([invoiceId])
   @@map("reminder_logs")
+}
+
+// ── INCOMING INVOICES ─────────────────────────────────────────────────────────
+enum IncomingInvoiceStatus {
+  RECEIVED
+  VALIDATED
+  REJECTED
+  APPROVED
+  PAID
+}
+
+model IncomingInvoice {
+  id              String                 @id @default(uuid())
+  tenantId        String
+  supplierName    String
+  supplierTin     String
+  invoiceNumber   String
+  invoiceAmount   Decimal
+  vatAmount       Decimal
+  currency        String                 @default("NGN")
+  invoiceDate     DateTime
+  dueDate         DateTime?
+  status          IncomingInvoiceStatus  @default(RECEIVED)
+  description     String?
+  sourceReference String?
+  rawPayload      Json?
+  rejectionReason String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id])
+  items           IncomingInvoiceItem[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([supplierTin])
+  @@unique([tenantId, invoiceNumber, supplierTin])
+  @@map("incoming_invoices")
+}
+
+model IncomingInvoiceItem {
+  id                String          @id @default(uuid())
+  incomingInvoiceId String
+  description       String
+  quantity          Decimal
+  unitPrice         Decimal
+  lineAmount        Decimal
+  vatAmount         Decimal         @default(0)
+  hsnCode           String?
+
+  invoice           IncomingInvoice @relation(fields: [incomingInvoiceId], references: [id], onDelete: Cascade)
+
+  @@index([incomingInvoiceId])
+  @@map("incoming_invoice_items")
 }
