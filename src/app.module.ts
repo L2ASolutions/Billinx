@@ -22,6 +22,7 @@ import { ConsentModule } from './modules/consent/consent.module';
 import { ProductCatalogModule } from './modules/product-catalog/product-catalog.module';
 import { ExportModule } from './modules/export/export.module';
 import { ReminderModule } from './modules/reminder/reminder.module';
+import { IncomingInvoiceModule } from './modules/incoming-invoice/incoming-invoice.module';
 import { DatabaseModule } from './infrastructure/database/database.module';
 import { SecretsService } from './infrastructure/secrets/secrets.service';
 import { IdempotencyInterceptor } from './shared/interceptors/idempotency.interceptor';
@@ -51,6 +52,7 @@ import { GlobalExceptionFilter } from './shared/filters/global-exception.filter'
     ProductCatalogModule,
     ExportModule,
     ReminderModule,
+    IncomingInvoiceModule,
   ],
   providers: [
     SecretsService,

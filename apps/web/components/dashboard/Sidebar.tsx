@@ -55,6 +55,13 @@ const ProductsIcon = () => (
   </svg>
 );
 
+const IncomingInvoiceIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" /><polyline points="12 18 9 15 12 12" /><line x1="15" y1="15" x2="9" y2="15" />
+  </svg>
+);
+
 const ReportsIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" />
@@ -127,6 +134,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Team members", href: "/team", icon: <TeamIcon /> },
       { label: "Company profile", href: "/settings?tab=company", icon: <CompanyIcon />, exact: true },
       { label: "Products", href: "/products", icon: <ProductsIcon /> },
+      { label: "Incoming invoices", href: "/incoming-invoices", icon: <IncomingInvoiceIcon /> },
       { label: "Reports", href: "/reports", icon: <ReportsIcon /> },
       { label: "Audit log", href: "/audit-log", icon: <AuditIcon /> },
     ],
