@@ -13,16 +13,23 @@ export class VatService {
     try {
       await this.createOutputEntry(payload.invoiceId, payload.tenantId);
     } catch (err) {
-      this.logger.error(`Failed to create VAT output entry for invoice ${payload.invoiceId}: ${err}`);
+      this.logger.error(
+        `Failed to create VAT output entry for invoice ${payload.invoiceId}: ${String(err)}`,
+      );
     }
   }
 
   @OnEvent('incoming-invoice.validated')
-  async onIncomingInvoiceValidated(payload: { incomingInvoiceId: string; tenantId: string }) {
+  async onIncomingInvoiceValidated(payload: {
+    incomingInvoiceId: string;
+    tenantId: string;
+  }) {
     try {
       await this.createInputEntry(payload.incomingInvoiceId, payload.tenantId);
     } catch (err) {
-      this.logger.error(`Failed to create VAT input entry for incoming invoice ${payload.incomingInvoiceId}: ${err}`);
+      this.logger.error(
+        `Failed to create VAT input entry for incoming invoice ${payload.incomingInvoiceId}: ${String(err)}`,
+      );
     }
   }
 
@@ -38,7 +45,14 @@ export class VatService {
   async createOutputEntry(invoiceId: string, tenantId: string): Promise<void> {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: invoiceId },
-      select: { id: true, vatAmount: true, subtotal: true, issueDate: true, sellerTin: true, buyerTin: true },
+      select: {
+        id: true,
+        vatAmount: true,
+        subtotal: true,
+        issueDate: true,
+        sellerTin: true,
+        buyerTin: true,
+      },
     });
     if (!invoice) return;
 
@@ -59,10 +73,19 @@ export class VatService {
     });
   }
 
-  async createInputEntry(incomingInvoiceId: string, tenantId: string): Promise<void> {
+  async createInputEntry(
+    incomingInvoiceId: string,
+    tenantId: string,
+  ): Promise<void> {
     const invoice = await (this.prisma as any).incomingInvoice.findUnique({
       where: { id: incomingInvoiceId },
-      select: { id: true, vatAmount: true, invoiceAmount: true, invoiceDate: true, supplierTin: true },
+      select: {
+        id: true,
+        vatAmount: true,
+        invoiceAmount: true,
+        invoiceDate: true,
+        supplierTin: true,
+      },
     });
     if (!invoice) return;
 
@@ -84,42 +107,54 @@ export class VatService {
   }
 
   async getSummary(tenantId: string, period: string) {
-    const [outputAgg, inputAgg, unreconciledCount] = await this.prisma.asAdmin(async (tx) => {
-      const outputAgg = await (tx as any).vatEntry.aggregate({
-        where: { tenantId, period, type: 'OUTPUT' },
-        _sum: { vatAmount: true },
-        _count: { id: true },
-      });
-      const inputAgg = await (tx as any).vatEntry.aggregate({
-        where: { tenantId, period, type: 'INPUT' },
-        _sum: { vatAmount: true },
-        _count: { id: true },
-      });
-      const unreconciledCount = await (tx as any).vatEntry.count({
-        where: { tenantId, period, status: 'UNRECONCILED' },
-      });
-      return [outputAgg, inputAgg, unreconciledCount] as const;
-    });
+    const [outputAgg, inputAgg, unreconciledCount] = await this.prisma.asAdmin(
+      async (tx) => {
+        const outputAgg = await (tx as any).vatEntry.aggregate({
+          where: { tenantId, period, type: 'OUTPUT' },
+          _sum: { vatAmount: true },
+          _count: { id: true },
+        });
+        const inputAgg = await (tx as any).vatEntry.aggregate({
+          where: { tenantId, period, type: 'INPUT' },
+          _sum: { vatAmount: true },
+          _count: { id: true },
+        });
+        const unreconciledCount = await (tx as any).vatEntry.count({
+          where: { tenantId, period, status: 'UNRECONCILED' },
+        });
+        return [outputAgg, inputAgg, unreconciledCount] as const;
+      },
+    );
 
     const outputVat = Number(outputAgg._sum.vatAmount ?? 0);
     const inputVat = Number(inputAgg._sum.vatAmount ?? 0);
     const netVat = outputVat - inputVat;
 
-    const [outputVatOutstanding, inputVatOutstanding] = await this.prisma.asAdmin(async (tx) => {
-      const outAgg = await tx.invoice.aggregate({
-        where: { tenantId, status: 'ACCEPTED', paymentStatus: { not: 'PAID' } },
-        _sum: { vatAmount: true },
+    const [outputVatOutstanding, inputVatOutstanding] =
+      await this.prisma.asAdmin(async (tx) => {
+        const outAgg = await tx.invoice.aggregate({
+          where: {
+            tenantId,
+            status: 'ACCEPTED',
+            paymentStatus: { not: 'PAID' },
+          },
+          _sum: { vatAmount: true },
+        });
+        const inAgg = await (tx as any).incomingInvoice.aggregate({
+          where: { tenantId, status: { in: ['VALIDATED', 'APPROVED'] } },
+          _sum: { vatAmount: true },
+        });
+        return [
+          Number(outAgg._sum.vatAmount ?? 0),
+          Number(inAgg._sum.vatAmount ?? 0),
+        ] as const;
       });
-      const inAgg = await (tx as any).incomingInvoice.aggregate({
-        where: { tenantId, status: { in: ['VALIDATED', 'APPROVED'] } },
-        _sum: { vatAmount: true },
-      });
-      return [Number(outAgg._sum.vatAmount ?? 0), Number(inAgg._sum.vatAmount ?? 0)] as const;
-    });
 
-    const periodRecord = await (this.prisma as any).vatPeriodSummary.findUnique({
-      where: { tenantId_period: { tenantId, period } },
-    });
+    const periodRecord = await (this.prisma as any).vatPeriodSummary.findUnique(
+      {
+        where: { tenantId_period: { tenantId, period } },
+      },
+    );
 
     return {
       period,
@@ -137,15 +172,24 @@ export class VatService {
   }
 
   async getAnnualSummary(tenantId: string, year: number) {
-    const months = Array.from({ length: 12 }, (_, i) =>
-      `${year}-${String(i + 1).padStart(2, '0')}`,
+    const months = Array.from(
+      { length: 12 },
+      (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`,
     );
-    return Promise.all(months.map((period) => this.getSummary(tenantId, period)));
+    return Promise.all(
+      months.map((period) => this.getSummary(tenantId, period)),
+    );
   }
 
   async getEntries(
     tenantId: string,
-    filters: { type?: string; period?: string; status?: string; page?: number; limit?: number },
+    filters: {
+      type?: string;
+      period?: string;
+      status?: string;
+      page?: number;
+      limit?: number;
+    },
   ) {
     const { type, period, status, page = 1, limit = 50 } = filters;
     const where: any = { tenantId };
@@ -178,7 +222,9 @@ export class VatService {
   }
 
   async reconcileEntry(entryId: string, tenantId: string) {
-    const entry = await (this.prisma as any).vatEntry.findUnique({ where: { id: entryId } });
+    const entry = await (this.prisma as any).vatEntry.findUnique({
+      where: { id: entryId },
+    });
     if (!entry || entry.tenantId !== tenantId) {
       throw new NotFoundException(`VAT entry ${entryId} not found`);
     }
@@ -210,7 +256,10 @@ export class VatService {
       if (Math.abs(rate - STANDARD_RATE) > 0.01) {
         issues.push({ ...entry, issue: `Non-standard VAT rate: ${rate}%` });
       } else if (diff > 1) {
-        issues.push({ ...entry, issue: `VAT amount mismatch: expected ₦${expectedVat.toFixed(2)}, got ₦${vat.toFixed(2)}` });
+        issues.push({
+          ...entry,
+          issue: `VAT amount mismatch: expected ₦${expectedVat.toFixed(2)}, got ₦${vat.toFixed(2)}`,
+        });
       }
     }
 
