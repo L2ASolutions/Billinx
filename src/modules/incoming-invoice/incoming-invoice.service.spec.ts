@@ -2,6 +2,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { IncomingInvoiceService } from './incoming-invoice.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ActivityService } from '../activity/services/activity.service';
@@ -93,6 +94,7 @@ describe('IncomingInvoiceService', () => {
         IncomingInvoiceService,
         { provide: PrismaService, useValue: prisma },
         { provide: ActivityService, useValue: { track: activityTrack } },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
     }).compile();
     service = module.get(IncomingInvoiceService);

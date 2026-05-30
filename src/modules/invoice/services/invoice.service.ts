@@ -582,38 +582,86 @@ export class InvoiceService {
     // Promise.all *inside* a single $transaction is also unsafe (concurrent
     // ops confuse the interactive-transaction state machine). Sequential awaits
     // inside one transaction is both safe and memory-efficient.
-    const [total, accepted, rejected, pending, amountAgg, recentInvoices] =
-      await this.prisma.asAdmin(async (tx) => {
-        const total = await tx.invoice.count({ where: { tenantId } });
-        const accepted = await tx.invoice.count({
-          where: { tenantId, status: 'ACCEPTED' },
-        });
-        const rejected = await tx.invoice.count({
-          where: { tenantId, status: 'REJECTED' },
-        });
-        const pending = await tx.invoice.count({
-          where: { tenantId, status: { in: PENDING_STATUSES as any } },
-        });
-        const amountAgg = await tx.invoice.aggregate({
-          where: { tenantId },
-          _sum: { totalAmount: true },
-        });
-        const recentInvoices = await tx.invoice.findMany({
-          where: { tenantId },
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-          select: {
-            id: true,
-            platformIrn: true,
-            buyerName: true,
-            totalAmount: true,
-            currency: true,
-            status: true,
-            createdAt: true,
-          },
-        });
-        return [total, accepted, rejected, pending, amountAgg, recentInvoices] as const;
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    const [
+      total,
+      accepted,
+      rejected,
+      pending,
+      amountAgg,
+      recentInvoices,
+      outstandingAgg,
+      overdueCount,
+      collectedThisMonth,
+      collectedLastMonth,
+      outputVatAgg,
+      inputVatAgg,
+    ] = await this.prisma.asAdmin(async (tx) => {
+      const total = await tx.invoice.count({ where: { tenantId } });
+      const accepted = await tx.invoice.count({
+        where: { tenantId, status: 'ACCEPTED' },
       });
+      const rejected = await tx.invoice.count({
+        where: { tenantId, status: 'REJECTED' },
+      });
+      const pending = await tx.invoice.count({
+        where: { tenantId, status: { in: PENDING_STATUSES as any } },
+      });
+      const amountAgg = await tx.invoice.aggregate({
+        where: { tenantId },
+        _sum: { totalAmount: true },
+      });
+      const recentInvoices = await tx.invoice.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          platformIrn: true,
+          buyerName: true,
+          totalAmount: true,
+          currency: true,
+          status: true,
+          createdAt: true,
+        },
+      });
+      const outstandingAgg = await tx.invoice.aggregate({
+        where: { tenantId, status: 'ACCEPTED', paymentStatus: { not: 'PAID' } },
+        _sum: { totalAmount: true },
+        _count: { id: true },
+      });
+      const overdueCount = await tx.invoice.count({
+        where: { tenantId, status: 'ACCEPTED', paymentStatus: { not: 'PAID' }, isOverdue: true },
+      });
+      const collectedThisMonth = await (tx as any).paymentRecord.aggregate({
+        where: { tenantId, paidAt: { gte: startOfMonth } },
+        _sum: { amount: true },
+      });
+      const collectedLastMonth = await (tx as any).paymentRecord.aggregate({
+        where: { tenantId, paidAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
+        _sum: { amount: true },
+      });
+      const outputVatAgg = await tx.invoice.aggregate({
+        where: { tenantId, status: 'ACCEPTED', paymentStatus: { not: 'PAID' } },
+        _sum: { vatAmount: true },
+      });
+      const inputVatAgg = await (tx as any).incomingInvoice.aggregate({
+        where: { tenantId, status: { in: ['VALIDATED', 'APPROVED'] } },
+        _sum: { vatAmount: true },
+      });
+      return [
+        total, accepted, rejected, pending, amountAgg, recentInvoices,
+        outstandingAgg, overdueCount, collectedThisMonth, collectedLastMonth,
+        outputVatAgg, inputVatAgg,
+      ] as const;
+    });
+
+    const outputVatOutstanding = Number(outputVatAgg._sum.vatAmount ?? 0);
+    const inputVatOutstanding = Number(inputVatAgg._sum.vatAmount ?? 0);
 
     return {
       total,
@@ -621,6 +669,13 @@ export class InvoiceService {
       rejected,
       pending,
       totalAmount: Number(amountAgg._sum.totalAmount ?? 0),
+      outstandingAmount: Number(outstandingAgg._sum.totalAmount ?? 0),
+      overdueCount,
+      collectedThisMonth: Number(collectedThisMonth._sum.amount ?? 0),
+      collectedLastMonth: Number(collectedLastMonth._sum.amount ?? 0),
+      outputVatOutstanding,
+      inputVatOutstanding,
+      netVatExposure: outputVatOutstanding - inputVatOutstanding,
       recentInvoices: recentInvoices.map((inv) => ({
         ...inv,
         totalAmount: Number(inv.totalAmount),
