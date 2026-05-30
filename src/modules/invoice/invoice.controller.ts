@@ -481,6 +481,15 @@ export class InvoiceController {
     return this.invoiceService.getDashboardStats(ctx.tenantId);
   }
 
+  @Get('dashboard/payment-stats')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get payment collection stats for dashboard (JWT auth)' })
+  async getPaymentStats(@Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.getPaymentStats(ctx.tenantId);
+  }
+
   // ---------------------------------------------------------------------------
   // Single-invoice dashboard routes (JWT auth)
   // These mirror the ApiKeyGuard :id routes so the dashboard UI can view,

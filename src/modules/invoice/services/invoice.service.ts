@@ -691,6 +691,58 @@ export class InvoiceService {
     };
   }
 
+  async getPaymentStats(tenantId: string) {
+    return this.prisma.asAdmin(async (tx) => {
+      const billedAgg = await tx.invoice.aggregate({
+        where: { tenantId, status: 'ACCEPTED' },
+        _sum: { totalAmount: true },
+      });
+      const collectedAgg = await (tx as any).paymentRecord.aggregate({
+        where: { tenantId },
+        _sum: { amount: true },
+      });
+      const totalBilled = Number(billedAgg._sum.totalAmount ?? 0);
+      const totalCollected = Number(collectedAgg._sum.amount ?? 0);
+      const collectionRate = totalBilled > 0
+        ? Math.round((totalCollected / totalBilled) * 100)
+        : 0;
+
+      const [paidInFull, partiallyPaid, overdue, accepted] = await Promise.all([
+        tx.invoice.count({ where: { tenantId, status: 'ACCEPTED', paymentStatus: 'PAID' } }),
+        tx.invoice.count({ where: { tenantId, status: 'ACCEPTED', paymentStatus: 'PARTIAL' } }),
+        tx.invoice.count({ where: { tenantId, status: 'ACCEPTED', isOverdue: true } }),
+        tx.invoice.count({ where: { tenantId, status: 'ACCEPTED' } }),
+      ]);
+      const unpaidNotDue = accepted - paidInFull - partiallyPaid - overdue;
+
+      const providerRows = await (tx as any).paymentRecord.groupBy({
+        by: ['provider'],
+        where: { tenantId },
+        _sum: { amount: true },
+      });
+      const knownProviders = ['BANK_TRANSFER', 'PAYSTACK', 'FLUTTERWAVE', 'MANUAL'];
+      const providerMap: Record<string, number> = {};
+      for (const row of providerRows as any[]) {
+        providerMap[row.provider] = Number(row._sum.amount ?? 0);
+      }
+      const providerBreakdown = knownProviders.map((p) => ({
+        provider: p,
+        total: providerMap[p] ?? 0,
+      }));
+
+      return {
+        totalBilled,
+        totalCollected,
+        collectionRate,
+        paidInFull,
+        partiallyPaid,
+        unpaidNotDue: Math.max(0, unpaidNotDue),
+        overdue,
+        providerBreakdown,
+      };
+    });
+  }
+
   async exportAsXml(id: string, tenantId: string): Promise<string> {
     const invoice = await this.invoiceRepository.findById(id);
     if (!invoice || invoice.tenantId !== tenantId) {
