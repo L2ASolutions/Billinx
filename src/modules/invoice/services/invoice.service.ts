@@ -629,13 +629,20 @@ export class InvoiceService {
           createdAt: true,
         },
       });
+      // paymentStatus is nullable — `{ not: 'PAID' }` excludes NULL rows in
+      // PostgreSQL. Use OR to include invoices that have no payment recorded yet.
+      const unpaidWhere = {
+        tenantId,
+        status: 'ACCEPTED' as const,
+        OR: [{ paymentStatus: null }, { paymentStatus: { not: 'PAID' } }],
+      };
       const outstandingAgg = await tx.invoice.aggregate({
-        where: { tenantId, status: 'ACCEPTED', paymentStatus: { not: 'PAID' } },
+        where: unpaidWhere,
         _sum: { totalAmount: true },
         _count: { id: true },
       });
       const overdueCount = await tx.invoice.count({
-        where: { tenantId, status: 'ACCEPTED', paymentStatus: { not: 'PAID' }, isOverdue: true },
+        where: { ...unpaidWhere, isOverdue: true },
       });
       const collectedThisMonth = await (tx as any).paymentRecord.aggregate({
         where: { tenantId, paidAt: { gte: startOfMonth } },
@@ -646,7 +653,7 @@ export class InvoiceService {
         _sum: { amount: true },
       });
       const outputVatAgg = await tx.invoice.aggregate({
-        where: { tenantId, status: 'ACCEPTED', paymentStatus: { not: 'PAID' } },
+        where: unpaidWhere,
         _sum: { vatAmount: true },
       });
       const inputVatAgg = await (tx as any).incomingInvoice.aggregate({
