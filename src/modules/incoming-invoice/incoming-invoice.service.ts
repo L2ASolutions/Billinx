@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ActivityService } from '../activity/services/activity.service';
 import { getRequestContext } from '../../shared/context/request-context';
@@ -24,6 +25,7 @@ export class IncomingInvoiceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityService: ActivityService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(
@@ -174,6 +176,8 @@ export class IncomingInvoiceService {
       entityId: id,
       payload: { invoiceNumber: invoice.invoiceNumber, supplierTin: invoice.supplierTin },
     });
+
+    this.eventEmitter.emit('incoming-invoice.validated', { incomingInvoiceId: id, tenantId });
 
     return this.map(updated);
   }
@@ -336,5 +340,37 @@ export class IncomingInvoiceService {
       createdAt: invoice.createdAt.toISOString(),
       updatedAt: invoice.updatedAt.toISOString(),
     };
+  }
+
+  async getStats(tenantId: string) {
+    return this.prisma.asAdmin(async (tx) => {
+      const total = await (tx as any).incomingInvoice.count({ where: { tenantId } });
+      const received = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'RECEIVED' } });
+      const validated = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'VALIDATED' } });
+      const approved = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'APPROVED' } });
+      const paid = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'PAID' } });
+
+      const outstandingAgg = await (tx as any).incomingInvoice.aggregate({
+        where: { tenantId, status: { in: ['VALIDATED', 'APPROVED'] } },
+        _sum: { invoiceAmount: true },
+        _count: { id: true },
+      });
+
+      const vatAgg = await (tx as any).incomingInvoice.aggregate({
+        where: { tenantId, status: { in: ['VALIDATED', 'APPROVED'] } },
+        _sum: { vatAmount: true },
+      });
+
+      return {
+        total,
+        received,
+        validated,
+        approved,
+        paid,
+        totalOutstanding: Number(outstandingAgg._sum.invoiceAmount ?? 0),
+        outstandingCount: outstandingAgg._count.id,
+        totalVatOutstanding: Number(vatAgg._sum.vatAmount ?? 0),
+      };
+    });
   }
 }
