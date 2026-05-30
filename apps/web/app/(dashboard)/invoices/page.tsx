@@ -21,6 +21,7 @@ interface Invoice {
   status: string;
   invoiceType: string;
   firsConfirmedIrn?: string;
+  rejectionCode?: string;
   paymentStatus?: string;
   isOverdue?: boolean;
   paymentDueDate?: string;
@@ -227,6 +228,15 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+interface InvoiceCounts {
+  total: number;
+  accepted: number;
+  rejected: number;
+  pending: number;
+  draft: number;
+  overdue: number;
+}
+
 export default function InvoicesPage() {
   const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -237,6 +247,7 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showBulk, setShowBulk] = useState(false);
+  const [counts, setCounts] = useState<InvoiceCounts | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -265,28 +276,59 @@ export default function InvoicesPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Load counts for all tabs
+  useEffect(() => {
+    Promise.all([
+      invoiceApi.list({ limit: 1 }),
+      invoiceApi.list({ limit: 1, status: "ACCEPTED" }),
+      invoiceApi.list({ limit: 1, status: "REJECTED,SUBMISSION_FAILED,DEAD_LETTERED,VALIDATION_FAILED" }),
+      invoiceApi.list({ limit: 1, status: "QUEUED,SUBMITTING,VALIDATING" }),
+      invoiceApi.list({ limit: 1, status: "DRAFT" }),
+      invoiceApi.list({ limit: 1, isOverdue: "true" }),
+    ]).then(([all, acc, rej, pend, draft, ov]) => {
+      setCounts({
+        total: all.total, accepted: acc.total, rejected: rej.total,
+        pending: pend.total, draft: draft.total, overdue: ov.total,
+      });
+    }).catch(() => {});
+  }, []);
+
   const totalPages = Math.ceil(total / 20);
+
+  const TAB_COUNTS: Record<StatusTab, number> = {
+    ALL:      counts?.total ?? 0,
+    ACCEPTED: counts?.accepted ?? 0,
+    PENDING:  counts?.pending ?? 0,
+    REJECTED: counts?.rejected ?? 0,
+    DRAFT:    counts?.draft ?? 0,
+    OVERDUE:  counts?.overdue ?? 0,
+  };
 
   return (
     <>
-      <Topbar
-        title="Invoices"
-        actions={
-          <div className="flex gap-2">
-            <Button size="sm" variant="secondary" onClick={() => setShowBulk(true)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="2" className="mr-1.5 inline">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-              Import CSV
-            </Button>
-            <Link href="/invoices/new">
-              <Button size="sm">+ Create invoice</Button>
-            </Link>
-          </div>
-        }
-      />
+      <div className="bg-white border-b border-border px-6 py-5 flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-dark">Invoices</h1>
+          {counts && (
+            <p className="text-sm text-muted mt-0.5">
+              {counts.total} total · {counts.accepted} accepted · {counts.rejected} rejected · {counts.pending} pending
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2 mt-1">
+          <Button size="sm" variant="secondary" onClick={() => setShowBulk(true)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" className="mr-1.5 inline">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            Import CSV
+          </Button>
+          <Link href="/invoices/new">
+            <Button size="sm">+ Create invoice</Button>
+          </Link>
+        </div>
+      </div>
 
       <div className="p-6 space-y-4">
         {error && (
@@ -307,7 +349,7 @@ export default function InvoicesPage() {
                       : "border-transparent text-muted hover:text-dark"
                   }`}
                 >
-                  {label}
+                  {label}{counts ? ` (${TAB_COUNTS[key]})` : ""}
                 </button>
               ))}
             </div>
@@ -379,9 +421,13 @@ export default function InvoicesPage() {
                           {(inv.status ?? '').replace(/_/g, " ")}
                         </span>
                       </td>
-                      {/* IRN */}
+                      {/* IRN / rejection reason */}
                       <td className="px-6 py-3">
-                        {inv.firsConfirmedIrn ? (
+                        {["REJECTED", "SUBMISSION_FAILED", "DEAD_LETTERED", "VALIDATION_FAILED"].includes(inv.status) ? (
+                          <span className="text-xs text-red-600 italic truncate block max-w-[140px]" title={(inv as any).rejectionCode ?? "Rejected"}>
+                            {(inv as any).rejectionCode ?? "Rejected"}
+                          </span>
+                        ) : inv.firsConfirmedIrn ? (
                           <span className="text-xs font-mono text-green-700 truncate block max-w-[120px]">
                             {inv.firsConfirmedIrn.slice(0, 16)}…
                           </span>

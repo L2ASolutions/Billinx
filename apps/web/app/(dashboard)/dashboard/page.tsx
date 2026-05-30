@@ -12,16 +12,11 @@ import { NotificationBell } from '@/components/dashboard/NotificationBell';
 // ── Dashboard prefs ───────────────────────────────────────────────────────────
 
 interface DashboardPrefs {
-  // Panels
   showRecentInvoices: boolean;
   showSubmissionQueue: boolean;
   showRecentActivity: boolean;
   showFirsStatus: boolean;
-  // Financial cards
-  showOutstandingPayables: boolean;
-  showOutputVatOutstanding: boolean;
-  showInputVatOutstanding: boolean;
-  showNetVatExposure: boolean;
+  showFinancialCards: boolean;
 }
 
 const DEFAULT_PREFS: DashboardPrefs = {
@@ -29,10 +24,7 @@ const DEFAULT_PREFS: DashboardPrefs = {
   showSubmissionQueue: true,
   showRecentActivity: true,
   showFirsStatus: true,
-  showOutstandingPayables: true,
-  showOutputVatOutstanding: true,
-  showInputVatOutstanding: true,
-  showNetVatExposure: true,
+  showFinancialCards: true,
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -204,7 +196,18 @@ export default function DashboardPage() {
     userApi.getPreferences()
       .then(({ dashboardWidgets }) => {
         if (dashboardWidgets && Object.keys(dashboardWidgets).length > 0) {
-          const merged = { ...DEFAULT_PREFS, ...dashboardWidgets } as DashboardPrefs;
+          const raw = dashboardWidgets as Record<string, boolean>;
+          // Migrate old per-card prefs to single showFinancialCards flag
+          const showFinancialCards = raw.showFinancialCards ??
+            (raw.showOutstandingPayables || raw.showOutputVatOutstanding ||
+             raw.showInputVatOutstanding || raw.showNetVatExposure) ?? true;
+          const merged: DashboardPrefs = {
+            showRecentInvoices:  raw.showRecentInvoices  ?? true,
+            showSubmissionQueue: raw.showSubmissionQueue ?? true,
+            showRecentActivity:  raw.showRecentActivity  ?? true,
+            showFirsStatus:      raw.showFirsStatus      ?? true,
+            showFinancialCards,
+          };
           setPrefs(merged);
           setPendingPrefs(merged);
         }
@@ -297,7 +300,12 @@ export default function DashboardPage() {
     ? lastRefreshed.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })
     : null;
 
-  const showVatRow = prefs.showOutputVatOutstanding || prefs.showInputVatOutstanding || prefs.showNetVatExposure;
+  // Net VAT Exposure — computed client-side from the two outstanding figures
+  const outputVat = stats?.outputVatOutstanding ?? 0;
+  const inputVat = incomingStats?.totalVatOutstanding ?? 0;
+  const netVat = outputVat - inputVat;
+  const netIsPos = netVat > 0;
+  const netIsNeg = netVat < 0;
 
   return (
     <div className="min-h-screen bg-surface">
@@ -335,8 +343,8 @@ export default function DashboardPage() {
             </button>
             {customiseOpen && (
               <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl border border-border shadow-lg z-50 p-4">
-                {/* Section 1: Panels */}
-                <p className="text-xs font-semibold text-dark uppercase tracking-wide mb-2">Panels</p>
+                {/* Section 1: Invoice Activity Cards */}
+                <p className="text-xs font-semibold text-dark uppercase tracking-wide mb-2">Invoice Activity Cards</p>
                 <div className="space-y-2.5 mb-4">
                   {(
                     [
@@ -353,22 +361,13 @@ export default function DashboardPage() {
                   ))}
                 </div>
 
-                {/* Section 2: Financial cards */}
-                <p className="text-xs font-semibold text-dark uppercase tracking-wide mb-2 pt-3 border-t border-border">Financial cards</p>
+                {/* Section 2: Financial Cards */}
+                <p className="text-xs font-semibold text-dark uppercase tracking-wide mb-2 pt-3 border-t border-border">Financial Cards</p>
                 <div className="space-y-2.5">
-                  {(
-                    [
-                      { key: 'showOutstandingPayables', label: 'Outstanding payables' },
-                      { key: 'showOutputVatOutstanding', label: 'Output VAT outstanding' },
-                      { key: 'showInputVatOutstanding', label: 'Input VAT outstanding' },
-                      { key: 'showNetVatExposure', label: 'Net VAT exposure' },
-                    ] as const
-                  ).map(({ key, label }) => (
-                    <div key={key} className="flex items-center justify-between gap-3">
-                      <span className="text-sm text-dark">{label}</span>
-                      <Toggle checked={pendingPrefs[key]} onChange={() => togglePendingPref(key)} />
-                    </div>
-                  ))}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-dark">Financial exposure cards</span>
+                    <Toggle checked={pendingPrefs.showFinancialCards} onChange={() => togglePendingPref('showFinancialCards')} />
+                  </div>
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
@@ -435,11 +434,12 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* ── Row 2: Outstanding Payables (toggleable) ────────────────────────── */}
-        {prefs.showOutstandingPayables && (
-          <div className="grid grid-cols-1 gap-4">
+        {/* ── Row 2: Financial Exposure (4 cards, toggleable together) ─────── */}
+        {prefs.showFinancialCards && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Card 5: Outstanding Payables */}
             <Link href="/incoming-invoices?status=APPROVED" className="block">
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 h-full">
                 <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Outstanding Payables</p>
                 {incomingStatsLoading ? (
                   <>
@@ -458,79 +458,64 @@ export default function DashboardPage() {
                 )}
               </div>
             </Link>
-          </div>
-        )}
 
-        {/* ── Row 3: VAT Exposure (each card toggleable) ──────────────────────── */}
-        {showVatRow && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {prefs.showOutputVatOutstanding && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-                <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Output VAT Outstanding</p>
-                {statsLoading ? (
-                  <>
-                    <Sk className="h-9 w-20 mb-2" />
-                    <Sk className="h-3 w-44" />
-                  </>
-                ) : (
-                  <>
-                    <p className="text-3xl font-bold text-amber-800">
-                      {formatCurrency(stats?.outputVatOutstanding ?? 0, 'NGN')}
-                    </p>
-                    <p className="text-xs text-amber-600 mt-1.5">VAT embedded in unpaid receivables</p>
-                  </>
-                )}
-              </div>
-            )}
+            {/* Card 6: Output VAT Outstanding */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+              <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Output VAT Outstanding</p>
+              {statsLoading ? (
+                <>
+                  <Sk className="h-9 w-20 mb-2" />
+                  <Sk className="h-3 w-44" />
+                </>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold text-amber-800">
+                    {formatCurrency(outputVat, 'NGN')}
+                  </p>
+                  <p className="text-xs text-amber-600 mt-1.5">Payable to FIRS when collected</p>
+                </>
+              )}
+            </div>
 
-            {prefs.showInputVatOutstanding && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-                <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Input VAT Outstanding</p>
-                {incomingStatsLoading ? (
-                  <>
-                    <Sk className="h-9 w-20 mb-2" />
-                    <Sk className="h-3 w-44" />
-                  </>
-                ) : (
-                  <>
-                    <p className="text-3xl font-bold text-amber-800">
-                      {formatCurrency(incomingStats?.totalVatOutstanding ?? 0, 'NGN')}
-                    </p>
-                    <p className="text-xs text-amber-600 mt-1.5">VAT embedded in unpaid payables</p>
-                  </>
-                )}
-              </div>
-            )}
+            {/* Card 7: Input VAT Outstanding */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+              <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Input VAT Outstanding</p>
+              {incomingStatsLoading ? (
+                <>
+                  <Sk className="h-9 w-20 mb-2" />
+                  <Sk className="h-3 w-44" />
+                </>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold text-amber-800">
+                    {formatCurrency(inputVat, 'NGN')}
+                  </p>
+                  <p className="text-xs text-amber-600 mt-1.5">Claimable from FIRS when paid</p>
+                </>
+              )}
+            </div>
 
-            {prefs.showNetVatExposure && (() => {
-              const outputVat = stats?.outputVatOutstanding ?? 0;
-              const inputVat = incomingStats?.totalVatOutstanding ?? 0;
-              const net = outputVat - inputVat;
-              const isPos = net > 0;
-              const isNeg = net < 0;
-              const colorCls = isPos ? 'bg-green-50 border-green-200' : isNeg ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
-              const labelCls = isPos ? 'text-green-700' : isNeg ? 'text-red-700' : 'text-gray-600';
-              const valueCls = isPos ? 'text-green-800' : isNeg ? 'text-red-700' : 'text-gray-700';
-              const tag = isPos ? 'Net receivable' : isNeg ? 'Net payable' : 'Balanced';
-              return (
-                <div className={`border rounded-xl p-5 ${colorCls}`}>
-                  <p className={`text-xs font-medium uppercase tracking-wide mb-3 ${labelCls}`}>Net VAT Exposure</p>
-                  {statsLoading || incomingStatsLoading ? (
-                    <>
-                      <Sk className="h-9 w-20 mb-2" />
-                      <Sk className="h-3 w-32" />
-                    </>
-                  ) : (
-                    <>
-                      <p className={`text-3xl font-bold ${valueCls}`}>
-                        {formatCurrency(Math.abs(net), 'NGN')}
-                      </p>
-                      <p className={`text-xs mt-1.5 ${labelCls}`}>{tag} · Output minus Input VAT</p>
-                    </>
-                  )}
-                </div>
-              );
-            })()}
+            {/* Card 8: Net VAT Exposure */}
+            <div className={`border rounded-xl p-5 ${netIsPos ? 'bg-red-50 border-red-200' : netIsNeg ? 'bg-green-50 border-green/20' : 'bg-gray-50 border-gray-200'}`}>
+              <p className={`text-xs font-medium uppercase tracking-wide mb-3 ${netIsPos ? 'text-red-700' : netIsNeg ? 'text-green-700' : 'text-gray-600'}`}>
+                Net VAT Exposure
+              </p>
+              {statsLoading || incomingStatsLoading ? (
+                <>
+                  <Sk className="h-9 w-20 mb-2" />
+                  <Sk className="h-3 w-32" />
+                </>
+              ) : (
+                <>
+                  <p className={`text-3xl font-bold ${netIsPos ? 'text-red-700' : netIsNeg ? 'text-green-800' : 'text-gray-700'}`}>
+                    {formatCurrency(Math.abs(netVat), 'NGN')}
+                  </p>
+                  <p className={`text-xs mt-1.5 ${netIsPos ? 'text-red-600' : netIsNeg ? 'text-green-700' : 'text-gray-500'}`}>
+                    {netIsPos ? 'Net future payable' : netIsNeg ? 'Net future credit' : 'Balanced'}
+                  </p>
+                </>
+              )}
+            </div>
           </div>
         )}
 
@@ -671,7 +656,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* Recent activity — derived from the same queue list; zero extra API calls */}
+            {/* Recent activity */}
             {prefs.showRecentActivity && (
               <div className="bg-white rounded-xl border border-border overflow-hidden">
                 <div className="px-6 py-4 border-b border-border">

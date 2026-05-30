@@ -411,81 +411,170 @@ export default function InvoiceDetailPage() {
   const isDraft = invoice.status === "DRAFT";
   const isRejected = ["REJECTED", "SUBMISSION_FAILED", "DEAD_LETTERED", "VALIDATION_FAILED"].includes(invoice.status);
   const canCancel = ["DRAFT", "QUEUED", "VALIDATION_FAILED", "ACCEPTED"].includes(invoice.status);
-  // Show Record payment for any ACCEPTED invoice that is not fully PAID.
   const canRecordPayment = isAccepted && invoice.paymentStatus !== "PAID";
   const amountOutstanding = invoice.totalAmount - (invoice.amountPaid ?? 0);
+  const collectedPct = invoice.totalAmount > 0
+    ? Math.round(((invoice.amountPaid ?? 0) / invoice.totalAmount) * 100)
+    : 0;
+
+  // Topbar title based on status
+  const pageTitle = isAccepted ? "Invoice accepted" : isRejected ? "Invoice rejected" : "Invoice";
+  const pageSubtitle = isAccepted
+    ? `${invoice.platformIrn?.slice(0, 24) ?? invoice.id} · FIRS validated · IRN issued`
+    : isRejected
+    ? `${invoice.platformIrn?.slice(0, 24) ?? invoice.id} · Action required`
+    : undefined;
 
   return (
     <>
-      <Topbar
-        title="Invoice detail"
-        actions={
-          <div className="flex gap-2 flex-wrap">
-            <Link href="/invoices"><Button variant="secondary" size="sm">← Back</Button></Link>
-            {isDraft && (
-              <Link href={`/invoices/new?id=${invoice.id}`}>
-                <Button size="sm" variant="secondary">Edit draft →</Button>
-              </Link>
-            )}
-            {isAccepted && (
-              <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadXml}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  strokeWidth="2" className="mr-1.5 inline">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Download XML
-              </Button>
-            )}
-            {canRecordPayment && (
-              <Button size="sm" onClick={() => {
-                setPaymentForm({
-                  amount: String(amountOutstanding > 0 ? amountOutstanding : invoice.totalAmount),
-                  provider: "MANUAL", reference: "",
-                  paidAt: new Date().toISOString().slice(0, 10), notes: "",
-                });
-                setPaymentError("");
-                setShowPaymentModal(true);
-              }}>
-                Record payment
-              </Button>
-            )}
-            {canCancel && (
-              <Button variant="danger" size="sm" onClick={() => setShowCancelConfirm(true)}>
-                Cancel invoice
-              </Button>
-            )}
-          </div>
-        }
-      />
+      <div className="bg-white border-b border-border px-6 py-4 flex items-start justify-between sticky top-0 z-10">
+        <div>
+          <h1 className="text-lg font-bold text-dark">{pageTitle}</h1>
+          {pageSubtitle && <p className="text-xs text-muted mt-0.5 font-mono">{pageSubtitle}</p>}
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Link href="/invoices"><Button variant="secondary" size="sm">← All invoices</Button></Link>
+          {isDraft && (
+            <Link href={`/invoices/new?id=${invoice.id}`}>
+              <Button size="sm" variant="secondary">Edit draft →</Button>
+            </Link>
+          )}
+          {isAccepted && (
+            <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadXml}>
+              Download PDF
+            </Button>
+          )}
+          {isRejected && (
+            <Button size="sm" onClick={handleCreateCorrected}>
+              Create corrected invoice
+            </Button>
+          )}
+          {canRecordPayment && (
+            <Button size="sm" onClick={() => {
+              setPaymentForm({
+                amount: String(amountOutstanding > 0 ? amountOutstanding : invoice.totalAmount),
+                provider: "MANUAL", reference: "",
+                paidAt: new Date().toISOString().slice(0, 10), notes: "",
+              });
+              setPaymentError("");
+              setShowPaymentModal(true);
+            }}>
+              Record payment
+            </Button>
+          )}
+          {canCancel && (
+            <Button variant="danger" size="sm" onClick={() => setShowCancelConfirm(true)}>
+              Cancel invoice
+            </Button>
+          )}
+        </div>
+      </div>
 
       <div className="p-6 space-y-6">
-        {/* Status header */}
-        <div className="bg-white rounded-xl border border-border p-6">
-          <div className="flex items-center gap-3 flex-wrap mb-4">
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${STATUS_COLORS[invoice.status] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
-              {(invoice.status ?? '').replace(/_/g, " ")}
-            </span>
-            {invoice.paymentStatus && (
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${PAYMENT_STATUS_COLORS[invoice.paymentStatus] ?? "bg-gray-100 text-gray-600"}`}>
-                {invoice.paymentStatus}
-              </span>
-            )}
-          </div>
-          <div>
-            <p className="text-xs text-muted mb-0.5 font-medium uppercase tracking-wide">Platform IRN</p>
-            <p className="font-mono text-sm text-dark">{invoice.platformIrn}</p>
-          </div>
-        </div>
-
-        {/* Overdue banner — show above accepted details if overdue */}
+        {/* Overdue banner */}
         {invoice.isOverdue && <OverdueBanner dueDate={invoice.paymentDueDate} />}
 
-        {/* Accepted details */}
+        {/* Accepted banner */}
         {isAccepted && <AcceptedBanner invoice={invoice} />}
 
-        {/* Rejected details */}
+        {/* FIRS details (accepted) */}
+        {isAccepted && (invoice.firsConfirmedIrn || invoice.csid) && (
+          <div className="bg-white rounded-xl border border-border p-6">
+            <h2 className="font-semibold text-dark mb-4">FIRS details</h2>
+            <dl className="space-y-3">
+              {invoice.firsConfirmedIrn && <Row label="IRN" value={invoice.firsConfirmedIrn} />}
+              {invoice.csid && <Row label="CSID" value={invoice.csid} />}
+              {invoice.acceptedAt && <Row label="Accepted at" value={`${formatDateTime(invoice.acceptedAt)} WAT`} />}
+              <Row label="Access point" value="Interswitch NRS" />
+            </dl>
+          </div>
+        )}
+
+        {/* Rejected banner */}
         {isRejected && <RejectedBanner invoice={invoice} onCorrect={handleCreateCorrected} />}
+
+        {/* Payment tracking — accepted invoices */}
+        {isAccepted && (
+          <div className="bg-white rounded-xl border border-border p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-dark">Payment tracking</h2>
+              {canRecordPayment && (
+                <Button size="sm" onClick={() => {
+                  setPaymentForm({
+                    amount: String(amountOutstanding > 0 ? amountOutstanding : invoice.totalAmount),
+                    provider: "MANUAL", reference: "",
+                    paidAt: new Date().toISOString().slice(0, 10), notes: "",
+                  });
+                  setPaymentError("");
+                  setShowPaymentModal(true);
+                }}>
+                  Record payment
+                </Button>
+              )}
+            </div>
+
+            {/* 3-column totals */}
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              {[
+                { label: "Total payable",    value: formatCurrency(invoice.totalAmount, invoice.currency) },
+                { label: "Amount received",  value: formatCurrency(invoice.amountPaid ?? 0, invoice.currency) },
+                { label: "Outstanding",      value: formatCurrency(Math.max(0, amountOutstanding), invoice.currency) },
+              ].map(({ label, value }) => (
+                <div key={label} className="text-center p-3 bg-surface rounded-lg border border-border">
+                  <p className="text-xs text-muted mb-1">{label}</p>
+                  <p className="text-sm font-bold text-dark">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Progress bar */}
+            <div className="mb-4">
+              <div className="w-full bg-gray-100 rounded-full h-2 mb-1.5">
+                <div className="bg-green h-2 rounded-full transition-all" style={{ width: `${Math.min(100, collectedPct)}%` }} />
+              </div>
+              <p className="text-xs text-muted">
+                {collectedPct}% collected
+                {invoice.paymentDueDate && ` · Due: ${formatDate(invoice.paymentDueDate)}`}
+              </p>
+            </div>
+
+            {/* Payment history */}
+            <h3 className="text-sm font-semibold text-dark mb-3">Payment history</h3>
+            {paymentsLoading ? (
+              <div className="space-y-2 py-2">
+                {[0,1,2].map(i => <Skeleton key={i} className="h-14 w-full" />)}
+              </div>
+            ) : payments.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-muted mb-3">No payments recorded yet.</p>
+                {canRecordPayment && (
+                  <Button size="sm" onClick={() => setShowPaymentModal(true)}>
+                    Record first payment
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {payments.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-dark">{formatCurrency(p.amount, p.currency)}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${PROVIDER_BADGE[p.provider] ?? "bg-gray-100 text-gray-600"}`}>
+                          {p.provider === "BANK_TRANSFER" ? "Bank Transfer" : p.provider.charAt(0) + p.provider.slice(1).toLowerCase()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted mt-0.5">
+                        Ref: <span className="font-mono">{p.paymentReference}</span> · {formatDate(p.paidAt)}
+                      </p>
+                      {p.notes && <p className="text-xs text-muted mt-0.5 italic">{p.notes}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Invoice info + parties */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -560,61 +649,6 @@ export default function InvoiceDetailPage() {
           </div>
         )}
 
-        {/* Payment tracking — accepted invoices only */}
-        {isAccepted && (
-          <div className="bg-white rounded-xl border border-border p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-dark">Payment history</h2>
-              {canRecordPayment && (
-                <Button size="sm" onClick={() => {
-                  setPaymentForm({
-                    amount: String(amountOutstanding > 0 ? amountOutstanding : invoice.totalAmount),
-                    provider: "MANUAL", reference: "",
-                    paidAt: new Date().toISOString().slice(0, 10), notes: "",
-                  });
-                  setPaymentError("");
-                  setShowPaymentModal(true);
-                }}>
-                  Record payment
-                </Button>
-              )}
-            </div>
-            {paymentsLoading ? (
-              <div className="space-y-2 py-2">
-                {[0,1,2].map(i => <Skeleton key={i} className="h-14 w-full" />)}
-              </div>
-            ) : payments.length === 0 ? (
-              <div className="text-center py-6">
-                <p className="text-sm text-muted mb-3">No payments recorded yet.</p>
-                {canRecordPayment && (
-                  <Button size="sm" onClick={() => setShowPaymentModal(true)}>
-                    Record first payment
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {payments.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-dark">{formatCurrency(p.amount, p.currency)}</span>
-                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${PROVIDER_BADGE[p.provider] ?? "bg-gray-100 text-gray-600"}`}>
-                          {p.provider === "BANK_TRANSFER" ? "Bank Transfer" : p.provider.charAt(0) + p.provider.slice(1).toLowerCase()}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted mt-0.5">
-                        Ref: <span className="font-mono">{p.paymentReference}</span> · {formatDate(p.paidAt)}
-                      </p>
-                      {p.notes && <p className="text-xs text-muted mt-0.5 italic">{p.notes}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Submission history */}
         {invoice.submissionAttempts && invoice.submissionAttempts.length > 0 && (
           <div className="bg-white rounded-xl border border-border p-6">
@@ -655,6 +689,47 @@ export default function InvoiceDetailPage() {
               ))}
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Bottom action bar */}
+      <div className="sticky bottom-0 bg-white border-t border-border px-6 py-3 flex items-center gap-3 flex-wrap">
+        <Link href="/invoices" className="text-sm font-medium text-muted hover:text-dark transition-colors">
+          ← All invoices
+        </Link>
+        <div className="flex-1" />
+        {isAccepted && (
+          <>
+            <button className="text-sm font-medium text-muted hover:text-dark transition-colors">
+              Send to buyer
+            </button>
+            <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadXml}>
+              Download PDF
+            </Button>
+            {canRecordPayment && (
+              <Button size="sm" onClick={() => {
+                setPaymentForm({
+                  amount: String(amountOutstanding > 0 ? amountOutstanding : invoice.totalAmount),
+                  provider: "MANUAL", reference: "",
+                  paidAt: new Date().toISOString().slice(0, 10), notes: "",
+                });
+                setPaymentError("");
+                setShowPaymentModal(true);
+              }}>
+                Record payment
+              </Button>
+            )}
+          </>
+        )}
+        {isRejected && (
+          <>
+            <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadXml}>
+              Download rejection report
+            </Button>
+            <Button size="sm" onClick={handleCreateCorrected}>
+              Create corrected invoice
+            </Button>
+          </>
         )}
       </div>
 
