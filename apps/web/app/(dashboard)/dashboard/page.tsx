@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/auth';
-import { invoiceApi, userApi } from '@/lib/api';
+import { invoiceApi, incomingInvoiceApi, userApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { useUserProfile } from '@/lib/userProfile';
@@ -37,7 +37,21 @@ interface Stats {
   overdueCount?: number;
   collectedThisMonth?: number;
   collectedLastMonth?: number;
+  outputVatOutstanding?: number;
+  inputVatOutstanding?: number;
+  netVatExposure?: number;
   recentInvoices: RecentInvoice[];
+}
+
+interface IncomingStats {
+  total: number;
+  received: number;
+  validated: number;
+  approved: number;
+  paid: number;
+  totalOutstanding: number;
+  outstandingCount: number;
+  totalVatOutstanding: number;
 }
 
 interface RecentInvoice {
@@ -162,6 +176,8 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
+  const [incomingStats, setIncomingStats] = useState<IncomingStats | null>(null);
+
   const [queue, setQueue] = useState<QueueInvoice[]>([]);
   const [queueLoading, setQueueLoading] = useState(true);
 
@@ -224,10 +240,10 @@ export default function DashboardPage() {
     setStatsLoading(true);
     setQueueLoading(true);
 
-    // Fire both requests in parallel — previously sequential, costing 2× latency.
-    const [statsResult, listResult] = await Promise.allSettled([
+    const [statsResult, listResult, incomingStatsResult] = await Promise.allSettled([
       invoiceApi.stats(),
       invoiceApi.list({ page: 1, limit: 5 } as Record<string, string | number>),
+      incomingInvoiceApi.stats(),
     ]);
 
     setStats(statsResult.status === 'fulfilled' ? (statsResult.value as Stats) : null);
@@ -239,6 +255,12 @@ export default function DashboardPage() {
         : [],
     );
     setQueueLoading(false);
+
+    setIncomingStats(
+      incomingStatsResult.status === 'fulfilled'
+        ? (incomingStatsResult.value as IncomingStats)
+        : null,
+    );
 
     setLastRefreshed(new Date());
   }, []);
@@ -344,7 +366,7 @@ export default function DashboardPage() {
       </header>
 
       <div className="p-6 space-y-6">
-        {/* ── 4 Metric cards ─────────────────────────────────────────────────── */}
+        {/* ── Row 1: Invoice Activity ─────────────────────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
             label="Total Invoices"
@@ -359,19 +381,112 @@ export default function DashboardPage() {
             valueClass="text-green-700"
             loading={statsLoading}
           />
-          <MetricCard
-            label="Outstanding Receivables"
-            value={formatCurrency(outstandingAmount, 'NGN')}
-            sub={overdueCount > 0 ? `${overdueCount} overdue` : 'None overdue'}
-            valueClass={overdueCount > 0 ? 'text-red-600' : 'text-dark'}
-            loading={statsLoading}
-          />
-          <MetricCard
-            label="Collected This Month"
-            value={formatCurrency(collectedThisMonth, 'NGN')}
-            sub={trend ?? 'All time'}
-            loading={statsLoading}
-          />
+          <Link href="/payments" className="block">
+            <MetricCard
+              label="Outstanding Receivables"
+              value={formatCurrency(outstandingAmount, 'NGN')}
+              sub={overdueCount > 0 ? `${overdueCount} overdue` : 'None overdue'}
+              valueClass={overdueCount > 0 ? 'text-red-600' : 'text-dark'}
+              loading={statsLoading}
+            />
+          </Link>
+          <Link href="/payments" className="block">
+            <MetricCard
+              label="Collected This Month"
+              value={formatCurrency(collectedThisMonth, 'NGN')}
+              sub={trend ?? 'All time'}
+              loading={statsLoading}
+            />
+          </Link>
+        </div>
+
+        {/* ── Row 2: Payables ─────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 gap-4">
+          <Link href="/incoming-invoices?status=APPROVED" className="block">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+              <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Outstanding Payables</p>
+              {statsLoading ? (
+                <>
+                  <Sk className="h-9 w-20 mb-2" />
+                  <Sk className="h-3 w-40" />
+                </>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold text-amber-800">
+                    {formatCurrency(incomingStats?.totalOutstanding ?? 0, 'NGN')}
+                  </p>
+                  <p className="text-xs text-amber-600 mt-1.5">
+                    {incomingStats?.outstandingCount ?? 0} invoices pending payment
+                  </p>
+                </>
+              )}
+            </div>
+          </Link>
+        </div>
+
+        {/* ── Row 3: VAT Exposure ─────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+            <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Output VAT Outstanding</p>
+            {statsLoading ? (
+              <>
+                <Sk className="h-9 w-20 mb-2" />
+                <Sk className="h-3 w-44" />
+              </>
+            ) : (
+              <>
+                <p className="text-3xl font-bold text-amber-800">
+                  {formatCurrency(stats?.outputVatOutstanding ?? 0, 'NGN')}
+                </p>
+                <p className="text-xs text-amber-600 mt-1.5">VAT embedded in unpaid receivables</p>
+              </>
+            )}
+          </div>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+            <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Input VAT Outstanding</p>
+            {statsLoading ? (
+              <>
+                <Sk className="h-9 w-20 mb-2" />
+                <Sk className="h-3 w-44" />
+              </>
+            ) : (
+              <>
+                <p className="text-3xl font-bold text-amber-800">
+                  {formatCurrency(stats?.inputVatOutstanding ?? 0, 'NGN')}
+                </p>
+                <p className="text-xs text-amber-600 mt-1.5">VAT embedded in unpaid payables</p>
+              </>
+            )}
+          </div>
+
+          {(() => {
+            const net = stats?.netVatExposure ?? 0;
+            const isPos = net > 0;
+            const isNeg = net < 0;
+            const colorCls = isPos ? 'bg-green-50 border-green-200' : isNeg ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
+            const labelCls = isPos ? 'text-green-700' : isNeg ? 'text-red-700' : 'text-gray-600';
+            const valueCls = isPos ? 'text-green-800' : isNeg ? 'text-red-700' : 'text-gray-700';
+            const tag = isPos ? 'Net receivable' : isNeg ? 'Net payable' : 'Balanced';
+            return (
+              <div className={`border rounded-xl p-5 ${colorCls}`}>
+                <p className={`text-xs font-medium uppercase tracking-wide mb-3 ${labelCls}`}>Net VAT Exposure</p>
+                {statsLoading ? (
+                  <>
+                    <Sk className="h-9 w-20 mb-2" />
+                    <Sk className="h-3 w-32" />
+                  </>
+                ) : (
+                  <>
+                    <p className={`text-3xl font-bold ${valueCls}`}>
+                      {formatCurrency(Math.abs(net), 'NGN')}
+                    </p>
+                    <p className={`text-xs mt-1.5 ${labelCls}`}>{tag} · Output minus Input VAT</p>
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* ── FIRS status bar ─────────────────────────────────────────────────── */}

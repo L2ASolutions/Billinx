@@ -75,6 +75,13 @@ export class IncomingInvoiceController {
     });
   }
 
+  @Get('stats')
+  @ApiOperation({ summary: 'Get incoming invoice stats for dashboard' })
+  async stats(@Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.incomingInvoiceService.getStats(ctx.tenantId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get incoming invoice by ID' })
   @ApiResponse({ status: 404, description: 'Not found' })

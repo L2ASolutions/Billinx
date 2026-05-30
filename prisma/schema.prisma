@@ -45,6 +45,8 @@ users         User[]
   reminderRules    ReminderRule[]
   reminderLogs     ReminderLog[]
   incomingInvoices IncomingInvoice[]
+  vatEntries       VatEntry[]
+  vatPeriodSummaries VatPeriodSummary[]
 
   @@map("tenants")
 }
@@ -682,6 +684,9 @@ enum ActivityEventType {
   INCOMING_INVOICE_RECEIVED
   INCOMING_INVOICE_VALIDATED
   INCOMING_INVOICE_APPROVED
+  VAT_ENTRY_CREATED
+  VAT_ENTRY_RECONCILED
+  VAT_PERIOD_CLOSED
   INCOMING_INVOICE_REJECTED
   INCOMING_INVOICE_PAID
 }
@@ -853,4 +858,72 @@ model IncomingInvoiceItem {
 
   @@index([incomingInvoiceId])
   @@map("incoming_invoice_items")
+}
+
+// ── VAT RECONCILIATION ────────────────────────────────────────────────────────
+
+enum VatType {
+  OUTPUT
+  INPUT
+}
+
+enum VatEntryStatus {
+  UNRECONCILED
+  RECONCILED
+  DISPUTED
+  EXEMPT
+}
+
+enum VatPeriodStatus {
+  OPEN
+  CLOSED
+  FILED
+}
+
+model VatEntry {
+  id                String         @id @default(uuid())
+  tenantId          String
+  type              VatType
+  invoiceId         String?
+  incomingInvoiceId String?
+  supplierTin       String?
+  buyerTin          String?
+  taxableAmount     Decimal
+  vatAmount         Decimal
+  vatRate           Decimal        @default(7.5)
+  invoiceDate       DateTime
+  period            String
+  status            VatEntryStatus @default(UNRECONCILED)
+  reconciledAt      DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  tenant            Tenant         @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, period])
+  @@index([tenantId, type])
+  @@index([tenantId, status])
+  @@map("vat_entries")
+}
+
+model VatPeriodSummary {
+  id                String          @id @default(uuid())
+  tenantId          String
+  period            String
+  outputVat         Decimal         @default(0)
+  inputVat          Decimal         @default(0)
+  netVat            Decimal         @default(0)
+  outputCount       Int             @default(0)
+  inputCount        Int             @default(0)
+  unreconciledCount Int             @default(0)
+  status            VatPeriodStatus @default(OPEN)
+  closedAt          DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  tenant            Tenant          @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, period])
+  @@index([tenantId])
+  @@map("vat_period_summaries")
 }
