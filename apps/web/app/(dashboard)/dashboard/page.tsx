@@ -12,10 +12,16 @@ import { NotificationBell } from '@/components/dashboard/NotificationBell';
 // ── Dashboard prefs ───────────────────────────────────────────────────────────
 
 interface DashboardPrefs {
+  // Panels
   showRecentInvoices: boolean;
   showSubmissionQueue: boolean;
   showRecentActivity: boolean;
   showFirsStatus: boolean;
+  // Financial cards
+  showOutstandingPayables: boolean;
+  showOutputVatOutstanding: boolean;
+  showInputVatOutstanding: boolean;
+  showNetVatExposure: boolean;
 }
 
 const DEFAULT_PREFS: DashboardPrefs = {
@@ -23,6 +29,10 @@ const DEFAULT_PREFS: DashboardPrefs = {
   showSubmissionQueue: true,
   showRecentActivity: true,
   showFirsStatus: true,
+  showOutstandingPayables: true,
+  showOutputVatOutstanding: true,
+  showInputVatOutstanding: true,
+  showNetVatExposure: true,
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -177,6 +187,7 @@ export default function DashboardPage() {
   const [statsLoading, setStatsLoading] = useState(true);
 
   const [incomingStats, setIncomingStats] = useState<IncomingStats | null>(null);
+  const [incomingStatsLoading, setIncomingStatsLoading] = useState(true);
 
   const [queue, setQueue] = useState<QueueInvoice[]>([]);
   const [queueLoading, setQueueLoading] = useState(true);
@@ -239,6 +250,7 @@ export default function DashboardPage() {
   const loadData = useCallback(async () => {
     setStatsLoading(true);
     setQueueLoading(true);
+    setIncomingStatsLoading(true);
 
     const [statsResult, listResult, incomingStatsResult] = await Promise.allSettled([
       invoiceApi.stats(),
@@ -261,6 +273,7 @@ export default function DashboardPage() {
         ? (incomingStatsResult.value as IncomingStats)
         : null,
     );
+    setIncomingStatsLoading(false);
 
     setLastRefreshed(new Date());
   }, []);
@@ -283,6 +296,8 @@ export default function DashboardPage() {
   const lastRefreshedLabel = lastRefreshed
     ? lastRefreshed.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })
     : null;
+
+  const showVatRow = prefs.showOutputVatOutstanding || prefs.showInputVatOutstanding || prefs.showNetVatExposure;
 
   return (
     <div className="min-h-screen bg-surface">
@@ -319,9 +334,10 @@ export default function DashboardPage() {
               Customise
             </button>
             {customiseOpen && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl border border-border shadow-lg z-50 p-4">
-                <p className="text-xs font-semibold text-dark uppercase tracking-wide mb-3">Dashboard widgets</p>
-                <div className="space-y-3">
+              <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl border border-border shadow-lg z-50 p-4">
+                {/* Section 1: Panels */}
+                <p className="text-xs font-semibold text-dark uppercase tracking-wide mb-2">Panels</p>
+                <div className="space-y-2.5 mb-4">
                   {(
                     [
                       { key: 'showRecentInvoices', label: 'Recent invoices' },
@@ -336,6 +352,25 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
+
+                {/* Section 2: Financial cards */}
+                <p className="text-xs font-semibold text-dark uppercase tracking-wide mb-2 pt-3 border-t border-border">Financial cards</p>
+                <div className="space-y-2.5">
+                  {(
+                    [
+                      { key: 'showOutstandingPayables', label: 'Outstanding payables' },
+                      { key: 'showOutputVatOutstanding', label: 'Output VAT outstanding' },
+                      { key: 'showInputVatOutstanding', label: 'Input VAT outstanding' },
+                      { key: 'showNetVatExposure', label: 'Net VAT exposure' },
+                    ] as const
+                  ).map(({ key, label }) => (
+                    <div key={key} className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-dark">{label}</span>
+                      <Toggle checked={pendingPrefs[key]} onChange={() => togglePendingPref(key)} />
+                    </div>
+                  ))}
+                </div>
+
                 <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
                   <button
                     onClick={cancelPrefs}
@@ -366,7 +401,7 @@ export default function DashboardPage() {
       </header>
 
       <div className="p-6 space-y-6">
-        {/* ── Row 1: Invoice Activity ─────────────────────────────────────────── */}
+        {/* ── Row 1: Invoice Activity (always visible) ────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
             label="Total Invoices"
@@ -400,94 +435,104 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* ── Row 2: Payables ─────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 gap-4">
-          <Link href="/incoming-invoices?status=APPROVED" className="block">
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-              <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Outstanding Payables</p>
-              {statsLoading ? (
-                <>
-                  <Sk className="h-9 w-20 mb-2" />
-                  <Sk className="h-3 w-40" />
-                </>
-              ) : (
-                <>
-                  <p className="text-3xl font-bold text-amber-800">
-                    {formatCurrency(incomingStats?.totalOutstanding ?? 0, 'NGN')}
-                  </p>
-                  <p className="text-xs text-amber-600 mt-1.5">
-                    {incomingStats?.outstandingCount ?? 0} invoices pending payment
-                  </p>
-                </>
-              )}
-            </div>
-          </Link>
-        </div>
-
-        {/* ── Row 3: VAT Exposure ─────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-            <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Output VAT Outstanding</p>
-            {statsLoading ? (
-              <>
-                <Sk className="h-9 w-20 mb-2" />
-                <Sk className="h-3 w-44" />
-              </>
-            ) : (
-              <>
-                <p className="text-3xl font-bold text-amber-800">
-                  {formatCurrency(stats?.outputVatOutstanding ?? 0, 'NGN')}
-                </p>
-                <p className="text-xs text-amber-600 mt-1.5">VAT embedded in unpaid receivables</p>
-              </>
-            )}
-          </div>
-
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-            <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Input VAT Outstanding</p>
-            {statsLoading ? (
-              <>
-                <Sk className="h-9 w-20 mb-2" />
-                <Sk className="h-3 w-44" />
-              </>
-            ) : (
-              <>
-                <p className="text-3xl font-bold text-amber-800">
-                  {formatCurrency(stats?.inputVatOutstanding ?? 0, 'NGN')}
-                </p>
-                <p className="text-xs text-amber-600 mt-1.5">VAT embedded in unpaid payables</p>
-              </>
-            )}
-          </div>
-
-          {(() => {
-            const net = stats?.netVatExposure ?? 0;
-            const isPos = net > 0;
-            const isNeg = net < 0;
-            const colorCls = isPos ? 'bg-green-50 border-green-200' : isNeg ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
-            const labelCls = isPos ? 'text-green-700' : isNeg ? 'text-red-700' : 'text-gray-600';
-            const valueCls = isPos ? 'text-green-800' : isNeg ? 'text-red-700' : 'text-gray-700';
-            const tag = isPos ? 'Net receivable' : isNeg ? 'Net payable' : 'Balanced';
-            return (
-              <div className={`border rounded-xl p-5 ${colorCls}`}>
-                <p className={`text-xs font-medium uppercase tracking-wide mb-3 ${labelCls}`}>Net VAT Exposure</p>
-                {statsLoading ? (
+        {/* ── Row 2: Outstanding Payables (toggleable) ────────────────────────── */}
+        {prefs.showOutstandingPayables && (
+          <div className="grid grid-cols-1 gap-4">
+            <Link href="/incoming-invoices?status=APPROVED" className="block">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+                <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Outstanding Payables</p>
+                {incomingStatsLoading ? (
                   <>
                     <Sk className="h-9 w-20 mb-2" />
-                    <Sk className="h-3 w-32" />
+                    <Sk className="h-3 w-40" />
                   </>
                 ) : (
                   <>
-                    <p className={`text-3xl font-bold ${valueCls}`}>
-                      {formatCurrency(Math.abs(net), 'NGN')}
+                    <p className="text-3xl font-bold text-amber-800">
+                      {formatCurrency(incomingStats?.totalOutstanding ?? 0, 'NGN')}
                     </p>
-                    <p className={`text-xs mt-1.5 ${labelCls}`}>{tag} · Output minus Input VAT</p>
+                    <p className="text-xs text-amber-600 mt-1.5">
+                      {incomingStats?.outstandingCount ?? 0} invoices pending payment
+                    </p>
                   </>
                 )}
               </div>
-            );
-          })()}
-        </div>
+            </Link>
+          </div>
+        )}
+
+        {/* ── Row 3: VAT Exposure (each card toggleable) ──────────────────────── */}
+        {showVatRow && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {prefs.showOutputVatOutstanding && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+                <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Output VAT Outstanding</p>
+                {statsLoading ? (
+                  <>
+                    <Sk className="h-9 w-20 mb-2" />
+                    <Sk className="h-3 w-44" />
+                  </>
+                ) : (
+                  <>
+                    <p className="text-3xl font-bold text-amber-800">
+                      {formatCurrency(stats?.outputVatOutstanding ?? 0, 'NGN')}
+                    </p>
+                    <p className="text-xs text-amber-600 mt-1.5">VAT embedded in unpaid receivables</p>
+                  </>
+                )}
+              </div>
+            )}
+
+            {prefs.showInputVatOutstanding && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+                <p className="text-xs font-medium text-amber-700 uppercase tracking-wide mb-3">Input VAT Outstanding</p>
+                {incomingStatsLoading ? (
+                  <>
+                    <Sk className="h-9 w-20 mb-2" />
+                    <Sk className="h-3 w-44" />
+                  </>
+                ) : (
+                  <>
+                    <p className="text-3xl font-bold text-amber-800">
+                      {formatCurrency(incomingStats?.totalVatOutstanding ?? 0, 'NGN')}
+                    </p>
+                    <p className="text-xs text-amber-600 mt-1.5">VAT embedded in unpaid payables</p>
+                  </>
+                )}
+              </div>
+            )}
+
+            {prefs.showNetVatExposure && (() => {
+              const outputVat = stats?.outputVatOutstanding ?? 0;
+              const inputVat = incomingStats?.totalVatOutstanding ?? 0;
+              const net = outputVat - inputVat;
+              const isPos = net > 0;
+              const isNeg = net < 0;
+              const colorCls = isPos ? 'bg-green-50 border-green-200' : isNeg ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
+              const labelCls = isPos ? 'text-green-700' : isNeg ? 'text-red-700' : 'text-gray-600';
+              const valueCls = isPos ? 'text-green-800' : isNeg ? 'text-red-700' : 'text-gray-700';
+              const tag = isPos ? 'Net receivable' : isNeg ? 'Net payable' : 'Balanced';
+              return (
+                <div className={`border rounded-xl p-5 ${colorCls}`}>
+                  <p className={`text-xs font-medium uppercase tracking-wide mb-3 ${labelCls}`}>Net VAT Exposure</p>
+                  {statsLoading || incomingStatsLoading ? (
+                    <>
+                      <Sk className="h-9 w-20 mb-2" />
+                      <Sk className="h-3 w-32" />
+                    </>
+                  ) : (
+                    <>
+                      <p className={`text-3xl font-bold ${valueCls}`}>
+                        {formatCurrency(Math.abs(net), 'NGN')}
+                      </p>
+                      <p className={`text-xs mt-1.5 ${labelCls}`}>{tag} · Output minus Input VAT</p>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
         {/* ── FIRS status bar ─────────────────────────────────────────────────── */}
         {prefs.showFirsStatus && (
