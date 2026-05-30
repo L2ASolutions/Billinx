@@ -2,6 +2,29 @@
 // Client-side: use /api prefix so requests go through the Next.js proxy API
 // route (app/api/[...path]/route.ts) which explicitly forwards all headers —
 // including Authorization — to the backend.
+
+// ── Client-side request cache (30 s TTL) ─────────────────────────────────────
+const _cache = new Map<string, { data: unknown; time: number }>();
+
+export function cachedGet<T>(url: string, ttlMs = 30_000): Promise<T> {
+  if (typeof window !== 'undefined') {
+    const hit = _cache.get(url);
+    if (hit && Date.now() - hit.time < ttlMs) {
+      return Promise.resolve(hit.data as T);
+    }
+  }
+  return api.get<T>(url).then((data) => {
+    if (typeof window !== 'undefined') {
+      _cache.set(url, { data, time: Date.now() });
+    }
+    return data;
+  });
+}
+
+export function invalidateCache(url: string) {
+  _cache.delete(url);
+}
+
 const API_BASE =
   typeof window === 'undefined'
     ? (process.env.API_URL ?? 'http://localhost:3000')
@@ -182,7 +205,7 @@ export const invoiceApi = {
   // BUG-003 fix: PATCH, not POST; BUG-002 fix: dashboard path with JWT guard
   cancel: (id: string, reason: string) =>
     api.patch(`/v1/invoices/dashboard/${id}/cancel`, { reason }),
-  stats: () => api.get<unknown>('/v1/invoices/dashboard/stats'),
+  stats: () => cachedGet<unknown>('/v1/invoices/dashboard/stats'),
   getXml: (id: string) => requestBlob(`/v1/invoices/dashboard/${id}/xml`),
   getStatus: (id: string) =>
     api.get<unknown>(`/v1/invoices/dashboard/${id}/status`),
@@ -243,7 +266,7 @@ export const exportApi = {
 
 // Reminder Rules — backend field is `reminderMessage` (BUG-011)
 export const reminderApi = {
-  list: () => api.get<{ data: unknown[]; total: number }>('/v1/reminder-rules'),
+  list: () => cachedGet<{ data: unknown[]; total: number }>('/v1/reminder-rules'),
   create: (data: {
     name: string;
     triggerType: string;
@@ -271,7 +294,7 @@ export const productApi = {
     isActive?: string;
   }) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return api.get<{ data: unknown[]; total: number }>(`/v1/products${qs}`);
+    return cachedGet<{ data: unknown[]; total: number }>(`/v1/products${qs}`);
   },
   get: (id: string) => api.get<unknown>(`/v1/products/${id}`),
   create: (data: unknown) => api.post<unknown>('/v1/products', data),
@@ -296,14 +319,14 @@ export interface ActivityEvent {
 export const activityApi = {
   list: (params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return api.get<{ data: ActivityEvent[]; total: number }>(`/v1/activity${qs}`);
+    return cachedGet<{ data: ActivityEvent[]; total: number }>(`/v1/activity${qs}`);
   },
 };
 
 // Team / Users
 export const userApi = {
   me: () => api.get<unknown>('/v1/users/me'),
-  list: () => api.get<{ data: unknown[]; total: number }>('/v1/users'),
+  list: () => cachedGet<{ data: unknown[]; total: number }>('/v1/users'),
   invite: (email: string, role: string) =>
     api.post('/v1/users/invite', { email, role }),
   // BUG-010: POST (not PATCH) to /roles (plural, not /role)
@@ -365,6 +388,32 @@ export const incomingInvoiceApi = {
     id: string,
     data: { amount: number; reference: string; provider: string; paidAt: string },
   ) => api.patch<unknown>(`/v1/incoming-invoices/${id}/mark-paid`, data),
+  stats: () => cachedGet<{
+    total: number;
+    received: number;
+    validated: number;
+    approved: number;
+    paid: number;
+    totalOutstanding: number;
+    outstandingCount: number;
+    totalVatOutstanding: number;
+  }>('/v1/incoming-invoices/stats'),
+};
+
+// VAT Reconciliation
+export const vatApi = {
+  summary: (period: string) =>
+    api.get<unknown>(`/v1/vat/summary?period=${encodeURIComponent(period)}`),
+  annualSummary: (year: number) =>
+    api.get<unknown>(`/v1/vat/summary/annual?year=${year}`),
+  entries: (params?: { type?: string; period?: string; status?: string; page?: number; limit?: number }) => {
+    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+    return api.get<unknown>(`/v1/vat/entries${qs}`);
+  },
+  reconcile: (entryId: string) =>
+    api.patch<unknown>(`/v1/vat/entries/${entryId}/reconcile`),
+  mismatches: (period: string) =>
+    api.get<unknown>(`/v1/vat/mismatches?period=${encodeURIComponent(period)}`),
 };
 
 function adminRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
