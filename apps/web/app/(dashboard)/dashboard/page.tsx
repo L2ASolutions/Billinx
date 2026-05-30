@@ -193,6 +193,8 @@ export default function DashboardPage() {
   const customiseRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Defer preferences load so it doesn't race with main data calls
+    const t = setTimeout(() => {
     userApi.getPreferences()
       .then(({ dashboardWidgets }) => {
         if (dashboardWidgets && Object.keys(dashboardWidgets).length > 0) {
@@ -213,6 +215,8 @@ export default function DashboardPage() {
         }
       })
       .catch(() => {});
+    }, 1000);
+    return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {

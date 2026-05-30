@@ -591,7 +591,10 @@ export class InvoiceService {
       total,
       accepted,
       rejected,
+      rejectedAll,
       pending,
+      draft,
+      overdue,
       amountAgg,
       recentInvoices,
       outstandingAgg,
@@ -608,8 +611,20 @@ export class InvoiceService {
       const rejected = await tx.invoice.count({
         where: { tenantId, status: 'REJECTED' },
       });
+      const rejectedAll = await tx.invoice.count({
+        where: {
+          tenantId,
+          status: { in: ['REJECTED', 'SUBMISSION_FAILED', 'DEAD_LETTERED', 'VALIDATION_FAILED'] as any },
+        },
+      });
       const pending = await tx.invoice.count({
         where: { tenantId, status: { in: PENDING_STATUSES as any } },
+      });
+      const draft = await tx.invoice.count({
+        where: { tenantId, status: 'DRAFT' },
+      });
+      const overdue = await tx.invoice.count({
+        where: { tenantId, isOverdue: true },
       });
       const amountAgg = await tx.invoice.aggregate({
         where: { tenantId },
@@ -661,7 +676,8 @@ export class InvoiceService {
         _sum: { vatAmount: true },
       });
       return [
-        total, accepted, rejected, pending, amountAgg, recentInvoices,
+        total, accepted, rejected, rejectedAll, pending, draft, overdue,
+        amountAgg, recentInvoices,
         outstandingAgg, overdueCount, collectedThisMonth, collectedLastMonth,
         outputVatAgg, inputVatAgg,
       ] as const;
@@ -674,7 +690,10 @@ export class InvoiceService {
       total,
       accepted,
       rejected,
+      rejectedAll,
       pending,
+      draft,
+      overdue,
       totalAmount: Number(amountAgg._sum.totalAmount ?? 0),
       outstandingAmount: Number(outstandingAgg._sum.totalAmount ?? 0),
       overdueCount,
