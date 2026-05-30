@@ -30,6 +30,13 @@ const PAYMENT_STATUS_COLORS: Record<string, string> = {
 
 const PROVIDERS = ["MANUAL", "PAYSTACK", "FLUTTERWAVE", "BANK_TRANSFER"] as const;
 
+const PROVIDER_DOTS: Record<string, string> = {
+  BANK_TRANSFER: "bg-blue-500",
+  PAYSTACK:      "bg-green-500",
+  FLUTTERWAVE:   "bg-orange-500",
+  MANUAL:        "bg-gray-400",
+};
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface InvoiceRow {
@@ -54,6 +61,17 @@ interface RecordPaymentForm {
   notes: string;
 }
 
+interface PaymentStats {
+  totalBilled: number;
+  totalCollected: number;
+  collectionRate: number;
+  paidInFull: number;
+  partiallyPaid: number;
+  unpaidNotDue: number;
+  overdue: number;
+  providerBreakdown: Array<{ provider: string; total: number }>;
+}
+
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function Sk({ className = "" }: { className?: string }) {
@@ -70,6 +88,9 @@ export default function PaymentsPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   const [recordFor, setRecordFor] = useState<InvoiceRow | null>(null);
   const [form, setForm] = useState<RecordPaymentForm>({
@@ -102,7 +123,15 @@ export default function PaymentsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Derive metrics from loaded page (best-effort approximation)
+  useEffect(() => {
+    setStatsLoading(true);
+    invoiceApi.paymentStats()
+      .then((s) => setPaymentStats(s as PaymentStats))
+      .catch(() => {})
+      .finally(() => setStatsLoading(false));
+  }, []);
+
+  // Derive metrics from loaded page (best-effort approximation for the top cards)
   const totalBilled = invoices.reduce((s, i) => s + Number(i.totalAmount ?? 0), 0);
   const totalCollected = invoices.reduce((s, i) => s + Number(i.amountPaid ?? 0), 0);
   const totalOutstanding = invoices.reduce((s, i) => {
@@ -137,6 +166,9 @@ export default function PaymentsPage() {
 
   const totalPages = Math.ceil(total / 20);
 
+  // Collection rate progress bar width
+  const collectionRate = paymentStats?.collectionRate ?? 0;
+
   return (
     <>
       <Topbar title="Payments" />
@@ -146,177 +178,265 @@ export default function PaymentsPage() {
           <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>
         )}
 
-        {/* 4 metric cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: "Total billed",    value: formatCurrency(totalBilled),     cls: "text-dark" },
-            { label: "Collected",       value: formatCurrency(totalCollected),   cls: "text-green-700" },
-            { label: "Outstanding",     value: formatCurrency(totalOutstanding), cls: "text-dark" },
-            { label: "Overdue",         value: formatCurrency(overdueAmount),    cls: overdueCount > 0 ? "text-red-600" : "text-dark" },
-          ].map(({ label, value, cls }) => (
-            <div key={label} className="bg-white rounded-xl border border-border p-5">
-              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-2">{label}</p>
-              {loading ? <Sk className="h-8 w-24" /> : <p className={`text-2xl font-bold ${cls}`}>{value}</p>}
-            </div>
-          ))}
-        </div>
-
-        {/* Overdue alert banner */}
-        {!loading && overdueCount > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 flex items-center gap-3">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2" className="text-red-600 shrink-0">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            <p className="text-sm font-medium text-red-700">
-              {overdueCount} invoice{overdueCount !== 1 ? "s" : ""} overdue — {formatCurrency(overdueAmount)} outstanding
-            </p>
-            <button
-              onClick={() => { setActiveTab("OVERDUE"); setPage(1); }}
-              className="ml-auto text-sm font-medium text-red-600 hover:underline shrink-0"
-            >
-              View overdue →
-            </button>
-          </div>
-        )}
-
-        {/* Filter tabs + search */}
-        <div className="bg-white rounded-xl border border-border overflow-hidden">
-          <div className="flex items-center justify-between px-4 border-b border-border">
-            <div className="flex">
-              {PAYMENT_TABS.map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => { setActiveTab(key); setPage(1); }}
-                  className={`px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === key
-                      ? "border-green text-green"
-                      : "border-transparent text-muted hover:text-dark"
-                  }`}
-                >
-                  {label}
-                </button>
+        <div className="flex gap-6 items-start">
+          {/* ── Left column (70%) ─────────────────────────────────────────── */}
+          <div className="flex-1 min-w-0 space-y-6">
+            {/* 4 metric cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                { label: "Total billed",    value: formatCurrency(totalBilled),     cls: "text-dark" },
+                { label: "Collected",       value: formatCurrency(totalCollected),   cls: "text-green-700" },
+                { label: "Outstanding",     value: formatCurrency(totalOutstanding), cls: "text-dark" },
+                { label: "Overdue",         value: formatCurrency(overdueAmount),    cls: overdueCount > 0 ? "text-red-600" : "text-dark" },
+              ].map(({ label, value, cls }) => (
+                <div key={label} className="bg-white rounded-xl border border-border p-5">
+                  <p className="text-xs font-medium text-muted uppercase tracking-wide mb-2">{label}</p>
+                  {loading ? <Sk className="h-8 w-24" /> : <p className={`text-2xl font-bold ${cls}`}>{value}</p>}
+                </div>
               ))}
             </div>
-            <div className="py-2 w-52">
-              <Input
-                placeholder="Search IRN, buyer…"
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              />
-            </div>
-          </div>
 
-          {loading ? (
-            <div className="px-6 py-4 space-y-2">
-              {[0,1,2,3,4].map(i => <SkeletonTableRow key={i} />)}
-            </div>
-          ) : invoices.length === 0 ? (
-            <div className="p-12 text-center">
-              <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center mx-auto mb-3">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  strokeWidth="1.8" className="text-muted">
-                  <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-                  <line x1="1" y1="10" x2="23" y2="10" />
+            {/* Overdue alert banner */}
+            {!loading && overdueCount > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 flex items-center gap-3">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="2" className="text-red-600 shrink-0">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
                 </svg>
+                <p className="text-sm font-medium text-red-700">
+                  {overdueCount} invoice{overdueCount !== 1 ? "s" : ""} overdue — {formatCurrency(overdueAmount)} outstanding
+                </p>
+                <button
+                  onClick={() => { setActiveTab("OVERDUE"); setPage(1); }}
+                  className="ml-auto text-sm font-medium text-red-600 hover:underline shrink-0"
+                >
+                  View overdue →
+                </button>
               </div>
-              <p className="text-muted text-sm">No invoices found for this filter.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    {["Invoice", "Buyer", "Amount", "Outstanding", "Due date", "FIRS status", "Payment", ""].map((col, i) => (
-                      <th key={col}
-                        className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${[2, 3].includes(i) ? "text-right" : "text-left"}`}>
-                        {col}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.map((inv) => {
-                    const outstanding = inv.paymentStatus === "PAID"
-                      ? 0
-                      : Math.max(0, Number(inv.totalAmount ?? 0) - Number(inv.amountPaid ?? 0));
-                    return (
-                    <tr key={inv.id}
-                      className={`border-b border-border last:border-0 transition-colors ${
-                        inv.isOverdue ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-surface"
-                      }`}>
-                      <td className="px-6 py-3">
-                        <Link href={`/invoices/${inv.id}`} className="text-sm font-mono text-green hover:underline block">
-                          {inv.platformIrn ? inv.platformIrn.slice(0, 16) + "…" : inv.id.slice(0, 8) + "…"}
-                        </Link>
-                        {inv.isOverdue && (
-                          <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-600">
-                            OVERDUE
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-3 text-sm text-dark">{inv.buyerName}</td>
-                      <td className="px-6 py-3 text-sm font-medium text-dark text-right">
-                        {formatCurrency(inv.totalAmount, inv.currency)}
-                      </td>
-                      <td className="px-6 py-3 text-sm text-right">
-                        <span className={outstanding === 0 ? "text-green-700 font-medium" : "text-dark font-medium"}>
-                          {formatCurrency(outstanding, inv.currency)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3 text-sm text-muted">
-                        {inv.paymentDueDate ? formatDate(inv.paymentDueDate) : "—"}
-                      </td>
-                      <td className="px-6 py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                          {(inv.status ?? '').replace(/_/g, " ")}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3">
-                        {inv.paymentStatus ? (
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_STATUS_COLORS[inv.paymentStatus] ?? "bg-gray-100 text-gray-600"}`}>
-                            {inv.paymentStatus}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted">—</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-3 text-right">
-                        {inv.status === "ACCEPTED" && inv.paymentStatus !== "PAID" && (
-                          <Button size="sm" variant="secondary" onClick={() => {
-                            setRecordFor(inv);
-                            setForm({
-                              amount: String(outstanding > 0 ? outstanding : inv.totalAmount),
-                              provider: "MANUAL", reference: "",
-                              paidAt: new Date().toISOString().slice(0, 10), notes: "",
-                            });
-                            setSubmitError("");
-                          }}>
-                            Record payment
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+            )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm text-muted">
-            <span>Showing {invoices.length} of {total}</span>
-            <div className="flex gap-2">
-              <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-              <span className="px-3 py-1.5 text-dark">{page} / {totalPages}</span>
-              <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            {/* Filter tabs + search */}
+            <div className="bg-white rounded-xl border border-border overflow-hidden">
+              <div className="flex items-center justify-between px-4 border-b border-border">
+                <div className="flex">
+                  {PAYMENT_TABS.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => { setActiveTab(key); setPage(1); }}
+                      className={`px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                        activeTab === key
+                          ? "border-green text-green"
+                          : "border-transparent text-muted hover:text-dark"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="py-2 w-52">
+                  <Input
+                    placeholder="Search IRN, buyer…"
+                    value={search}
+                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                  />
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="px-6 py-4 space-y-2">
+                  {[0,1,2,3,4].map(i => <SkeletonTableRow key={i} />)}
+                </div>
+              ) : invoices.length === 0 ? (
+                <div className="p-12 text-center">
+                  <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center mx-auto mb-3">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="1.8" className="text-muted">
+                      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                      <line x1="1" y1="10" x2="23" y2="10" />
+                    </svg>
+                  </div>
+                  <p className="text-muted text-sm">No invoices found for this filter.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border">
+                        {["Invoice", "Buyer", "Amount", "Outstanding", "Due date", "FIRS status", "Payment", ""].map((col, i) => (
+                          <th key={col}
+                            className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${[2, 3].includes(i) ? "text-right" : "text-left"}`}>
+                            {col}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoices.map((inv) => {
+                        const outstanding = inv.paymentStatus === "PAID"
+                          ? 0
+                          : Math.max(0, Number(inv.totalAmount ?? 0) - Number(inv.amountPaid ?? 0));
+                        return (
+                        <tr key={inv.id}
+                          className={`border-b border-border last:border-0 transition-colors ${
+                            inv.isOverdue ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-surface"
+                          }`}>
+                          <td className="px-6 py-3">
+                            <Link href={`/invoices/${inv.id}`} className="text-sm font-mono text-green hover:underline block">
+                              {inv.platformIrn ? inv.platformIrn.slice(0, 16) + "…" : inv.id.slice(0, 8) + "…"}
+                            </Link>
+                            {inv.isOverdue && (
+                              <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-600">
+                                OVERDUE
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-3 text-sm text-dark">{inv.buyerName}</td>
+                          <td className="px-6 py-3 text-sm font-medium text-dark text-right">
+                            {formatCurrency(inv.totalAmount, inv.currency)}
+                          </td>
+                          <td className="px-6 py-3 text-sm text-right">
+                            <span className={outstanding === 0 ? "text-green-700 font-medium" : "text-dark font-medium"}>
+                              {formatCurrency(outstanding, inv.currency)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3 text-sm text-muted">
+                            {inv.paymentDueDate ? formatDate(inv.paymentDueDate) : "—"}
+                          </td>
+                          <td className="px-6 py-3">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                              {(inv.status ?? '').replace(/_/g, " ")}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3">
+                            {inv.paymentStatus ? (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_STATUS_COLORS[inv.paymentStatus] ?? "bg-gray-100 text-gray-600"}`}>
+                                {inv.paymentStatus}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted">—</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-3 text-right">
+                            {inv.status === "ACCEPTED" && inv.paymentStatus !== "PAID" && (
+                              <Button size="sm" variant="secondary" onClick={() => {
+                                setRecordFor(inv);
+                                setForm({
+                                  amount: String(outstanding > 0 ? outstanding : inv.totalAmount),
+                                  provider: "MANUAL", reference: "",
+                                  paidAt: new Date().toISOString().slice(0, 10), notes: "",
+                                });
+                                setSubmitError("");
+                              }}>
+                                Record payment
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between text-sm text-muted">
+                <span>Showing {invoices.length} of {total}</span>
+                <div className="flex gap-2">
+                  <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+                  <span className="px-3 py-1.5 text-dark">{page} / {totalPages}</span>
+                  <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Right column (30%) ────────────────────────────────────────── */}
+          <div className="w-72 shrink-0 space-y-4">
+            {/* Collection Summary */}
+            <div className="bg-white rounded-xl border border-border p-5">
+              <h3 className="text-sm font-semibold text-dark mb-4">Collection summary</h3>
+              {statsLoading ? (
+                <div className="space-y-3">
+                  <Sk className="h-3 w-full" />
+                  <Sk className="h-4 w-full" />
+                  <Sk className="h-3 w-3/4" />
+                </div>
+              ) : (
+                <>
+                  <div className="mb-3">
+                    <div className="flex justify-between text-xs text-muted mb-1.5">
+                      <span>{collectionRate}% collected</span>
+                      <span>{formatCurrency(paymentStats?.totalCollected ?? 0)} of {formatCurrency(paymentStats?.totalBilled ?? 0)}</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div
+                        className="bg-green h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, collectionRate)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2 mt-4">
+                    {[
+                      { label: "Paid in full",       value: paymentStats?.paidInFull ?? 0,    cls: "text-green-700" },
+                      { label: "Partially paid",     value: paymentStats?.partiallyPaid ?? 0, cls: "text-blue-600" },
+                      { label: "Unpaid (not due)",   value: paymentStats?.unpaidNotDue ?? 0,  cls: "text-muted" },
+                      { label: "Overdue",            value: paymentStats?.overdue ?? 0,       cls: "text-red-600" },
+                    ].map(({ label, value, cls }) => (
+                      <div key={label} className="flex items-center justify-between text-sm">
+                        <span className="text-muted">{label}</span>
+                        <span className={`font-medium ${cls}`}>{value} invoice{value !== 1 ? "s" : ""}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Payment Providers */}
+            <div className="bg-white rounded-xl border border-border p-5">
+              <h3 className="text-sm font-semibold text-dark mb-4">Payment providers</h3>
+              {statsLoading ? (
+                <div className="space-y-2">
+                  {[0,1,2,3].map(i => <Sk key={i} className="h-5 w-full" />)}
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {(paymentStats?.providerBreakdown ?? PROVIDERS.map(p => ({ provider: p, total: 0 }))).map(({ provider, total }) => (
+                    <div key={provider} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${PROVIDER_DOTS[provider] ?? "bg-gray-400"}`} />
+                        <span className="text-dark">{provider.replace(/_/g, " ")}</span>
+                      </div>
+                      <span className="font-medium text-dark">{formatCurrency(total)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Webhook Events */}
+            <div className="bg-white rounded-xl border border-border p-5">
+              <h3 className="text-sm font-semibold text-dark mb-4">Webhook events</h3>
+              <div className="space-y-2">
+                {["payment.confirmed", "payment.partial", "invoice.overdue", "invoice.reminder_sent"].map((ev) => (
+                  <div key={ev} className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green shrink-0" />
+                    <span className="text-xs font-mono text-muted">{ev}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 pt-3 border-t border-border">
+                <Link href="/settings?tab=integrations" className="text-xs text-green font-medium hover:underline">
+                  Configure webhooks →
+                </Link>
+              </div>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Record Payment Modal */}
