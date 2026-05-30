@@ -184,7 +184,9 @@ export function NotificationBell() {
 
   useEffect(() => {
     setReadIds(getReadIds());
-    load();
+    // Defer so the notification fetch doesn't fire alongside main page data
+    const t = setTimeout(() => load(), 2000);
+    return () => clearTimeout(t);
   }, [load]);
 
   useEffect(() => {

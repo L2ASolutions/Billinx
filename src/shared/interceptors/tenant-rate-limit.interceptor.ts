@@ -12,10 +12,13 @@ import { Request, Response } from 'express';
 import { RedisService } from '../redis/redis.service';
 
 const TIER_LIMITS: Record<string, number> = {
-  STANDARD: 100,
+  STANDARD: 300,
   PREMIUM: 1000,
   ENTERPRISE: 10_000,
 };
+// Dashboard/JWT users get a generous separate bucket — they must never
+// share quota with API key integrations or trip the limit during normal use.
+const JWT_LIMIT = 600;
 const WINDOW_SECS = 3600; // 1 hour
 
 @Injectable()
@@ -32,14 +35,17 @@ export class TenantRateLimitInterceptor implements NestInterceptor {
     const req = http.getRequest<Request>();
     const res = http.getResponse<Response>();
 
-    // Only applies to requests authenticated via ApiKeyGuard
     const ctx = (req as any)._billinxContext;
     if (!ctx?.tenantId) return next.handle();
 
+    const isJwtUser = ctx.actorType === 'user';
     const tier: string = ctx.tier ?? 'STANDARD';
-    const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.STANDARD;
+    const limit = isJwtUser ? JWT_LIMIT : (TIER_LIMITS[tier] ?? TIER_LIMITS.STANDARD);
     const hourBucket = Math.floor(Date.now() / (WINDOW_SECS * 1000));
-    const key = `rl:api:tenant:${ctx.tenantId}:${hourBucket}`;
+    // Separate Redis keys so JWT dashboard calls never consume API key quota
+    const key = isJwtUser
+      ? `rl:dashboard:tenant:${ctx.tenantId}:${hourBucket}`
+      : `rl:api:tenant:${ctx.tenantId}:${hourBucket}`;
 
     const { allowed, remaining, retryAfter } =
       await this.redisService.checkRateLimit(key, limit, WINDOW_SECS);
