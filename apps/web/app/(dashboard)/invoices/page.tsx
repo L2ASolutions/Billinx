@@ -276,19 +276,16 @@ export default function InvoicesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Load counts for all tabs
+  // Tab counts come from the stats endpoint — zero extra requests.
   useEffect(() => {
-    Promise.all([
-      invoiceApi.list({ limit: 1 }),
-      invoiceApi.list({ limit: 1, status: "ACCEPTED" }),
-      invoiceApi.list({ limit: 1, status: "REJECTED,SUBMISSION_FAILED,DEAD_LETTERED,VALIDATION_FAILED" }),
-      invoiceApi.list({ limit: 1, status: "QUEUED,SUBMITTING,VALIDATING" }),
-      invoiceApi.list({ limit: 1, status: "DRAFT" }),
-      invoiceApi.list({ limit: 1, isOverdue: "true" }),
-    ]).then(([all, acc, rej, pend, draft, ov]) => {
+    invoiceApi.stats().then((s: any) => {
       setCounts({
-        total: all.total, accepted: acc.total, rejected: rej.total,
-        pending: pend.total, draft: draft.total, overdue: ov.total,
+        total:    s.total    ?? 0,
+        accepted: s.accepted ?? 0,
+        rejected: s.rejectedAll ?? s.rejected ?? 0,
+        pending:  s.pending  ?? 0,
+        draft:    s.draft    ?? 0,
+        overdue:  s.overdue  ?? s.overdueCount ?? 0,
       });
     }).catch(() => {});
   }, []);
