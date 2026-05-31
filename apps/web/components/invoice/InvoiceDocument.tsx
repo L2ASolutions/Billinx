@@ -33,7 +33,7 @@ export interface InvoiceDocumentProps {
   qrCodeBase64?: string;
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Field-level rejection highlighting ────────────────────────────────────────
 
 const INVALID_FIELD_CODES: Record<string, string[]> = {
   INVALID_TIN:           ["sellerTin", "buyerTin"],
@@ -43,23 +43,6 @@ const INVALID_FIELD_CODES: Record<string, string[]> = {
   INVALID_CURRENCY:      ["currency"],
   MISSING_BUYER_ADDRESS: ["buyerAddress"],
 };
-
-// ── Logo ──────────────────────────────────────────────────────────────────────
-
-function BillinxLogo() {
-  return (
-    <div className="flex items-center gap-2">
-      <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="26" height="26" rx="7" fill="#1D9E75" />
-        <path
-          d="M8 7h5.2a3 3 0 0 1 0 6H8V7zm0 6h5.8a3.2 3.2 0 0 1 0 6.4H8V13z"
-          fill="white"
-        />
-      </svg>
-      <span className="text-base font-bold" style={{ color: "#1D9E75" }}>Billinx</span>
-    </div>
-  );
-}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -98,46 +81,33 @@ export function InvoiceDocument({
   const vatRates = [...new Set(lineItems.map((i) => i.vatRate))];
   const vatLabel = vatRates.length === 1 ? `VAT (${vatRates[0]}%)` : "VAT";
 
-  function field(value: string | undefined, fieldKey: string) {
-    const isInvalid = invalidFields.includes(fieldKey);
-    return (
-      <span className={isInvalid ? "text-red-600 font-medium" : undefined}>
-        {value ?? "—"}
-        {isInvalid && (
-          <span className="ml-1 text-xs text-red-500">(invalid)</span>
-        )}
-      </span>
-    );
+  function hi(value: string, fieldKey: string) {
+    return invalidFields.includes(fieldKey)
+      ? <span className="text-red-600 font-semibold">{value} <span className="text-xs font-normal">(invalid)</span></span>
+      : <span>{value}</span>;
   }
 
   return (
     <div
       className={`max-w-[800px] mx-auto bg-white rounded-xl shadow-sm p-10 ${
-        isRejected
-          ? "border-2 border-red-300"
-          : "border border-[#E2E8E5]"
+        isRejected ? "border-2 border-red-300" : "border border-[#E2E8E5]"
       }`}
     >
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* ── Header: seller company + FIRS status badge ──────────────────────── */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <BillinxLogo />
-          <p className="mt-4 text-2xl font-bold text-[#1a1a2e] font-mono tracking-tight">
-            {irn}
+          <h2 className="text-2xl font-bold text-[#1a1a2e] leading-tight">{sellerName}</h2>
+          <p className="text-sm text-[#6B7B74] mt-1">
+            TIN: {hi(sellerTin, "sellerTin")}
           </p>
-          <p className="text-sm text-[#6B7B74] mt-1.5">
-            <span className={invalidFields.includes("issueDate") ? "text-red-600 font-medium" : undefined}>
-              Issue date: {formatDate(issueDate)}
-            </span>
-            {paymentDueDate && (
-              <> · Due: {formatDate(paymentDueDate)}</>
-            )}
-          </p>
+          {sellerAddress && (
+            <p className="text-sm text-[#6B7B74] mt-0.5">{sellerAddress}</p>
+          )}
         </div>
         <div className="shrink-0 mt-1">
           {isAccepted && (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold bg-green-50 text-green-700 border border-green-200">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
               FIRS Accepted
@@ -145,7 +115,7 @@ export function InvoiceDocument({
           )}
           {isRejected && (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold bg-red-50 text-red-600 border border-red-200">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
               FIRS Rejected
@@ -156,35 +126,47 @@ export function InvoiceDocument({
 
       <hr className="border-[#E2E8E5] mb-6" />
 
-      {/* ── From / To ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-10 mb-6">
-        <div>
-          <p className="text-[10px] font-semibold text-[#6B7B74] uppercase tracking-widest mb-2">From</p>
-          <p className="font-semibold text-[#1a1a2e]">{sellerName}</p>
-          <p className="text-sm text-[#6B7B74] mt-0.5">TIN: {field(sellerTin, "sellerTin")}</p>
-          {sellerAddress && (
-            <p className="text-sm text-[#6B7B74] mt-0.5">{sellerAddress}</p>
-          )}
-        </div>
-        <div>
-          <p className="text-[10px] font-semibold text-[#6B7B74] uppercase tracking-widest mb-2">To</p>
-          <p className="font-semibold text-[#1a1a2e]">{buyerName}</p>
-          {buyerTin && (
-            <p className="text-sm text-[#6B7B74] mt-0.5">TIN: {field(buyerTin, "buyerTin")}</p>
-          )}
-          {buyerAddress ? (
-            <p className={`text-sm mt-0.5 ${invalidFields.includes("buyerAddress") ? "text-red-600 font-medium" : "text-[#6B7B74]"}`}>
-              {buyerAddress}
-            </p>
-          ) : invalidFields.includes("buyerAddress") ? (
-            <p className="text-sm text-red-600 mt-0.5 font-medium">Address missing (required)</p>
-          ) : null}
-        </div>
+      {/* ── Invoice reference + dates ────────────────────────────────────────── */}
+      <div className="mb-6 space-y-1.5">
+        <p className="text-sm text-[#1a1a2e]">
+          <span className="text-[#6B7B74]">Invoice Reference: </span>
+          <span className="font-mono font-semibold">{irn}</span>
+        </p>
+        <p className={`text-sm ${invalidFields.includes("issueDate") ? "text-red-600 font-medium" : "text-[#6B7B74]"}`}>
+          Issue date: {formatDate(issueDate)}
+          {invalidFields.includes("issueDate") && <span className="ml-1 text-xs">(invalid)</span>}
+        </p>
+        {paymentDueDate && (
+          <p className="text-sm text-[#6B7B74]">Due date: {formatDate(paymentDueDate)}</p>
+        )}
+        {invalidFields.includes("currency") && (
+          <p className="text-sm text-red-600 font-medium">Currency: {currency} (invalid — use NGN, USD, EUR or GBP)</p>
+        )}
+      </div>
+
+      <hr className="border-[#E2E8E5] mb-6" />
+
+      {/* ── Bill to ─────────────────────────────────────────────────────────── */}
+      <div className="mb-6">
+        <p className="text-[10px] font-semibold text-[#6B7B74] uppercase tracking-widest mb-2">Bill to</p>
+        <p className="font-semibold text-[#1a1a2e]">{buyerName}</p>
+        {buyerTin && (
+          <p className="text-sm text-[#6B7B74] mt-0.5">
+            TIN: {hi(buyerTin, "buyerTin")}
+          </p>
+        )}
+        {buyerAddress ? (
+          <p className={`text-sm mt-0.5 ${invalidFields.includes("buyerAddress") ? "text-red-600 font-medium" : "text-[#6B7B74]"}`}>
+            {buyerAddress}
+          </p>
+        ) : invalidFields.includes("buyerAddress") ? (
+          <p className="text-sm text-red-600 mt-0.5 font-medium">Address missing (required for B2B invoices)</p>
+        ) : null}
       </div>
 
       <hr className="border-[#E2E8E5]" />
 
-      {/* ── Line items ─────────────────────────────────────────────────────── */}
+      {/* ── Line items ──────────────────────────────────────────────────────── */}
       {lineItems.length > 0 && (
         <table className="w-full">
           <thead>
@@ -207,18 +189,16 @@ export function InvoiceDocument({
             {lineItems.map((item, i) => (
               <tr
                 key={i}
-                className={`border-b border-[#E2E8E5] last:border-0 ${
-                  i % 2 === 1 ? "bg-[#F4F6F5]" : "bg-white"
-                }`}
+                className={`border-b border-[#E2E8E5] last:border-0 ${i % 2 === 1 ? "bg-[#F4F6F5]" : "bg-white"}`}
               >
                 <td className="py-3 pr-4">
                   <p className="text-sm text-[#1a1a2e]">{item.description}</p>
                   {item.hsnCode ? (
-                    <p className={`text-xs mt-0.5 ${invalidFields.includes("hsnCode") ? "text-red-500" : "text-[#6B7B74]"}`}>
+                    <p className={`text-xs mt-0.5 ${invalidFields.includes("hsnCode") ? "text-red-500 font-medium" : "text-[#6B7B74]"}`}>
                       HSN: {item.hsnCode}
                     </p>
                   ) : invalidFields.includes("hsnCode") ? (
-                    <p className="text-xs text-red-500 mt-0.5">HSN code missing</p>
+                    <p className="text-xs text-red-500 mt-0.5 font-medium">HSN code missing</p>
                   ) : null}
                 </td>
                 <td className="py-3 px-2 text-sm text-[#1a1a2e] text-right tabular-nums">
@@ -238,7 +218,7 @@ export function InvoiceDocument({
 
       <hr className="border-[#E2E8E5]" />
 
-      {/* ── Totals ─────────────────────────────────────────────────────────── */}
+      {/* ── Totals ──────────────────────────────────────────────────────────── */}
       <div className="flex justify-end py-5">
         <div className="w-64 space-y-2">
           <div className="flex justify-between text-sm">
@@ -263,20 +243,15 @@ export function InvoiceDocument({
 
       <hr className="border-[#E2E8E5]" />
 
-      {/* ── Footer ─────────────────────────────────────────────────────────── */}
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
       <div className="flex items-end justify-between pt-6">
-        <div className="space-y-2 text-xs text-[#6B7B74] max-w-xs">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest mb-1 text-[#6B7B74]">IRN</p>
-            <p className="font-mono text-[11px] text-[#1a1a2e] break-all leading-relaxed">{irn}</p>
-          </div>
-          {firsConfirmedIrn && platformIrn !== firsConfirmedIrn && (
-            <p className="font-mono text-[10px] text-[#6B7B74]">
-              Platform: {platformIrn}
-            </p>
-          )}
+        <div className="space-y-1 text-xs text-[#6B7B74] max-w-xs">
+          <p>
+            <span className="font-medium text-[#1a1a2e]">Invoice Reference:</span>{" "}
+            <span className="font-mono">{irn}</span>
+          </p>
           <p>Validated by FIRS via Interswitch NRS</p>
-          <p className="text-[#6B7B74]">billinx.ng</p>
+          <p>Invoice generated by billinx.ng</p>
         </div>
 
         {isAccepted && qrSrc && (
@@ -291,9 +266,7 @@ export function InvoiceDocument({
                 className="block"
               />
             </div>
-            <p className="text-[11px] text-[#6B7B74] mt-2 leading-tight">
-              Scan this QR code to verify<br />this invoice with FIRS
-            </p>
+            <p className="text-[11px] text-[#6B7B74] mt-2">Scan to verify with FIRS</p>
           </div>
         )}
       </div>

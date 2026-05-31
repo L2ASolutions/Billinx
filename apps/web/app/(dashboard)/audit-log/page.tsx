@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRequireAuth } from '@/lib/auth';
-import { api } from '@/lib/api';
+import { activityApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -125,11 +125,9 @@ export default function AuditLogPage() {
         since.setDate(since.getDate() - parseInt(timeRange));
         params.since = since.toISOString();
       }
-      const res = await api.get<{ data: ActivityEvent[]; total: number }>(
-        '/v1/activity?' + new URLSearchParams(params).toString(),
-      );
-      setEvents((res as { data: ActivityEvent[] }).data ?? []);
-      setTotal((res as { total: number }).total ?? 0);
+      const res = await activityApi.list(params);
+      setEvents((res.data as unknown as ActivityEvent[]) ?? []);
+      setTotal(res.total ?? 0);
     } catch (e) {
       setError((e as Error).message ?? 'Failed to load audit log');
       setEvents([]);
