@@ -3,10 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { InvoiceDocument } from "@/components/invoice/InvoiceDocument";
 import { invoiceApi } from "@/lib/api";
 import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils";
 
@@ -83,8 +83,10 @@ interface InvoiceDetail {
   isOverdue?: boolean;
   sellerName: string;
   sellerTin: string;
+  sellerAddress?: string;
   buyerName: string;
   buyerTin?: string;
+  buyerAddress?: string;
   issueDate: string;
   createdAt: string;
   updatedAt: string;
@@ -285,6 +287,11 @@ export default function InvoiceDetailPage() {
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState("");
 
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sendingToBuyer, setSendingToBuyer] = useState(false);
+  const [sendToBuyerError, setSendToBuyerError] = useState("");
+  const [sentToBuyer, setSentToBuyer] = useState(false);
+
   const loadPayments = useCallback(async (invoiceId: string) => {
     setPaymentsLoading(true);
     try {
@@ -322,7 +329,7 @@ export default function InvoiceDetailPage() {
     }
   }
 
-  async function handleDownloadXml() {
+  async function handleDownloadPdf() {
     setXmlDownloading(true);
     try {
       const { blob, filename } = await invoiceApi.getXml(id);
@@ -362,9 +369,22 @@ export default function InvoiceDetailPage() {
     }
   }
 
+  async function handleSendToBuyer() {
+    setSendingToBuyer(true);
+    setSendToBuyerError("");
+    try {
+      await invoiceApi.sendToBuyer(id);
+      setSentToBuyer(true);
+      setTimeout(() => setShowSendModal(false), 1800);
+    } catch (err: unknown) {
+      setSendToBuyerError(err instanceof Error ? err.message : "Failed to send invoice.");
+    } finally {
+      setSendingToBuyer(false);
+    }
+  }
+
   function handleCreateCorrected() {
     if (!invoice) return;
-    // Pre-fill /invoices/new with originalIrn pointing to this rejected invoice
     window.location.href = `/invoices/new?originalIrn=${encodeURIComponent(invoice.platformIrn)}&type=${invoice.invoiceType}`;
   }
 
@@ -417,7 +437,6 @@ export default function InvoiceDetailPage() {
     ? Math.round(((invoice.amountPaid ?? 0) / invoice.totalAmount) * 100)
     : 0;
 
-  // Topbar title based on status
   const pageTitle = isAccepted ? "Invoice accepted" : isRejected ? "Invoice rejected" : "Invoice";
   const pageSubtitle = isAccepted
     ? `${invoice.platformIrn?.slice(0, 24) ?? invoice.id} · FIRS validated · IRN issued`
@@ -425,8 +444,19 @@ export default function InvoiceDetailPage() {
     ? `${invoice.platformIrn?.slice(0, 24) ?? invoice.id} · Action required`
     : undefined;
 
+  function openPaymentModal() {
+    setPaymentForm({
+      amount: String(amountOutstanding > 0 ? amountOutstanding : invoice!.totalAmount),
+      provider: "MANUAL", reference: "",
+      paidAt: new Date().toISOString().slice(0, 10), notes: "",
+    });
+    setPaymentError("");
+    setShowPaymentModal(true);
+  }
+
   return (
     <>
+      {/* ── Topbar ─────────────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-border px-6 py-4 flex items-start justify-between sticky top-0 z-10">
         <div>
           <h1 className="text-lg font-bold text-dark">{pageTitle}</h1>
@@ -440,7 +470,7 @@ export default function InvoiceDetailPage() {
             </Link>
           )}
           {isAccepted && (
-            <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadXml}>
+            <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadPdf}>
               Download PDF
             </Button>
           )}
@@ -450,15 +480,7 @@ export default function InvoiceDetailPage() {
             </Button>
           )}
           {canRecordPayment && (
-            <Button size="sm" onClick={() => {
-              setPaymentForm({
-                amount: String(amountOutstanding > 0 ? amountOutstanding : invoice.totalAmount),
-                provider: "MANUAL", reference: "",
-                paidAt: new Date().toISOString().slice(0, 10), notes: "",
-              });
-              setPaymentError("");
-              setShowPaymentModal(true);
-            }}>
+            <Button size="sm" onClick={openPaymentModal}>
               Record payment
             </Button>
           )}
@@ -470,7 +492,7 @@ export default function InvoiceDetailPage() {
         </div>
       </div>
 
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6 pb-24">
         {/* Overdue banner */}
         {invoice.isOverdue && <OverdueBanner dueDate={invoice.paymentDueDate} />}
 
@@ -499,15 +521,7 @@ export default function InvoiceDetailPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-dark">Payment tracking</h2>
               {canRecordPayment && (
-                <Button size="sm" onClick={() => {
-                  setPaymentForm({
-                    amount: String(amountOutstanding > 0 ? amountOutstanding : invoice.totalAmount),
-                    provider: "MANUAL", reference: "",
-                    paidAt: new Date().toISOString().slice(0, 10), notes: "",
-                  });
-                  setPaymentError("");
-                  setShowPaymentModal(true);
-                }}>
+                <Button size="sm" onClick={openPaymentModal}>
                   Record payment
                 </Button>
               )}
@@ -548,7 +562,7 @@ export default function InvoiceDetailPage() {
               <div className="text-center py-6">
                 <p className="text-sm text-muted mb-3">No payments recorded yet.</p>
                 {canRecordPayment && (
-                  <Button size="sm" onClick={() => setShowPaymentModal(true)}>
+                  <Button size="sm" onClick={openPaymentModal}>
                     Record first payment
                   </Button>
                 )}
@@ -573,6 +587,38 @@ export default function InvoiceDetailPage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Invoice document */}
+        {(isAccepted || isRejected) && (
+          <div>
+            <h2 className="font-semibold text-dark mb-4">Invoice document</h2>
+            <p className="text-sm text-muted mb-4">
+              {isAccepted
+                ? "This is the FIRS-certified document your buyer receives. The QR code lets them verify it directly with FIRS."
+                : "Invoice document — fields highlighted in red indicate data rejected by FIRS."}
+            </p>
+            <InvoiceDocument
+              platformIrn={invoice.platformIrn}
+              firsConfirmedIrn={invoice.firsConfirmedIrn}
+              status={invoice.status}
+              rejectionCode={invoice.rejectionCode}
+              issueDate={invoice.issueDate}
+              paymentDueDate={invoice.paymentDueDate}
+              sellerName={invoice.sellerName}
+              sellerTin={invoice.sellerTin}
+              sellerAddress={invoice.sellerAddress}
+              buyerName={invoice.buyerName}
+              buyerTin={invoice.buyerTin}
+              buyerAddress={invoice.buyerAddress}
+              currency={invoice.currency}
+              totalAmount={invoice.totalAmount}
+              taxAmount={invoice.taxAmount}
+              lineItems={invoice.lineItems}
+              qrCode={invoice.qrCode}
+              qrCodeBase64={invoice.qrCodeBase64}
+            />
           </div>
         )}
 
@@ -603,11 +649,13 @@ export default function InvoiceDetailPage() {
                 <p className="text-xs text-muted mb-1 font-medium uppercase tracking-wide">Seller</p>
                 <p className="text-sm font-medium text-dark">{invoice.sellerName}</p>
                 <p className="text-xs text-muted">TIN: {invoice.sellerTin}</p>
+                {invoice.sellerAddress && <p className="text-xs text-muted mt-0.5">{invoice.sellerAddress}</p>}
               </div>
               <div>
                 <p className="text-xs text-muted mb-1 font-medium uppercase tracking-wide">Buyer</p>
                 <p className="text-sm font-medium text-dark">{invoice.buyerName}</p>
                 {invoice.buyerTin && <p className="text-xs text-muted">TIN: {invoice.buyerTin}</p>}
+                {invoice.buyerAddress && <p className="text-xs text-muted mt-0.5">{invoice.buyerAddress}</p>}
               </div>
             </div>
           </div>
@@ -692,30 +740,25 @@ export default function InvoiceDetailPage() {
         )}
       </div>
 
-      {/* Bottom action bar */}
-      <div className="sticky bottom-0 bg-white border-t border-border px-6 py-3 flex items-center gap-3 flex-wrap">
+      {/* ── Bottom sticky action bar ────────────────────────────────────────── */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-border px-6 py-3 flex items-center gap-3 flex-wrap z-20">
         <Link href="/invoices" className="text-sm font-medium text-muted hover:text-dark transition-colors">
           ← All invoices
         </Link>
         <div className="flex-1" />
         {isAccepted && (
           <>
-            <button className="text-sm font-medium text-muted hover:text-dark transition-colors">
+            <button
+              onClick={() => { setSendToBuyerError(""); setSentToBuyer(false); setShowSendModal(true); }}
+              className="text-sm font-medium text-muted hover:text-dark transition-colors"
+            >
               Send to buyer
             </button>
-            <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadXml}>
+            <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadPdf}>
               Download PDF
             </Button>
             {canRecordPayment && (
-              <Button size="sm" onClick={() => {
-                setPaymentForm({
-                  amount: String(amountOutstanding > 0 ? amountOutstanding : invoice.totalAmount),
-                  provider: "MANUAL", reference: "",
-                  paidAt: new Date().toISOString().slice(0, 10), notes: "",
-                });
-                setPaymentError("");
-                setShowPaymentModal(true);
-              }}>
+              <Button size="sm" onClick={openPaymentModal}>
                 Record payment
               </Button>
             )}
@@ -723,7 +766,7 @@ export default function InvoiceDetailPage() {
         )}
         {isRejected && (
           <>
-            <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadXml}>
+            <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadPdf}>
               Download rejection report
             </Button>
             <Button size="sm" onClick={handleCreateCorrected}>
@@ -733,7 +776,68 @@ export default function InvoiceDetailPage() {
         )}
       </div>
 
-      {/* Cancel modal */}
+      {/* ── Send to buyer modal ─────────────────────────────────────────────── */}
+      {showSendModal && invoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="font-semibold text-dark">Send invoice to buyer</h2>
+              <button onClick={() => setShowSendModal(false)} className="text-muted hover:text-dark">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {sentToBuyer ? (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-green-600">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-dark">Invoice sent to {invoice.buyerName}</p>
+                </div>
+              ) : (
+                <>
+                  <div className="p-4 bg-surface rounded-lg border border-border space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted">Invoice</span>
+                      <span className="font-mono text-dark text-xs">{invoice.platformIrn}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted">Buyer</span>
+                      <span className="text-dark font-medium">{invoice.buyerName}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted">Amount</span>
+                      <span className="text-dark font-medium">{formatCurrency(invoice.totalAmount, invoice.currency)}</span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted">
+                    The FIRS-certified invoice document including the QR verification code will be sent to the buyer.
+                  </p>
+                  {sendToBuyerError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                      {sendToBuyerError}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            {!sentToBuyer && (
+              <div className="px-6 py-4 border-t border-border flex gap-3 justify-end">
+                <Button variant="secondary" onClick={() => setShowSendModal(false)}>Cancel</Button>
+                <Button loading={sendingToBuyer} onClick={handleSendToBuyer}>
+                  Send invoice
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Cancel modal ───────────────────────────────────────────────────── */}
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
@@ -765,7 +869,7 @@ export default function InvoiceDetailPage() {
         </div>
       )}
 
-      {/* Record payment modal */}
+      {/* ── Record payment modal ────────────────────────────────────────────── */}
       {showPaymentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">

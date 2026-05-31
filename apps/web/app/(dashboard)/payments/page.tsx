@@ -418,23 +418,6 @@ export default function PaymentsPage() {
               )}
             </div>
 
-            {/* Webhook Events */}
-            <div className="bg-white rounded-xl border border-border p-5">
-              <h3 className="text-sm font-semibold text-dark mb-4">Webhook events</h3>
-              <div className="space-y-2">
-                {["payment.confirmed", "payment.partial", "invoice.overdue", "invoice.reminder_sent"].map((ev) => (
-                  <div key={ev} className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green shrink-0" />
-                    <span className="text-xs font-mono text-muted">{ev}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 pt-3 border-t border-border">
-                <Link href="/settings?tab=integrations" className="text-xs text-green font-medium hover:underline">
-                  Configure webhooks →
-                </Link>
-              </div>
-            </div>
           </div>
         </div>
       </div>
