@@ -50,7 +50,10 @@ async function request<T>(
 
   const url = `${API_BASE}${path}`;
 
+  const _t0 = Date.now();
   const res = await fetch(url, { ...options, headers });
+  const _ms = Date.now() - _t0;
+  if (_ms > 1000) console.warn(`[Billinx] Slow API: ${path} took ${_ms}ms`);
 
   if (!res.ok) {
     if (
@@ -408,17 +411,17 @@ export const incomingInvoiceApi = {
 // VAT Reconciliation
 export const vatApi = {
   summary: (period: string) =>
-    api.get<unknown>(`/v1/vat/summary?period=${encodeURIComponent(period)}`),
+    cachedGet<unknown>(`/v1/vat/summary?period=${encodeURIComponent(period)}`, 30_000),
   annualSummary: (year: number) =>
-    api.get<unknown>(`/v1/vat/summary/annual?year=${year}`),
+    cachedGet<unknown>(`/v1/vat/summary/annual?year=${year}`, 30_000),
   entries: (params?: { type?: string; period?: string; status?: string; page?: number; limit?: number }) => {
     const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
-    return api.get<unknown>(`/v1/vat/entries${qs}`);
+    return cachedGet<unknown>(`/v1/vat/entries${qs}`, 30_000);
   },
   reconcile: (entryId: string) =>
     api.patch<unknown>(`/v1/vat/entries/${entryId}/reconcile`),
   mismatches: (period: string) =>
-    api.get<unknown>(`/v1/vat/mismatches?period=${encodeURIComponent(period)}`),
+    cachedGet<unknown>(`/v1/vat/mismatches?period=${encodeURIComponent(period)}`, 30_000),
 };
 
 function adminRequest<T>(path: string, options: RequestInit = {}): Promise<T> {

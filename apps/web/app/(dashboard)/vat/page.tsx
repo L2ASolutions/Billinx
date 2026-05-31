@@ -200,15 +200,18 @@ export default function VatPage() {
   const [mismatches, setMismatches] = useState<Mismatch[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [entriesLoading, setEntriesLoading] = useState(true);
+  const [mismatchesLoading, setMismatchesLoading] = useState(false);
+  const [mismatchesLoaded, setMismatchesLoaded] = useState(false);
 
   const load = useCallback(async (p: string) => {
     setSummaryLoading(true);
     setEntriesLoading(true);
+    setMismatchesLoaded(false);
+    setMismatches([]);
 
-    const [summaryRes, entriesRes, mismatchRes] = await Promise.allSettled([
+    const [summaryRes, entriesRes] = await Promise.allSettled([
       vatApi.summary(p),
       vatApi.entries({ period: p, limit: 100 }),
-      vatApi.mismatches(p),
     ]);
 
     setSummary(summaryRes.status === 'fulfilled' ? (summaryRes.value as VatSummary) : null);
@@ -220,12 +223,19 @@ export default function VatPage() {
         : [],
     );
     setEntriesLoading(false);
+  }, []);
 
-    setMismatches(
-      mismatchRes.status === 'fulfilled'
-        ? ((mismatchRes.value as { issues: Mismatch[] }).issues ?? [])
-        : [],
-    );
+  const loadMismatches = useCallback(async (p: string) => {
+    setMismatchesLoading(true);
+    try {
+      const res = await vatApi.mismatches(p);
+      setMismatches((res as { issues: Mismatch[] }).issues ?? []);
+      setMismatchesLoaded(true);
+    } catch {
+      setMismatches([]);
+    } finally {
+      setMismatchesLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -361,12 +371,25 @@ export default function VatPage() {
           />
         </div>
 
-        {/* Mismatches */}
+        {/* Mismatches — loaded on demand */}
         <div className="bg-white rounded-xl border border-border overflow-hidden">
-          <div className="px-5 py-4 border-b border-border">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
             <h3 className="font-semibold text-dark text-sm">Potential Issues</h3>
+            {!mismatchesLoaded && (
+              <button
+                onClick={() => loadMismatches(period)}
+                disabled={mismatchesLoading}
+                className="text-xs font-medium text-green hover:text-green-dark transition-colors disabled:opacity-50"
+              >
+                {mismatchesLoading ? "Checking…" : "Find mismatches →"}
+              </button>
+            )}
           </div>
-          {entriesLoading ? (
+          {!mismatchesLoaded && !mismatchesLoading ? (
+            <div className="py-10 text-center">
+              <p className="text-sm text-muted">Click "Find mismatches" to check for VAT issues in this period.</p>
+            </div>
+          ) : mismatchesLoading ? (
             <div className="p-4 space-y-2">
               {[0, 1].map((i) => <Sk key={i} className="h-10 w-full" />)}
             </div>
