@@ -8,6 +8,15 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { invoiceApi } from "@/lib/api";
+
+async function sendReminder(invoiceId: string) {
+  try {
+    await invoiceApi.sendReminder(invoiceId);
+    alert("Payment reminder sent.");
+  } catch {
+    alert("Failed to send reminder.");
+  }
+}
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -450,7 +459,7 @@ export default function InvoicesPage() {
                       <td className="px-6 py-3 text-sm font-medium text-dark text-right">
                         {formatCurrency(inv.totalAmount, inv.currency)}
                       </td>
-                      {/* Actions — continue editing DRAFT invoices */}
+                      {/* Actions */}
                       <td className="px-6 py-3 text-right whitespace-nowrap">
                         {inv.status === "DRAFT" && (
                           <button
@@ -458,6 +467,14 @@ export default function InvoicesPage() {
                             className="text-xs font-medium text-green hover:text-green-dark hover:underline transition-colors"
                           >
                             Continue →
+                          </button>
+                        )}
+                        {inv.isOverdue && inv.status === "ACCEPTED" && (
+                          <button
+                            onClick={() => sendReminder(inv.id)}
+                            className="text-xs font-medium text-red-600 hover:text-red-700 hover:underline transition-colors"
+                          >
+                            Send reminder
                           </button>
                         )}
                       </td>

@@ -241,6 +241,10 @@ export const invoiceApi = {
   },
   getBulkStatus: (batchId: string) =>
     api.get<unknown>(`/v1/invoices/bulk/dashboard/${batchId}/status`),
+  sendToBuyer: (id: string) =>
+    api.post<unknown>(`/v1/invoices/dashboard/${id}/send`),
+  sendReminder: (id: string) =>
+    api.post<unknown>(`/v1/invoices/dashboard/${id}/reminder`),
 };
 
 // Payments list (tenant-wide)
