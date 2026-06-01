@@ -174,6 +174,10 @@ model IdempotencyRecord {
   overdueAt             DateTime?
   reminderCount         Int               @default(0)
   lastReminderAt        DateTime?
+  whtApplicable         Boolean           @default(false)
+  whtRate               Decimal?
+  whtAmount             Decimal?
+  expectedCash          Decimal?
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
@@ -746,6 +750,7 @@ model PaymentRecord {
   confirmedAt      DateTime?
   confirmedBy      String?
   notes            String?
+  whtDeducted      Decimal?
   metadata         Json?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -831,6 +836,10 @@ model IncomingInvoice {
   sourceReference String?
   rawPayload      Json?
   rejectionReason String?
+  whtApplicable   Boolean                @default(false)
+  whtRate         Decimal?
+  whtAmount       Decimal?
+  netPayable      Decimal?
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 

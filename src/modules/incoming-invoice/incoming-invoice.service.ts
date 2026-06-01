@@ -47,6 +47,19 @@ export class IncomingInvoiceService {
       );
     }
 
+    const whtFields = dto.whtApplicable
+      ? (() => {
+          const rate = dto.whtRate ?? 5;
+          const whtAmt = parseFloat((dto.invoiceAmount * rate / 100).toFixed(2));
+          return {
+            whtApplicable: true,
+            whtRate: rate,
+            whtAmount: whtAmt,
+            netPayable: parseFloat((dto.invoiceAmount - whtAmt).toFixed(2)),
+          };
+        })()
+      : { whtApplicable: false };
+
     const invoice = await (this.prisma as any).incomingInvoice.create({
       data: {
         tenantId,
@@ -61,6 +74,7 @@ export class IncomingInvoiceService {
         description: dto.description ?? null,
         sourceReference: dto.sourceReference ?? null,
         status: 'RECEIVED',
+        ...whtFields,
         items: dto.items?.length
           ? {
               create: dto.items.map((item) => ({
@@ -326,6 +340,10 @@ export class IncomingInvoiceService {
       description: invoice.description ?? undefined,
       sourceReference: invoice.sourceReference ?? undefined,
       rejectionReason: invoice.rejectionReason ?? undefined,
+      whtApplicable: invoice.whtApplicable ?? false,
+      whtRate: invoice.whtRate != null ? Number(invoice.whtRate) : undefined,
+      whtAmount: invoice.whtAmount != null ? Number(invoice.whtAmount) : undefined,
+      netPayable: invoice.netPayable != null ? Number(invoice.netPayable) : undefined,
       items: (invoice.items ?? []).map(
         (item: any): IncomingInvoiceItemResponse => ({
           id: item.id,
@@ -361,15 +379,25 @@ export class IncomingInvoiceService {
         _sum: { vatAmount: true },
       });
 
+      const whtAgg = await (tx as any).incomingInvoice.aggregate({
+        where: { tenantId, status: { in: ['VALIDATED', 'APPROVED'] }, whtApplicable: true },
+        _sum: { whtAmount: true },
+      });
+
+      const totalWhtOutstanding = Number(whtAgg._sum.whtAmount ?? 0);
+      const totalOutstanding = Number(outstandingAgg._sum.invoiceAmount ?? 0);
+
       return {
         total,
         received,
         validated,
         approved,
         paid,
-        totalOutstanding: Number(outstandingAgg._sum.invoiceAmount ?? 0),
+        totalOutstanding,
         outstandingCount: outstandingAgg._count.id,
         totalVatOutstanding: Number(vatAgg._sum.vatAmount ?? 0),
+        totalWhtOutstanding,
+        netPayableAfterWht: totalOutstanding - totalWhtOutstanding,
       };
     });
   }
