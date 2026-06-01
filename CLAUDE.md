@@ -192,6 +192,7 @@ billinx/
 20260517150000_add_product_catalog
 20260517160000_add_bulk_batches         # feat/bulk-processing — BulkBatch model + BulkBatchSource enum
 20260517170000_add_api_key_usage_tracking  # feat/tenant-api-improvements — lastUsedIp, requestCount, expiresAt index
+20260601000000_add_firs_reference_data  # feat/firs-reference-data — 10 lookup tables (invoice types, payment means, tax categories, currencies, HS/service codes, states, LGAs, countries, quantity codes)
 ```
 
 Run pending migrations: `npx prisma migrate deploy`
@@ -398,6 +399,15 @@ Deployment pipeline: test → build-and-push → migrate → deploy (needs both 
 - `GET /v1/admin/queue/status` — BullMQ job counts (waiting, active, completed, failed, delayed)
 - `GET /v1/admin/queue/bulk/status` — bulk queue job counts (separate BullMQ queue)
 - `POST /v1/admin/queue/retry-failed` — re-queues all failed submission jobs
+
+### Reference data (`src/modules/reference-data/`)
+- Public read-only lookup endpoints — no auth required
+- 5-minute in-process cache per endpoint; safe to call on every invoice form load
+- Endpoints: `GET /v1/reference/invoice-types`, `/payment-means`, `/tax-categories`, `/currencies`, `/quantity-codes`, `/states`, `/countries`
+- Paginated search: `GET /v1/reference/hs-codes?search=&limit=20&offset=0`, `/service-codes?search=&limit=20&offset=0`
+- Filtered: `GET /v1/reference/lgas?stateCode=NG-LA`
+- Seed script: `npx tsx scripts/seed-reference-data.ts` (safe to re-run — uses `skipDuplicates`)
+- Migration: `20260601000000_add_firs_reference_data`
 
 ### Bulk invoice ingestion (`src/modules/invoice/bulk/`)
 - `POST /v1/invoices/bulk` — up to 500 invoices per JSON request; per-invoice results with `invoiceId`, `platformIrn`, `status`, `errors`
