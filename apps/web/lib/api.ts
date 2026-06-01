@@ -232,6 +232,7 @@ export const invoiceApi = {
       provider: string;
       paidAt: string;
       notes?: string;
+      whtDeducted?: number;
     },
   ) => api.post<unknown>(`/v1/invoices/dashboard/${id}/payments`, data),
   listPayments: (id: string) =>
@@ -405,6 +406,8 @@ export const incomingInvoiceApi = {
     totalOutstanding: number;
     outstandingCount: number;
     totalVatOutstanding: number;
+    totalWhtOutstanding?: number;
+    netPayableAfterWht?: number;
   }>('/v1/incoming-invoices/stats'),
 };
 

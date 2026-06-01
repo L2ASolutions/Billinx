@@ -37,11 +37,23 @@ interface Stats {
   totalAmount: number;
   outstandingAmount?: number;
   overdueCount?: number;
+  outgoingTotal?: number;
+  outgoingAccepted?: number;
+  outgoingPending?: number;
+  outgoingRejected?: number;
+  collectedToday?: number;
+  collectedYesterday?: number;
+  collectedThisWeek?: number;
+  collectedLastWeek?: number;
   collectedThisMonth?: number;
   collectedLastMonth?: number;
+  collectedThisYear?: number;
+  collectedLastYear?: number;
   outputVatOutstanding?: number;
   inputVatOutstanding?: number;
   netVatExposure?: number;
+  totalWhtExpected?: number;
+  expectedCashCollections?: number;
   recentInvoices: RecentInvoice[];
 }
 
@@ -54,6 +66,8 @@ interface IncomingStats {
   totalOutstanding: number;
   outstandingCount: number;
   totalVatOutstanding: number;
+  totalWhtOutstanding?: number;
+  netPayableAfterWht?: number;
 }
 
 interface RecentInvoice {
@@ -89,12 +103,6 @@ function todayLabel(): string {
   return new Date().toLocaleDateString('en-NG', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
-}
-
-function trendLabel(current: number, previous: number | undefined): string | null {
-  if (previous == null || previous === 0) return null;
-  const delta = ((current - previous) / previous) * 100;
-  return `${delta >= 0 ? '+' : ''}${Math.round(delta)}% vs last month`;
 }
 
 // ── Status pill ───────────────────────────────────────────────────────────────
@@ -185,6 +193,7 @@ export default function DashboardPage() {
   const [queueLoading, setQueueLoading] = useState(true);
 
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [collectedTab, setCollectedTab] = useState<'day' | 'week' | 'month' | 'year'>('month');
 
   const [prefs, setPrefs] = useState<DashboardPrefs>(DEFAULT_PREFS);
   const [pendingPrefs, setPendingPrefs] = useState<DashboardPrefs>(DEFAULT_PREFS);
@@ -292,13 +301,35 @@ export default function DashboardPage() {
 
   const firstName = profile?.firstName ?? user?.name?.split(' ')[0] ?? 'there';
   const tenantName = user?.tenantName ?? '';
-  const acceptanceRate =
-    stats && stats.total > 0 ? Math.round((stats.accepted / stats.total) * 100) : 0;
-
   const outstandingAmount = stats?.outstandingAmount ?? 0;
   const overdueCount = stats?.overdueCount ?? 0;
-  const collectedThisMonth = stats?.collectedThisMonth ?? 0;
-  const trend = trendLabel(collectedThisMonth, stats?.collectedLastMonth);
+
+  const collectedTabValue = (() => {
+    if (!stats) return 0;
+    if (collectedTab === 'day') return stats.collectedToday ?? 0;
+    if (collectedTab === 'week') return stats.collectedThisWeek ?? 0;
+    if (collectedTab === 'year') return stats.collectedThisYear ?? 0;
+    return stats.collectedThisMonth ?? 0;
+  })();
+
+  const collectedTabPrev = (() => {
+    if (!stats) return undefined;
+    if (collectedTab === 'day') return stats.collectedYesterday;
+    if (collectedTab === 'week') return stats.collectedLastWeek;
+    if (collectedTab === 'year') return stats.collectedLastYear;
+    return stats.collectedLastMonth;
+  })();
+
+  const collectedTabPeriodLabel = collectedTab === 'day' ? 'yesterday' : collectedTab === 'week' ? 'last week' : collectedTab === 'year' ? 'last year' : 'last month';
+
+  function collectedTrend(): string {
+    if (collectedTabPrev == null || collectedTabPrev === 0) return 'No prior data';
+    const delta = ((collectedTabValue - collectedTabPrev) / collectedTabPrev) * 100;
+    const sign = delta >= 0 ? '↑' : '↓';
+    return `${sign} ${Math.abs(Math.round(delta))}% vs ${collectedTabPeriodLabel}`;
+  }
+  const collectedTrendStr = collectedTrend();
+  const collectedTrendNeg = collectedTabPrev != null && collectedTabPrev > 0 && collectedTabValue < collectedTabPrev;
 
   const lastRefreshedLabel = lastRefreshed
     ? lastRefreshed.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })
@@ -406,35 +437,105 @@ export default function DashboardPage() {
       <div className="p-6 space-y-6">
         {/* ── Row 1: Invoice Activity (always visible) ────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard
-            label="Total Invoices"
-            value={String(stats?.total ?? 0)}
-            sub={stats && stats.total > 0 ? `${stats.pending} pending` : 'No invoices yet'}
-            loading={statsLoading}
-          />
-          <MetricCard
-            label="FIRS Accepted"
-            value={String(stats?.accepted ?? 0)}
-            sub={stats && stats.total > 0 ? `${acceptanceRate}% acceptance rate` : 'No invoices yet'}
-            valueClass="text-green-700"
-            loading={statsLoading}
-          />
+          {/* Card 1: Outgoing Invoices */}
+          <Link href="/invoices" className="block">
+            <div className="bg-[#1a2b4a] rounded-xl border border-[#1a2b4a] p-5 h-full">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium text-blue-200 uppercase tracking-wide">Outgoing Invoices</p>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              </div>
+              {statsLoading ? (
+                <>
+                  <div className="animate-pulse bg-blue-800/40 rounded h-9 w-16 mb-2" />
+                  <div className="animate-pulse bg-blue-800/40 rounded h-3 w-40" />
+                </>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold text-white">{stats?.outgoingTotal ?? stats?.total ?? 0}</p>
+                  <p className="text-xs text-blue-300 mt-1.5">
+                    {stats?.outgoingAccepted ?? 0} accepted · {stats?.outgoingPending ?? 0} pending · {stats?.outgoingRejected ?? 0} rejected
+                  </p>
+                </>
+              )}
+            </div>
+          </Link>
+
+          {/* Card 2: Incoming Invoices */}
+          <Link href="/incoming-invoices" className="block">
+            <div className="bg-emerald-700 rounded-xl border border-emerald-700 p-5 h-full">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium text-emerald-200 uppercase tracking-wide">Incoming Invoices</p>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6ee7b7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+                </svg>
+              </div>
+              {incomingStatsLoading ? (
+                <>
+                  <div className="animate-pulse bg-emerald-600/40 rounded h-9 w-16 mb-2" />
+                  <div className="animate-pulse bg-emerald-600/40 rounded h-3 w-40" />
+                </>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold text-white">{incomingStats?.total ?? 0}</p>
+                  <p className="text-xs text-emerald-200 mt-1.5">
+                    {incomingStats?.approved ?? 0} approved · {((incomingStats?.total ?? 0) - (incomingStats?.paid ?? 0))} pending payment
+                  </p>
+                </>
+              )}
+            </div>
+          </Link>
+
+          {/* Card 3: Outstanding Receivables */}
           <Link href="/payments" className="block">
             <MetricCard
               label="Outstanding Receivables"
               value={formatCurrency(outstandingAmount, 'NGN')}
-              sub={overdueCount > 0 ? `${overdueCount} overdue` : 'None overdue'}
+              sub={
+                (stats?.totalWhtExpected ?? 0) > 0
+                  ? `Expected cash: ${formatCurrency(stats?.expectedCashCollections ?? 0, 'NGN')} (after WHT)`
+                  : overdueCount > 0 ? `${overdueCount} overdue` : 'None overdue'
+              }
               valueClass={overdueCount > 0 ? 'text-red-600' : 'text-dark'}
               loading={statsLoading}
             />
           </Link>
+
+          {/* Card 4: Collected — with tab pills */}
           <Link href="/payments" className="block">
-            <MetricCard
-              label="Collected This Month"
-              value={formatCurrency(collectedThisMonth, 'NGN')}
-              sub={trend ?? 'All time'}
-              loading={statsLoading}
-            />
+            <div className="bg-white rounded-xl border border-border p-5 h-full">
+              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Collected</p>
+              {/* Tab pills */}
+              <div className="flex gap-1 mb-3">
+                {(['day', 'week', 'month', 'year'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={(e) => { e.preventDefault(); setCollectedTab(tab); }}
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                      collectedTab === tab
+                        ? 'bg-[#1D9E75] text-white'
+                        : 'text-muted hover:text-dark'
+                    }`}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
+              </div>
+              {statsLoading ? (
+                <>
+                  <div className="animate-pulse bg-gray-100 rounded h-9 w-28 mb-2" />
+                  <div className="animate-pulse bg-gray-100 rounded h-3 w-36" />
+                </>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold text-dark">{formatCurrency(collectedTabValue, 'NGN')}</p>
+                  <p className={`text-xs mt-1.5 ${collectedTrendNeg ? 'text-red-500' : 'text-muted'}`}>
+                    {collectedTrendStr}
+                  </p>
+                </>
+              )}
+            </div>
           </Link>
         </div>
 
@@ -456,7 +557,9 @@ export default function DashboardPage() {
                       {formatCurrency(incomingStats?.totalOutstanding ?? 0, 'NGN')}
                     </p>
                     <p className="text-xs text-amber-600 mt-1.5">
-                      {incomingStats?.outstandingCount ?? 0} invoices pending payment
+                      {(incomingStats?.totalWhtOutstanding ?? 0) > 0
+                        ? `Net to pay: ${formatCurrency(incomingStats?.netPayableAfterWht ?? 0, 'NGN')} (after WHT)`
+                        : `${incomingStats?.outstandingCount ?? 0} invoices pending payment`}
                     </p>
                   </>
                 )}
