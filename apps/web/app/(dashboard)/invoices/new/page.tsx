@@ -335,6 +335,8 @@ function NewInvoiceForm() {
   }, [draftId]);
 
   const [lineItems, setLineItems] = useState<LineItem[]>([{ ...EMPTY_LINE }]);
+  const [whtApplicable, setWhtApplicable] = useState(false);
+  const [whtRate, setWhtRate] = useState<number>(5);
 
   const uf = (field: string) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -424,6 +426,8 @@ function NewInvoiceForm() {
           taxInclusiveAmount: totals.total,
           payableAmount: totals.total,
         },
+        whtApplicable: whtApplicable || undefined,
+        whtRate: whtApplicable ? whtRate : undefined,
       };
 
       let saved: any;
@@ -484,6 +488,8 @@ function NewInvoiceForm() {
           taxInclusiveAmount: totals.total,
           payableAmount: totals.total,
         },
+        whtApplicable: whtApplicable || undefined,
+        whtRate: whtApplicable ? whtRate : undefined,
       };
 
       // When resuming a draft (?id= param OR after saving a new draft in this
@@ -681,6 +687,48 @@ function NewInvoiceForm() {
                 <span>Total ({form.currency})</span>
                 <span>{totals.total.toLocaleString("en-NG", { minimumFractionDigits: 2 })}</span>
               </div>
+            </div>
+
+            {/* WHT section */}
+            <div className="border-t border-border pt-4 mt-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={whtApplicable}
+                  onChange={(e) => setWhtApplicable(e.target.checked)}
+                  className="w-4 h-4 rounded border-border accent-green"
+                />
+                <span className="text-sm font-medium text-dark">Withholding Tax (WHT) applicable</span>
+              </label>
+              {whtApplicable && (
+                <div className="mt-3 ml-6 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm text-muted w-20">WHT Rate</label>
+                    <select
+                      className={sel("w-36")}
+                      value={whtRate}
+                      onChange={(e) => setWhtRate(Number(e.target.value))}
+                    >
+                      <option value={5}>5%</option>
+                      <option value={10}>10%</option>
+                    </select>
+                  </div>
+                  <div className="text-sm text-muted space-y-1 mt-2 p-3 bg-surface rounded-lg border border-border max-w-xs">
+                    <div className="flex justify-between">
+                      <span>Invoice total</span>
+                      <span>₦{totals.total.toLocaleString("en-NG", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-amber-700">
+                      <span>WHT ({whtRate}%)</span>
+                      <span>-₦{(totals.total * whtRate / 100).toLocaleString("en-NG", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold text-dark border-t border-border pt-1">
+                      <span>Expected cash</span>
+                      <span>₦{(totals.total * (1 - whtRate / 100)).toLocaleString("en-NG", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </SectionCard>
 

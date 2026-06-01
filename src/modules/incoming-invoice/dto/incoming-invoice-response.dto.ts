@@ -30,6 +30,10 @@ export interface IncomingInvoiceResponse {
   description?: string;
   sourceReference?: string;
   rejectionReason?: string;
+  whtApplicable: boolean;
+  whtRate?: number;
+  whtAmount?: number;
+  netPayable?: number;
   items: IncomingInvoiceItemResponse[];
   createdAt: string;
   updatedAt: string;

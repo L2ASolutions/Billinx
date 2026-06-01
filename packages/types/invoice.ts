@@ -76,6 +76,10 @@ export interface InvoiceResponse {
   acceptedAt?: string;
   rejectedAt?: string;
   cancelledAt?: string;
+  whtApplicable?: boolean;
+  whtRate?: number;
+  whtAmount?: number;
+  expectedCash?: number;
   createdAt: string;
   updatedAt: string;
 }
