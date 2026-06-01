@@ -93,6 +93,10 @@ interface InvoiceDetail {
   rejectionReason?: string;
   rejectionCode?: string;
   errorMessage?: string;
+  whtApplicable?: boolean;
+  whtRate?: number;
+  whtAmount?: number;
+  expectedCash?: number;
   lineItems: Array<{
     description: string;
     quantity: number;
@@ -123,6 +127,7 @@ interface RecordPaymentForm {
   reference: string;
   paidAt: string;
   notes: string;
+  whtDeducted: string;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -282,7 +287,7 @@ export default function InvoiceDetailPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentForm, setPaymentForm] = useState<RecordPaymentForm>({
     amount: "", provider: "MANUAL", reference: "",
-    paidAt: new Date().toISOString().slice(0, 10), notes: "",
+    paidAt: new Date().toISOString().slice(0, 10), notes: "", whtDeducted: "",
   });
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState("");
@@ -357,6 +362,7 @@ export default function InvoiceDetailPage() {
         reference: paymentForm.reference,
         paidAt: new Date(paymentForm.paidAt).toISOString(),
         notes: paymentForm.notes || undefined,
+        whtDeducted: paymentForm.whtDeducted ? parseFloat(paymentForm.whtDeducted) : undefined,
       });
       setShowPaymentModal(false);
       const updated = await invoiceApi.get(id) as InvoiceDetail;
@@ -445,10 +451,14 @@ export default function InvoiceDetailPage() {
     : undefined;
 
   function openPaymentModal() {
+    const defaultAmount = invoice?.whtApplicable
+      ? (invoice.expectedCash ?? amountOutstanding)
+      : (amountOutstanding > 0 ? amountOutstanding : invoice!.totalAmount);
     setPaymentForm({
-      amount: String(amountOutstanding > 0 ? amountOutstanding : invoice!.totalAmount),
+      amount: String(defaultAmount),
       provider: "MANUAL", reference: "",
       paidAt: new Date().toISOString().slice(0, 10), notes: "",
+      whtDeducted: invoice?.whtApplicable ? String(invoice.whtAmount ?? "") : "",
     });
     setPaymentError("");
     setShowPaymentModal(true);
@@ -509,6 +519,19 @@ export default function InvoiceDetailPage() {
               {invoice.acceptedAt && <Row label="Accepted at" value={`${formatDateTime(invoice.acceptedAt)} WAT`} />}
               <Row label="Access point" value="Interswitch NRS" />
             </dl>
+          </div>
+        )}
+
+        {/* WHT information — accepted invoices with WHT */}
+        {isAccepted && invoice.whtApplicable && (
+          <div className="bg-amber-50 rounded-xl border border-amber-200 p-6">
+            <h2 className="font-semibold text-amber-900 mb-4">WHT Information</h2>
+            <dl className="space-y-3">
+              <Row label="WHT Rate" value={`${invoice.whtRate ?? 5}%`} />
+              <Row label="Expected WHT deduction" value={formatCurrency(invoice.whtAmount ?? 0, invoice.currency)} />
+              <Row label="Expected cash collection" value={formatCurrency(invoice.expectedCash ?? 0, invoice.currency)} />
+            </dl>
+            <p className="text-xs text-amber-700 mt-3">The buyer will deduct WHT at source and remit to FIRS. You will receive the net cash amount.</p>
           </div>
         )}
 
@@ -810,6 +833,22 @@ export default function InvoiceDetailPage() {
               {paymentError && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{paymentError}</div>
               )}
+              {invoice?.whtApplicable && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm space-y-1">
+                  <div className="flex justify-between text-amber-800">
+                    <span>Invoice total</span>
+                    <span>{formatCurrency(invoice.totalAmount, invoice.currency)}</span>
+                  </div>
+                  <div className="flex justify-between text-amber-700">
+                    <span>WHT deducted</span>
+                    <span>-{formatCurrency(invoice.whtAmount ?? 0, invoice.currency)}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold text-amber-900 border-t border-amber-200 pt-1">
+                    <span>Cash received</span>
+                    <span>{formatCurrency(invoice.expectedCash ?? 0, invoice.currency)}</span>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-dark mb-1">Amount (NGN)</label>
                 <input type="number"
@@ -818,6 +857,17 @@ export default function InvoiceDetailPage() {
                   onChange={(e) => setPaymentForm((f) => ({ ...f, amount: e.target.value }))}
                 />
               </div>
+              {invoice?.whtApplicable && (
+                <div>
+                  <label className="block text-sm font-medium text-dark mb-1">WHT deducted by buyer (NGN)</label>
+                  <input type="number"
+                    className="w-full px-3 py-2.5 rounded-lg border border-border text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green"
+                    value={paymentForm.whtDeducted}
+                    onChange={(e) => setPaymentForm((f) => ({ ...f, whtDeducted: e.target.value }))}
+                    placeholder="0.00"
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-dark mb-1">Provider</label>
                 <select

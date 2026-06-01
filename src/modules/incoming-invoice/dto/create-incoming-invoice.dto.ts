@@ -6,8 +6,10 @@ import {
   IsOptional,
   IsDateString,
   IsArray,
+  IsBoolean,
   ValidateNested,
   Min,
+  Max,
   MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -99,6 +101,18 @@ export class CreateIncomingInvoiceDto {
   @IsOptional()
   @IsString()
   sourceReference?: string;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  whtApplicable?: boolean;
+
+  @ApiPropertyOptional({ example: 5, description: 'WHT rate percentage (default 5)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  whtRate?: number;
 
   @ApiPropertyOptional({ type: [IncomingInvoiceItemDto] })
   @IsOptional()
