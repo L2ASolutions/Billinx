@@ -936,3 +936,102 @@ model VatPeriodSummary {
   @@index([tenantId])
   @@map("vat_period_summaries")
 }
+
+// ── FIRS REFERENCE DATA ───────────────────────────────────────────────────────
+
+model InvoiceType {
+  code      String   @id
+  value     String
+  createdAt DateTime @default(now())
+
+  @@map("invoice_types")
+}
+
+model PaymentMeans {
+  code      String   @id
+  value     String
+  createdAt DateTime @default(now())
+
+  @@map("payment_means")
+}
+
+model TaxCategory {
+  code      String   @id
+  value     String
+  createdAt DateTime @default(now())
+
+  @@map("tax_categories")
+}
+
+model Currency {
+  code          String   @id
+  name          String
+  symbol        String
+  symbolNative  String
+  decimalDigits Int      @default(2)
+  rounding      Float    @default(0)
+  namePlural    String
+  createdAt     DateTime @default(now())
+
+  @@map("currencies")
+}
+
+model HsCode {
+  code        String   @id
+  description String
+  createdAt   DateTime @default(now())
+
+  @@index([description])
+  @@map("hs_codes")
+}
+
+model ServiceCode {
+  code        String   @id
+  description String
+  createdAt   DateTime @default(now())
+
+  @@index([description])
+  @@map("service_codes")
+}
+
+model NigerianState {
+  code      String   @id
+  name      String
+  lgas      Lga[]
+  createdAt DateTime @default(now())
+
+  @@map("nigerian_states")
+}
+
+model Lga {
+  code      String        @id
+  name      String
+  stateCode String
+  state     NigerianState @relation(fields: [stateCode], references: [code])
+  createdAt DateTime      @default(now())
+
+  @@index([stateCode])
+  @@map("lgas")
+}
+
+model Country {
+  alpha2      String   @id
+  alpha3      String
+  name        String
+  countryCode String
+  region      String?
+  subRegion   String?
+  createdAt   DateTime @default(now())
+
+  @@index([name])
+  @@map("countries")
+}
+
+model QuantityCode {
+  code        String   @id
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@map("quantity_codes")
+}
