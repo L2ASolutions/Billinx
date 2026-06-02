@@ -569,6 +569,9 @@ interface TenantProfile {
   website?: string;
   telephone?: string;
   businessDescription?: string;
+  bankName?: string;
+  bankAccount?: string;
+  bankAccountName?: string;
 }
 
 function CompanyTab() {
@@ -658,6 +661,17 @@ function CompanyTab() {
           <div className="md:col-span-2">
             <Input label="Business description (for FIRS invoices)" placeholder="e.g. Software services company"
               value={profile.businessDescription ?? ""} onChange={uf("businessDescription")} />
+          </div>
+          <div className="md:col-span-2 pt-2 border-t border-border">
+            <p className="text-sm font-medium text-dark mb-3">Bank transfer details (shown on payment page)</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Input label="Bank name" placeholder="e.g. GTBank, Access Bank" value={profile.bankName ?? ""}
+                onChange={uf("bankName")} />
+              <Input label="Account number" placeholder="0123456789" value={profile.bankAccount ?? ""}
+                onChange={uf("bankAccount")} />
+              <Input label="Account name" placeholder="Company name on account" value={profile.bankAccountName ?? ""}
+                onChange={uf("bankAccountName")} />
+            </div>
           </div>
         </div>
       </div>

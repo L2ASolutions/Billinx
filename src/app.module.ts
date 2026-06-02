@@ -25,6 +25,7 @@ import { ReminderModule } from './modules/reminder/reminder.module';
 import { IncomingInvoiceModule } from './modules/incoming-invoice/incoming-invoice.module';
 import { VatModule } from './modules/vat/vat.module';
 import { ReferenceDataModule } from './modules/reference-data/reference-data.module';
+import { PaymentModule } from './modules/payment/payment.module';
 import { DatabaseModule } from './infrastructure/database/database.module';
 import { SecretsService } from './infrastructure/secrets/secrets.service';
 import { IdempotencyInterceptor } from './shared/interceptors/idempotency.interceptor';
@@ -57,6 +58,7 @@ import { GlobalExceptionFilter } from './shared/filters/global-exception.filter'
     IncomingInvoiceModule,
     VatModule,
     ReferenceDataModule,
+    PaymentModule,
   ],
   providers: [
     SecretsService,
