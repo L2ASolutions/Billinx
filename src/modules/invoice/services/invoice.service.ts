@@ -92,8 +92,8 @@ export class InvoiceService {
     const platformIrn = await this.irnService.generateUniqueIrn(tenant.tin);
 
     if (
-      (request.invoiceTypeCode === '381' ||
-        request.invoiceTypeCode === '383') &&
+      (request.invoiceTypeCode === '380' ||
+        request.invoiceTypeCode === '384') &&
       !request.originalIrn
     ) {
       throw new BadRequestException(
@@ -176,6 +176,12 @@ export class InvoiceService {
         : null,
       invoiceDeliveryPeriod: request.invoiceDeliveryPeriod
         ? JSON.parse(JSON.stringify(request.invoiceDeliveryPeriod))
+        : null,
+      deliveryPeriodStart: request.deliveryPeriodStart
+        ? new Date(request.deliveryPeriodStart)
+        : null,
+      deliveryPeriodEnd: request.deliveryPeriodEnd
+        ? new Date(request.deliveryPeriodEnd)
         : null,
       paymentTermsNote: request.paymentTermsNote ?? null,
       note: request.note ?? null,
@@ -444,8 +450,8 @@ export class InvoiceService {
     }
 
     if (
-      (request.invoiceTypeCode === '381' ||
-        request.invoiceTypeCode === '383') &&
+      (request.invoiceTypeCode === '380' ||
+        request.invoiceTypeCode === '384') &&
       !request.originalIrn
     ) {
       errors.push({
@@ -922,10 +928,20 @@ export class InvoiceService {
 
   private mapInvoiceTypeCode(code: string): string {
     const map: Record<string, string> = {
-      '380': 'STANDARD',
-      '381': 'CREDIT_NOTE',
+      // Corrected FIRS codes (from reference data seed)
+      '381': 'STANDARD',     // Commercial Invoice
+      '380': 'CREDIT_NOTE',  // Credit Note
+      '384': 'DEBIT_NOTE',   // Debit Note
+      '390': 'PROFORMA',     // Proforma Invoice
+      '385': 'STANDARD',     // Self Billed Invoice → STANDARD
+      // Legacy aliases
       '383': 'DEBIT_NOTE',
       '325': 'PROFORMA',
+      // Pass-through for enum values already stored
+      STANDARD: 'STANDARD',
+      CREDIT_NOTE: 'CREDIT_NOTE',
+      DEBIT_NOTE: 'DEBIT_NOTE',
+      PROFORMA: 'PROFORMA',
     };
     return map[code] ?? 'STANDARD';
   }
@@ -936,8 +952,11 @@ export class InvoiceService {
       CREDIT_NOTE: 'CREDIT_NOTE',
       DEBIT_NOTE: 'DEBIT_NOTE',
       PROFORMA: 'PROFORMA',
-      '380': 'STANDARD',
-      '381': 'CREDIT_NOTE',
+      // Corrected FIRS codes
+      '381': 'STANDARD',
+      '380': 'CREDIT_NOTE',
+      '384': 'DEBIT_NOTE',
+      '390': 'PROFORMA',
       '383': 'DEBIT_NOTE',
       '325': 'PROFORMA',
     };
@@ -975,6 +994,26 @@ export class InvoiceService {
       paymentMeans: invoice.paymentMeans as any[],
       allowanceCharges: invoice.allowanceCharges as any[],
       note: invoice.note ?? undefined,
+      buyerReference: invoice.buyerReference ?? undefined,
+      orderReference: invoice.orderReference ?? undefined,
+      paymentTermsNote: invoice.paymentTermsNote ?? undefined,
+      actualDeliveryDate: invoice.actualDeliveryDate
+        ? (invoice.actualDeliveryDate instanceof Date
+            ? invoice.actualDeliveryDate.toISOString()
+            : invoice.actualDeliveryDate)
+        : undefined,
+      deliveryPeriodStart: invoice.deliveryPeriodStart
+        ? (invoice.deliveryPeriodStart instanceof Date
+            ? invoice.deliveryPeriodStart.toISOString()
+            : invoice.deliveryPeriodStart)
+        : undefined,
+      deliveryPeriodEnd: invoice.deliveryPeriodEnd
+        ? (invoice.deliveryPeriodEnd instanceof Date
+            ? invoice.deliveryPeriodEnd.toISOString()
+            : invoice.deliveryPeriodEnd)
+        : undefined,
+      seller: (invoice.metadata as any)?.sellerParty ?? undefined,
+      buyer: (invoice.metadata as any)?.buyerParty ?? undefined,
       qrCodeBase64: invoice.qrCodeBase64 ?? undefined,
       stateHistory: invoice.stateHistory
         ? (invoice.stateHistory as any[]).map((h) => ({
@@ -1030,7 +1069,7 @@ export class InvoiceService {
       environment,
       schemaVersion: request.schemaVersion ?? '2.0',
       invoiceTypeCode: this.mapInvoiceTypeCode(
-        request.invoiceTypeCode ?? '380',
+        request.invoiceTypeCode ?? '381',
       ),
       platformIrn,
       sourceReference: request.sourceReference ?? null,
