@@ -130,12 +130,8 @@ export function InvoiceDocument({
 
       <hr className="border-[#E2E8E5] mb-6" />
 
-      {/* ── Invoice reference + dates ────────────────────────────────────────── */}
+      {/* ── Dates ───────────────────────────────────────────────────────────── */}
       <div className="mb-6 space-y-1.5">
-        <p className="text-sm text-[#1a1a2e]">
-          <span className="text-[#6B7B74]">Invoice Reference: </span>
-          <span className="font-mono font-semibold">{irn}</span>
-        </p>
         <p className={`text-sm ${invalidFields.includes("issueDate") ? "text-red-600 font-medium" : "text-[#6B7B74]"}`}>
           Issue date: {formatDate(issueDate)}
           {invalidFields.includes("issueDate") && <span className="ml-1 text-xs">(invalid)</span>}
@@ -251,9 +247,15 @@ export function InvoiceDocument({
       <div className="flex items-end justify-between pt-6">
         <div className="space-y-1 text-xs text-[#6B7B74] max-w-xs">
           <p>
-            <span className="font-medium text-[#1a1a2e]">Invoice Reference:</span>{" "}
-            <span className="font-mono">{irn}</span>
+            <span className="font-medium text-[#1a1a2e]">Invoice Reference (IRN):</span>{" "}
+            <span className="font-mono">{platformIrn}</span>
           </p>
+          {firsConfirmedIrn && (
+            <p>
+              <span className="font-medium text-[#1a1a2e]">FIRS Reference:</span>{" "}
+              <span className="font-mono">{firsConfirmedIrn}</span>
+            </p>
+          )}
           <p>Validated by FIRS via Interswitch NRS</p>
           {isAccepted && (invoiceId || paymentLink) && (
             <p>
