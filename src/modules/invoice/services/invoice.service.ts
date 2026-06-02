@@ -632,6 +632,8 @@ export class InvoiceService {
       outputVatAgg,
       inputVatAgg,
       whtExpectedAgg,
+      whtCreditsAgg,
+      pendingWhtCount,
     ] = await this.prisma.asAdmin(async (tx) => {
       const total = await tx.invoice.count({ where: { tenantId } });
       const accepted = await tx.invoice.count({
@@ -737,6 +739,17 @@ export class InvoiceService {
         } as any,
         _sum: { whtAmount: true } as any,
       });
+      const whtCreditsAgg = await (tx as any).paymentRecord.aggregate({
+        where: { tenantId, whtDeducted: { gt: 0 } },
+        _sum: { whtDeducted: true },
+      });
+      const pendingWhtCount = await tx.invoice.count({
+        where: {
+          tenantId,
+          whtApplicable: true,
+          paymentStatus: 'PAID',
+        } as any,
+      });
       return [
         total, accepted, rejected, rejectedAll, pending, draft, overdue,
         amountAgg, recentInvoices,
@@ -746,6 +759,7 @@ export class InvoiceService {
         collectedThisMonth, collectedLastMonth,
         collectedThisYear, collectedLastYear,
         outputVatAgg, inputVatAgg, whtExpectedAgg,
+        whtCreditsAgg, pendingWhtCount,
       ] as const;
     });
 
@@ -753,6 +767,8 @@ export class InvoiceService {
     const inputVatOutstanding = Number(inputVatAgg._sum.vatAmount ?? 0);
     const totalWhtExpected = Number((whtExpectedAgg._sum as any).whtAmount ?? 0);
     const outstandingAmount = Number(outstandingAgg._sum.totalAmount ?? 0);
+    const availableWhtCredits = Number((whtCreditsAgg._sum as any).whtDeducted ?? 0);
+    const submissionAcceptanceRate = total > 0 ? Math.round((accepted / total) * 1000) / 10 : 0;
 
     return {
       total,
@@ -777,11 +793,15 @@ export class InvoiceService {
       collectedLastMonth: Number(collectedLastMonth._sum.amount ?? 0),
       collectedThisYear: Number(collectedThisYear._sum.amount ?? 0),
       collectedLastYear: Number(collectedLastYear._sum.amount ?? 0),
+      outstandingInvoiceCount: outstandingAgg._count.id,
       outputVatOutstanding,
       inputVatOutstanding,
       netVatExposure: outputVatOutstanding - inputVatOutstanding,
       totalWhtExpected,
       expectedCashCollections: outstandingAmount - totalWhtExpected,
+      availableWhtCredits,
+      pendingWhtCertificates: pendingWhtCount,
+      submissionAcceptanceRate,
       recentInvoices: recentInvoices.map((inv) => ({
         ...inv,
         totalAmount: Number(inv.totalAmount),
