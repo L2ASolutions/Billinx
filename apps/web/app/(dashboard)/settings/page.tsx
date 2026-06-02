@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { apiKeyApi, reminderApi, webhookApi, api } from "@/lib/api";
+import { apiKeyApi, reminderApi, webhookApi, api, referenceApi } from "@/lib/api";
 import { Skeleton, SkeletonTableRow } from "@/components/ui/Skeleton";
 import { useAuth } from "@/lib/auth";
 import { formatDate } from "@/lib/utils";
@@ -562,6 +562,8 @@ interface TenantProfile {
   address?: string;
   city?: string;
   state?: string;
+  lga?: string;
+  postalZone?: string;
   country?: string;
   phone?: string;
   website?: string;
@@ -573,13 +575,21 @@ function CompanyTab() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const [states, setStates] = useState<{ code: string; name: string }[]>([]);
+  const [lgas, setLgas] = useState<{ code: string; name: string }[]>([]);
 
   useEffect(() => {
+    referenceApi.states().then(setStates).catch(() => {});
     api.get<TenantProfile>("/v1/tenants/me")
       .then((data) => setProfile(data ?? {}))
-      .catch(() => { /* tenant endpoint may not exist yet */ })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!profile.state) { setLgas([]); return; }
+    referenceApi.lgas(profile.state).then(setLgas).catch(() => setLgas([]));
+  }, [profile.state]);
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
@@ -598,7 +608,7 @@ function CompanyTab() {
   }
 
   const uf = (field: keyof TenantProfile) =>
-    (e: React.ChangeEvent<HTMLInputElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setProfile((p) => ({ ...p, [field]: e.target.value }));
 
   if (loading) {
@@ -653,7 +663,28 @@ function CompanyTab() {
               onChange={uf("address")} />
           </div>
           <Input label="City" placeholder="Lagos" value={profile.city ?? ""} onChange={uf("city")} />
-          <Input label="State" placeholder="Lagos State" value={profile.state ?? ""} onChange={uf("state")} />
+          <div>
+            <label className="block text-sm font-medium text-dark mb-1">State</label>
+            <select className={sel()} value={profile.state ?? ""} onChange={uf("state")}>
+              <option value="">Select state…</option>
+              {states.map((s) => (
+                <option key={s.code} value={s.code}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-dark mb-1">LGA</label>
+            <select className={sel()} value={profile.lga ?? ""}
+              onChange={(e) => setProfile((p) => ({ ...p, lga: e.target.value }))}
+              disabled={!profile.state}>
+              <option value="">{profile.state ? "Select LGA…" : "Select state first"}</option>
+              {lgas.map((l) => (
+                <option key={l.code} value={l.code}>{l.name}</option>
+              ))}
+            </select>
+          </div>
+          <Input label="Postal zone" placeholder="e.g. 100001" value={profile.postalZone ?? ""}
+            onChange={uf("postalZone")} />
           <Input label="Country" placeholder="Nigeria" value={profile.country ?? ""} onChange={uf("country")} />
         </div>
       </div>
