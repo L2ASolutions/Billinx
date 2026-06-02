@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent, useEffect, useCallback, useRef } from "react";
+import { useState, FormEvent, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { Topbar } from "@/components/dashboard/Topbar";
@@ -31,10 +31,27 @@ interface Product {
   unitPrice: number;
   currency: string;
   hsnCode?: string;
+  isicCode?: string;
   taxCategoryId?: string;
 }
 
 const TAX_RATE_MAP: Record<string, number> = { S: 7.5, Z: 0, E: 0, O: 0, WHT: 0 };
+
+// Products store legacy taxCategoryId strings — normalise to FIRS codes
+function normaliseTaxCategory(raw?: string): string {
+  if (!raw) return "S";
+  const upper = raw.toUpperCase().replace(/[-_ ]/g, "");
+  if (upper === "STANDARD" || upper === "STANDARDVAT" || upper === "S") return "S";
+  if (upper === "ZERORATED" || upper === "ZERO" || upper === "Z") return "Z";
+  if (upper === "EXEMPT" || upper === "E") return "E";
+  if (upper === "OUTSIDESCOPE" || upper === "OUTSIDE" || upper === "O") return "O";
+  if (upper === "WHT" || upper === "WITHHOLDING") return "WHT";
+  return "S";
+}
+
+const TAX_CATEGORY_LABEL: Record<string, string> = {
+  S: "Standard VAT 7.5%", Z: "Zero-rated", E: "Exempt", O: "Outside scope", WHT: "WHT",
+};
 
 // Maps legacy backend enum values (STANDARD etc.) to FIRS codes
 const LEGACY_TYPE_TO_CODE: Record<string, string> = {
@@ -137,28 +154,49 @@ function CatalogPicker({ onPick, onClose }: {
   onClose: () => void;
 }) {
   const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await productApi.list(search ? { search } : undefined);
-      setProducts(res.data as Product[]);
-    } catch {
-      setProducts([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [search]);
+  useEffect(() => {
+    productApi.list()
+      .then((res) => {
+        const data = res.data as Product[];
+        setAllProducts(data);
+        setProducts(data);
+      })
+      .catch(() => { setAllProducts([]); setProducts([]); })
+      .finally(() => setLoading(false));
+  }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const q = search.trim().toLowerCase();
+    setProducts(
+      q
+        ? allProducts.filter(
+            (p) =>
+              p.name.toLowerCase().includes(q) ||
+              (p.description ?? "").toLowerCase().includes(q) ||
+              (p.hsnCode ?? "").toLowerCase().includes(q),
+          )
+        : allProducts,
+    );
+  }, [search, allProducts]);
+
+  const TAX_PILL: Record<string, string> = {
+    S: "bg-blue-50 text-blue-700", Z: "bg-gray-100 text-gray-600",
+    E: "bg-gray-100 text-gray-600", O: "bg-gray-100 text-gray-600",
+    WHT: "bg-amber-50 text-amber-700",
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
         <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
-          <h2 className="font-semibold text-dark">Select from catalog</h2>
+          <div>
+            <h2 className="font-semibold text-dark">Select a product</h2>
+            {!loading && <p className="text-xs text-muted mt-0.5">{allProducts.length} product{allProducts.length !== 1 ? "s" : ""} in catalog</p>}
+          </div>
           <button onClick={onClose} className="text-muted hover:text-dark">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -168,7 +206,7 @@ function CatalogPicker({ onPick, onClose }: {
         <div className="p-4 border-b border-border shrink-0">
           <input
             className={inp()}
-            placeholder="Search products…"
+            placeholder="Search by name, description or HSN code…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             autoFocus
@@ -179,27 +217,49 @@ function CatalogPicker({ onPick, onClose }: {
             <div className="p-8 flex justify-center">
               <div className="w-5 h-5 border-2 border-green border-t-transparent rounded-full animate-spin" />
             </div>
+          ) : allProducts.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="text-sm text-muted mb-3">No products in catalog yet.</p>
+              <a href="/products" className="text-sm text-green font-medium hover:underline">
+                Add products →
+              </a>
+            </div>
           ) : products.length === 0 ? (
-            <p className="p-8 text-center text-sm text-muted">No products found.</p>
+            <p className="p-8 text-center text-sm text-muted">No products match &ldquo;{search}&rdquo;</p>
           ) : (
             <ul className="divide-y divide-border">
-              {products.map((p) => (
-                <li key={p.id}>
-                  <button
-                    onClick={() => onPick(p)}
-                    className="w-full text-left px-6 py-3 hover:bg-surface transition-colors flex items-center justify-between gap-3"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-dark">{p.name}</p>
-                      {p.description && <p className="text-xs text-muted truncate">{p.description}</p>}
-                      {p.hsnCode && <p className="text-xs text-muted">HSN: {p.hsnCode}</p>}
-                    </div>
-                    <span className="shrink-0 text-sm font-semibold text-dark">
-                      {formatCurrency(p.unitPrice, p.currency)}
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {products.map((p) => {
+                const taxCode = normaliseTaxCategory(p.taxCategoryId);
+                return (
+                  <li key={p.id}>
+                    <button
+                      onClick={() => onPick(p)}
+                      className="w-full text-left px-5 py-3.5 hover:bg-surface transition-colors flex items-start justify-between gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-dark">{p.name}</p>
+                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${TAX_PILL[taxCode] ?? "bg-gray-100 text-gray-600"}`}>
+                            {taxCode}
+                          </span>
+                          {(p.hsnCode || p.isicCode) && (
+                            <span className="px-1.5 py-0.5 rounded text-xs font-mono bg-surface border border-border text-muted">
+                              {p.hsnCode ?? p.isicCode}
+                            </span>
+                          )}
+                        </div>
+                        {p.description && (
+                          <p className="text-xs text-muted mt-0.5 truncate">{p.description}</p>
+                        )}
+                        <p className="text-xs text-muted mt-0.5">{TAX_CATEGORY_LABEL[taxCode]}</p>
+                      </div>
+                      <span className="shrink-0 text-sm font-bold text-dark">
+                        {formatCurrency(p.unitPrice, p.currency ?? "NGN")}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -484,16 +544,20 @@ function NewInvoiceForm() {
   function pickFromCatalog(product: Product) {
     const idx = showCatalog;
     if (idx == null) return;
+    const taxCode = normaliseTaxCategory(product.taxCategoryId);
+    const hasIsic = !!product.isicCode && !product.hsnCode;
     setLineItems((items) =>
       items.map((item, i) =>
         i === idx
           ? {
               ...item,
-              description: product.name,
+              description: product.description ? `${product.name} — ${product.description}` : product.name,
               unitPrice: product.unitPrice,
-              hsnCode: product.hsnCode ?? item.hsnCode,
-              taxCategory: product.taxCategoryId ?? item.taxCategory,
-              vatRate: TAX_RATE_MAP[product.taxCategoryId ?? item.taxCategory] ?? item.vatRate,
+              taxCategory: taxCode,
+              vatRate: TAX_RATE_MAP[taxCode] ?? 7.5,
+              itemType: hasIsic ? "service" : "product",
+              hsnCode: product.hsnCode ?? (hasIsic ? undefined : item.hsnCode),
+              isicCode: product.isicCode ?? (hasIsic ? item.isicCode : undefined),
               productId: product.id,
             }
           : item
@@ -848,13 +912,29 @@ function NewInvoiceForm() {
                 </div>
               ))}
 
-              <button type="button" onClick={addLine}
-                className="text-sm text-green hover:underline mt-1 flex items-center gap-1">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                Add line item
-              </button>
+              <div className="flex items-center gap-4 mt-1">
+                <button type="button" onClick={addLine}
+                  className="text-sm text-green hover:underline flex items-center gap-1">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Add line item
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const idx = lineItems.length - 1;
+                    addLine();
+                    setShowCatalog(idx + 1);
+                  }}
+                  className="text-sm text-muted hover:text-green flex items-center gap-1 transition-colors"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                  </svg>
+                  Add from catalog
+                </button>
+              </div>
             </div>
 
             {/* Tax summary */}
