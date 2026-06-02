@@ -427,6 +427,44 @@ export const vatApi = {
     cachedGet<unknown>(`/v1/vat/mismatches?period=${encodeURIComponent(period)}`, 30_000),
 };
 
+// Reference data — public endpoints, no auth required, 5-minute cache
+const REF = '/v1/reference';
+
+export const referenceApi = {
+  invoiceTypes: () =>
+    cachedGet<{ code: string; value: string }[]>(`${REF}/invoice-types`, 300_000),
+  paymentMeans: () =>
+    cachedGet<{ code: string; value: string }[]>(`${REF}/payment-means`, 300_000),
+  taxCategories: () =>
+    cachedGet<{ code: string; value: string }[]>(`${REF}/tax-categories`, 300_000),
+  currencies: () =>
+    cachedGet<{ code: string; name: string; symbol: string; symbolNative: string }[]>(
+      `${REF}/currencies`, 300_000,
+    ),
+  quantityCodes: () =>
+    cachedGet<{ code: string; name: string }[]>(`${REF}/quantity-codes`, 300_000),
+  states: () =>
+    cachedGet<{ code: string; name: string }[]>(`${REF}/states`, 300_000),
+  lgas: (stateCode: string) =>
+    cachedGet<{ code: string; name: string }[]>(
+      `${REF}/lgas?stateCode=${stateCode}`, 300_000,
+    ),
+  hsCodes: (search: string, limit = 10) =>
+    api.get<{ data: { code: string; description: string }[]; total: number }>(
+      `${REF}/hs-codes?search=${encodeURIComponent(search)}&limit=${limit}`,
+    ),
+  serviceCodes: (search: string, limit = 10) =>
+    api.get<{ data: { code: string; description: string }[]; total: number }>(
+      `${REF}/service-codes?search=${encodeURIComponent(search)}&limit=${limit}`,
+    ),
+  countries: (search?: string) => {
+    const url = search
+      ? `${REF}/countries?search=${encodeURIComponent(search)}`
+      : `${REF}/countries`;
+    return cachedGet<{ alpha2: string; alpha3: string; name: string }[]>(url, 300_000);
+  },
+};
+
 function adminRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   return request<T>(path, options, true);
 }
