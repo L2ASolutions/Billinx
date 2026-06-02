@@ -69,6 +69,14 @@ export interface InvoiceResponse {
   paymentMeans?: any[];
   allowanceCharges?: any[];
   note?: string;
+  buyerReference?: string;
+  orderReference?: string;
+  paymentTermsNote?: string;
+  actualDeliveryDate?: string;
+  deliveryPeriodStart?: string;
+  deliveryPeriodEnd?: string;
+  seller?: Record<string, any>;
+  buyer?: Record<string, any>;
   qrCodeBase64?: string;
   stateHistory?: any[];
   submissionAttempts?: any[];

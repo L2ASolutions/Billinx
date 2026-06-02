@@ -427,15 +427,28 @@ function NewInvoiceForm() {
     sellerAddress: "",
     sellerState: "",
     sellerLga: "",
+    sellerTelephone: "",
+    sellerBusinessDescription: "",
     buyerName: "",
     buyerTin: "",
     buyerEmail: "",
     buyerAddress: "",
     buyerState: "",
     buyerLga: "",
+    buyerTelephone: "",
+    buyerBusinessDescription: "",
     originalIrn: params.get("originalIrn") ?? "",
     sourceReference: "",
+    // Advanced options
+    note: "",
+    paymentTermsNote: "",
+    buyerReference: "",
+    orderReference: "",
+    actualDeliveryDate: "",
+    deliveryPeriodStart: "",
+    deliveryPeriodEnd: "",
   });
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Cascading LGA dropdowns
   useEffect(() => {
@@ -451,14 +464,16 @@ function NewInvoiceForm() {
   // Pre-fill seller from tenant profile
   useEffect(() => {
     if (draftId) return;
-    api.get<{ name?: string; tin?: string; state?: string; lga?: string }>("/v1/tenants/me")
+    api.get<{ name?: string; tin?: string; telephone?: string; businessDescription?: string; registeredAddress?: { state?: string; lga?: string } }>("/v1/tenants/me")
       .then((t) => {
         setForm((f) => ({
           ...f,
           sellerName: t?.name ?? f.sellerName,
           sellerTin: t?.tin ?? f.sellerTin,
-          sellerState: t?.state ?? f.sellerState,
-          sellerLga: t?.lga ?? f.sellerLga,
+          sellerTelephone: t?.telephone ?? f.sellerTelephone,
+          sellerBusinessDescription: t?.businessDescription ?? f.sellerBusinessDescription,
+          sellerState: t?.registeredAddress?.state ?? f.sellerState,
+          sellerLga: t?.registeredAddress?.lga ?? f.sellerLga,
         }));
       })
       .catch(() => {
@@ -478,19 +493,30 @@ function NewInvoiceForm() {
         currency: data.currency ?? "NGN",
         issueDate: data.issueDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
         paymentDueDate: data.paymentDueDate?.slice(0, 10) ?? "",
-        sellerName: data.sellerName ?? "",
-        sellerTin: data.sellerTin ?? "",
-        sellerAddress: data.sellerAddress ?? "",
-        sellerState: data.sellerState ?? "",
-        sellerLga: data.sellerLga ?? "",
-        buyerName: data.buyerName ?? "",
-        buyerTin: data.buyerTin ?? "",
-        buyerEmail: data.buyerEmail ?? "",
-        buyerAddress: data.buyerAddress ?? "",
-        buyerState: data.buyerState ?? "",
-        buyerLga: data.buyerLga ?? "",
+        sellerName: data.sellerName ?? data.seller?.partyName ?? "",
+        sellerTin: data.sellerTin ?? data.seller?.tin ?? "",
+        sellerAddress: data.seller?.postalAddress?.streetName ?? "",
+        sellerState: data.seller?.postalAddress?.state ?? "",
+        sellerLga: data.seller?.postalAddress?.lga ?? "",
+        sellerTelephone: data.seller?.telephone ?? "",
+        sellerBusinessDescription: data.seller?.businessDescription ?? "",
+        buyerName: data.buyerName ?? data.buyer?.partyName ?? "",
+        buyerTin: data.buyerTin ?? data.buyer?.tin ?? "",
+        buyerEmail: data.buyer?.email ?? "",
+        buyerAddress: data.buyer?.postalAddress?.streetName ?? "",
+        buyerState: data.buyer?.postalAddress?.state ?? "",
+        buyerLga: data.buyer?.postalAddress?.lga ?? "",
+        buyerTelephone: data.buyer?.telephone ?? "",
+        buyerBusinessDescription: data.buyer?.businessDescription ?? "",
         originalIrn: data.originalIrn ?? "",
         sourceReference: data.sourceReference ?? "",
+        note: data.note ?? "",
+        paymentTermsNote: data.paymentTermsNote ?? "",
+        buyerReference: data.buyerReference ?? "",
+        orderReference: data.orderReference ?? "",
+        actualDeliveryDate: data.actualDeliveryDate?.slice(0, 10) ?? "",
+        deliveryPeriodStart: data.deliveryPeriodStart?.slice(0, 10) ?? "",
+        deliveryPeriodEnd: data.deliveryPeriodEnd?.slice(0, 10) ?? "",
       });
       if (Array.isArray(data.lineItems) && data.lineItems.length > 0) {
         setLineItems(data.lineItems.map((li: any) => ({
@@ -578,8 +604,6 @@ function NewInvoiceForm() {
   const needsOriginalIrn = ["380", "384"].includes(form.invoiceType);
 
   function buildPayload(forSubmit: boolean) {
-    const sellerAddr = [form.sellerAddress, form.sellerLga, form.sellerState].filter(Boolean).join(", ");
-    const buyerAddr = [form.buyerAddress, form.buyerLga, form.buyerState].filter(Boolean).join(", ");
     return {
       invoiceTypeCode: form.invoiceType,
       invoiceKind: form.invoiceKind,
@@ -588,16 +612,37 @@ function NewInvoiceForm() {
       dueDate: form.paymentDueDate ? new Date(form.paymentDueDate).toISOString() : undefined,
       sourceReference: form.sourceReference || undefined,
       originalIrn: form.originalIrn || undefined,
+      note: form.note || undefined,
+      paymentTermsNote: form.paymentTermsNote || undefined,
+      buyerReference: form.buyerReference || undefined,
+      orderReference: form.orderReference || undefined,
+      actualDeliveryDate: form.actualDeliveryDate ? new Date(form.actualDeliveryDate).toISOString() : undefined,
+      deliveryPeriodStart: form.deliveryPeriodStart ? new Date(form.deliveryPeriodStart).toISOString() : undefined,
+      deliveryPeriodEnd: form.deliveryPeriodEnd ? new Date(form.deliveryPeriodEnd).toISOString() : undefined,
       seller: {
         tin: form.sellerTin || undefined,
         partyName: form.sellerName || undefined,
-        address: sellerAddr || undefined,
+        telephone: form.sellerTelephone || undefined,
+        businessDescription: form.sellerBusinessDescription || undefined,
+        postalAddress: {
+          streetName: form.sellerAddress || undefined,
+          lga: form.sellerLga || undefined,
+          state: form.sellerState || undefined,
+          country: "NG",
+        },
       },
       buyer: {
-        partyName: form.buyerName || (forSubmit ? undefined : undefined),
+        partyName: form.buyerName || undefined,
         tin: form.buyerTin || undefined,
         email: form.buyerEmail || undefined,
-        address: buyerAddr || undefined,
+        telephone: form.buyerTelephone || undefined,
+        businessDescription: form.buyerBusinessDescription || undefined,
+        postalAddress: {
+          streetName: form.buyerAddress || undefined,
+          lga: form.buyerLga || undefined,
+          state: form.buyerState || undefined,
+          country: "NG",
+        },
       },
       lineItems: lineItems
         .filter((li) => !forSubmit || li.description)
@@ -734,6 +779,35 @@ function NewInvoiceForm() {
                 <Input label="Original IRN *" placeholder="IRN of the original invoice" value={form.originalIrn} onChange={uf("originalIrn")} required />
               </div>
             )}
+            {/* Advanced options */}
+            <div className="mt-4 border-t border-border pt-4">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className="flex items-center gap-1.5 text-sm text-muted hover:text-green transition-colors"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  className={`transition-transform ${showAdvanced ? "rotate-90" : ""}`}>
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+                {showAdvanced ? "Hide advanced options" : "Show advanced options"}
+              </button>
+              {showAdvanced && (
+                <div className="mt-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input label="Buyer reference (PO number)" placeholder="PO-2026-001" value={form.buyerReference} onChange={uf("buyerReference")} />
+                    <Input label="Order reference" placeholder="ORD-001" value={form.orderReference} onChange={uf("orderReference")} />
+                  </div>
+                  <Input label="Note" placeholder="e.g. Payment due within 30 days" value={form.note} onChange={uf("note")} />
+                  <Input label="Payment terms" placeholder="e.g. Net 30 days" value={form.paymentTermsNote} onChange={uf("paymentTermsNote")} />
+                  <div className="grid grid-cols-3 gap-3">
+                    <Input label="Actual delivery date" type="date" value={form.actualDeliveryDate} onChange={uf("actualDeliveryDate")} />
+                    <Input label="Delivery period start" type="date" value={form.deliveryPeriodStart} onChange={uf("deliveryPeriodStart")} />
+                    <Input label="Delivery period end" type="date" value={form.deliveryPeriodEnd} onChange={uf("deliveryPeriodEnd")} />
+                  </div>
+                </div>
+              )}
+            </div>
           </SectionCard>
 
           {/* ── Supplier + Buyer ─────────────────────────────────────────────── */}
@@ -755,12 +829,9 @@ function NewInvoiceForm() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-dark mb-1">LGA</label>
-                    <select
-                      className={sel()}
-                      value={form.sellerLga}
+                    <select className={sel()} value={form.sellerLga}
                       onChange={(e) => setForm((f) => ({ ...f, sellerLga: e.target.value }))}
-                      disabled={!form.sellerState}
-                    >
+                      disabled={!form.sellerState}>
                       <option value="">{form.sellerState ? "Select LGA…" : "Select state first"}</option>
                       {sellerLgas.map((l) => (
                         <option key={l.code} value={l.code}>{l.name}</option>
@@ -768,6 +839,8 @@ function NewInvoiceForm() {
                     </select>
                   </div>
                 </div>
+                <Input label="Telephone (optional)" type="tel" placeholder="+2348012345678" value={form.sellerTelephone} onChange={uf("sellerTelephone")} />
+                <Input label="Business description (optional)" placeholder="e.g. Software services company" value={form.sellerBusinessDescription} onChange={uf("sellerBusinessDescription")} />
               </div>
             </SectionCard>
             <SectionCard title="Buyer">
@@ -788,14 +861,9 @@ function NewInvoiceForm() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-dark mb-1">LGA</label>
-                    <select
-                      className={sel()}
-                      value={form.buyerLga}
-                      onChange={(e) => {
-                        setForm((f) => ({ ...f, buyerLga: e.target.value }));
-                      }}
-                      disabled={!form.buyerState}
-                    >
+                    <select className={sel()} value={form.buyerLga}
+                      onChange={(e) => setForm((f) => ({ ...f, buyerLga: e.target.value }))}
+                      disabled={!form.buyerState}>
                       <option value="">{form.buyerState ? "Select LGA…" : "Select state first"}</option>
                       {buyerLgas.map((l) => (
                         <option key={l.code} value={l.code}>{l.name}</option>
@@ -803,6 +871,8 @@ function NewInvoiceForm() {
                     </select>
                   </div>
                 </div>
+                <Input label="Telephone (optional)" type="tel" placeholder="+2348098765432" value={form.buyerTelephone} onChange={uf("buyerTelephone")} />
+                <Input label="Business description (optional)" placeholder="e.g. Manufacturing company" value={form.buyerBusinessDescription} onChange={uf("buyerBusinessDescription")} />
               </div>
             </SectionCard>
           </div>

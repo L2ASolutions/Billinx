@@ -25,6 +25,8 @@ model Tenant {
   interswitchSecretIv     Bytes?
   interswitchServiceId    String?
   interswitchBusinessId   String?
+  telephone               String?
+  businessDescription     String?
   nrsApiKey               Bytes?
   nrsApiKeyIv             Bytes?
   nrsApiSecret            Bytes?
@@ -156,6 +158,8 @@ model IdempotencyRecord {
   billingReference      Json?
   documentReferences    Json?
   invoiceDeliveryPeriod Json?
+  deliveryPeriodStart   DateTime?
+  deliveryPeriodEnd     DateTime?
   paymentTermsNote      String?
   note                  String?
   metadata              Json?

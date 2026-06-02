@@ -567,6 +567,8 @@ interface TenantProfile {
   country?: string;
   phone?: string;
   website?: string;
+  telephone?: string;
+  businessDescription?: string;
 }
 
 function CompanyTab() {
@@ -651,6 +653,12 @@ function CompanyTab() {
             onChange={uf("phone")} />
           <Input label="Website" type="url" placeholder="https://yourcompany.com" value={profile.website ?? ""}
             onChange={uf("website")} />
+          <Input label="Telephone (for FIRS invoices)" type="tel" placeholder="+2348012345678" value={profile.telephone ?? ""}
+            onChange={uf("telephone")} />
+          <div className="md:col-span-2">
+            <Input label="Business description (for FIRS invoices)" placeholder="e.g. Software services company"
+              value={profile.businessDescription ?? ""} onChange={uf("businessDescription")} />
+          </div>
         </div>
       </div>
 
