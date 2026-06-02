@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { productApi } from "@/lib/api";
+import { productApi, referenceApi } from "@/lib/api";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { formatCurrency } from "@/lib/utils";
 
@@ -14,6 +14,7 @@ interface Product {
   name: string;
   description?: string;
   hsnCode?: string;
+  isicCode?: string;
   productCategory?: string;
   unitPrice: number;
   currency: string;
@@ -23,9 +24,11 @@ interface Product {
 }
 
 interface ProductForm {
+  itemType: "product" | "service";
   name: string;
   description: string;
   hsnCode: string;
+  isicCode: string;
   productCategory: string;
   unitPrice: string;
   currency: string;
@@ -33,25 +36,104 @@ interface ProductForm {
 }
 
 const EMPTY_FORM: ProductForm = {
+  itemType: "product",
   name: "",
   description: "",
   hsnCode: "",
+  isicCode: "",
   productCategory: "",
   unitPrice: "",
   currency: "NGN",
-  taxCategoryId: "",
+  taxCategoryId: "S",
 };
 
-const TAX_OPTIONS: { value: string; label: string }[] = [
-  { value: "STANDARD_VAT", label: "Standard VAT (7.5%)" },
-  { value: "ZERO_RATED", label: "Zero Rated (0%)" },
-  { value: "EXEMPT", label: "Exempt" },
-  { value: "WITHHOLDING", label: "Withholding Tax" },
-];
+// Maps any stored taxCategoryId to a display label
+const TAX_CODE_LABEL: Record<string, string> = {
+  S: "Standard VAT (7.5%)", Z: "Zero-rated (0%)", E: "Exempt",
+  O: "Outside scope", WHT: "Withholding Tax",
+  STANDARD: "Standard VAT (7.5%)", STANDARD_VAT: "Standard VAT (7.5%)",
+  ZERO_RATED: "Zero-rated (0%)", EXEMPT: "Exempt", WITHHOLDING: "Withholding Tax",
+};
 
 function taxLabel(id?: string): string {
   if (!id) return "—";
-  return TAX_OPTIONS.find((t) => t.value === id)?.label ?? id.replace(/_/g, " ");
+  return TAX_CODE_LABEL[id] ?? id.replace(/_/g, " ");
+}
+
+// Normalise legacy stored values to FIRS code
+function normaliseTax(raw?: string): string {
+  if (!raw) return "S";
+  const u = raw.toUpperCase().replace(/[-_ ]/g, "");
+  if (u === "STANDARD" || u === "STANDARDVAT" || u === "S") return "S";
+  if (u === "ZERORATED" || u === "ZERO" || u === "Z") return "Z";
+  if (u === "EXEMPT" || u === "E") return "E";
+  if (u === "OUTSIDESCOPE" || u === "OUTSIDE" || u === "O") return "O";
+  if (u === "WHT" || u === "WITHHOLDING") return "WHT";
+  return "S";
+}
+
+// ── Code search ───────────────────────────────────────────────────────────────
+
+function CodeSearch({ type, value, onSelect }: {
+  type: "hs" | "service";
+  value: string;
+  onSelect: (code: string, description: string) => void;
+}) {
+  const [query, setQuery] = useState(value || "");
+  const [results, setResults] = useState<{ code: string; description: string }[]>([]);
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+
+  function handleInput(q: string) {
+    setQuery(q);
+    setOpen(false);
+    clearTimeout(timer.current);
+    if (!q.trim()) { setResults([]); return; }
+    timer.current = setTimeout(async () => {
+      try {
+        const res = type === "hs"
+          ? await referenceApi.hsCodes(q)
+          : await referenceApi.serviceCodes(q);
+        setResults(res.data ?? []);
+        setOpen(true);
+      } catch { setResults([]); }
+    }, 300);
+  }
+
+  const inp = "w-full px-3 py-2 rounded-lg border border-border bg-white text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green";
+
+  return (
+    <div className="relative">
+      <input
+        className={inp}
+        placeholder={type === "hs" ? "Search by code or description…" : "Search by code or description…"}
+        value={query}
+        onChange={(e) => handleInput(e.target.value)}
+        onFocus={() => results.length > 0 && setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {open && results.length > 0 && (
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-border rounded-lg shadow-xl max-h-44 overflow-y-auto text-sm">
+          {results.map((r) => (
+            <button
+              key={r.code}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              className="w-full text-left px-3 py-2 hover:bg-surface border-b border-border last:border-0"
+              onClick={() => {
+                onSelect(r.code, r.description);
+                setQuery(`${r.code} — ${r.description}`);
+                setOpen(false);
+              }}
+            >
+              <span className="font-mono font-medium">{r.code}</span>
+              <span className="text-muted ml-1">— {r.description}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -62,6 +144,8 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+
+  const [taxCategories, setTaxCategories] = useState<{ code: string; value: string }[]>([]);
 
   // Modal
   const [showModal, setShowModal] = useState(false);
@@ -90,6 +174,10 @@ export default function ProductsPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    referenceApi.taxCategories().then(setTaxCategories).catch(() => {});
+  }, []);
+
   function openCreate() {
     setEditProduct(null);
     setForm(EMPTY_FORM);
@@ -99,14 +187,17 @@ export default function ProductsPage() {
 
   function openEdit(p: Product) {
     setEditProduct(p);
+    const hasIsic = !!p.isicCode && !p.hsnCode;
     setForm({
+      itemType: hasIsic ? "service" : "product",
       name: p.name,
       description: p.description ?? "",
       hsnCode: p.hsnCode ?? "",
+      isicCode: p.isicCode ?? "",
       productCategory: p.productCategory ?? "",
       unitPrice: String(p.unitPrice),
       currency: p.currency ?? "NGN",
-      taxCategoryId: p.taxCategoryId ?? "",
+      taxCategoryId: normaliseTax(p.taxCategoryId),
     });
     setFormError("");
     setShowModal(true);
@@ -119,11 +210,12 @@ export default function ProductsPage() {
       const payload = {
         name: form.name,
         description: form.description || undefined,
-        hsnCode: form.hsnCode || undefined,
+        hsnCode: form.itemType === "product" ? (form.hsnCode || undefined) : undefined,
+        isicCode: form.itemType === "service" ? (form.isicCode || undefined) : undefined,
         productCategory: form.productCategory || undefined,
         unitPrice: parseFloat(form.unitPrice),
         currency: form.currency,
-        taxCategoryId: form.taxCategoryId || undefined,
+        taxCategoryId: form.taxCategoryId || "S",
       };
       if (editProduct) {
         await productApi.update(editProduct.id, payload);
@@ -153,9 +245,9 @@ export default function ProductsPage() {
     }
   }
 
-  const f = (field: keyof ProductForm) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-      setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  const sel = "w-full px-3 py-2.5 rounded-lg border border-border bg-white text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green";
+
+  const TAX_RATE: Record<string, number> = { S: 7.5, Z: 0, E: 0, O: 0, WHT: 0 };
 
   return (
     <>
@@ -216,7 +308,7 @@ export default function ProductsPage() {
                 <thead>
                   <tr className="border-b border-border bg-surface/50">
                     <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Name</th>
-                    <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden sm:table-cell">HSN Code</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden sm:table-cell">Code</th>
                     <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden md:table-cell">Category</th>
                     <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Unit Price</th>
                     <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden lg:table-cell">Tax</th>
@@ -240,8 +332,10 @@ export default function ProductsPage() {
                         </div>
                       </td>
                       <td className="px-5 py-4 hidden sm:table-cell">
-                        {p.hsnCode ? (
-                          <span className="font-mono text-xs text-dark bg-surface px-2 py-0.5 rounded border border-border">{p.hsnCode}</span>
+                        {(p.hsnCode || p.isicCode) ? (
+                          <span className="font-mono text-xs text-dark bg-surface px-2 py-0.5 rounded border border-border">
+                            {p.hsnCode ?? p.isicCode}
+                          </span>
                         ) : (
                           <span className="text-muted text-sm">—</span>
                         )}
@@ -303,53 +397,127 @@ export default function ProductsPage() {
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{formError}</div>
               )}
 
-              <Input label="Product name *" value={form.name} onChange={f("name")} placeholder="e.g. Consulting Services" required />
-
+              {/* Product / Service toggle */}
               <div>
-                <label className="block text-sm font-medium text-dark mb-1">Description</label>
+                <label className="block text-sm font-medium text-dark mb-1.5">Product type</label>
+                <div className="flex rounded-lg border border-border overflow-hidden w-fit">
+                  <button
+                    type="button"
+                    className={`px-4 py-2 text-sm transition-colors ${form.itemType === "product" ? "bg-green text-white font-medium" : "bg-white text-muted hover:bg-surface"}`}
+                    onClick={() => setForm((f) => ({ ...f, itemType: "product", isicCode: "" }))}
+                  >
+                    Product
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-4 py-2 text-sm border-l border-border transition-colors ${form.itemType === "service" ? "bg-green text-white font-medium" : "bg-white text-muted hover:bg-surface"}`}
+                    onClick={() => setForm((f) => ({ ...f, itemType: "service", hsnCode: "" }))}
+                  >
+                    Service
+                  </button>
+                </div>
+              </div>
+
+              {/* Code search */}
+              <div>
+                <label className="block text-sm font-medium text-dark mb-1">
+                  {form.itemType === "product" ? "HS Code (Product)" : "Service Code"}
+                </label>
+                <CodeSearch
+                  key={form.itemType}
+                  type={form.itemType === "product" ? "hs" : "service"}
+                  value={form.itemType === "product" ? form.hsnCode : form.isicCode}
+                  onSelect={(code, description) => {
+                    setForm((f) => ({
+                      ...f,
+                      hsnCode: f.itemType === "product" ? code : f.hsnCode,
+                      isicCode: f.itemType === "service" ? code : f.isicCode,
+                      productCategory: f.productCategory || description,
+                    }));
+                  }}
+                />
+                <p className="text-xs text-muted mt-1">
+                  {form.itemType === "product"
+                    ? "Search HS tariff codes (e.g. rice, petroleum, textiles)"
+                    : "Search ISIC service codes (e.g. consultancy, transport, software)"}
+                </p>
+              </div>
+
+              {/* Product name */}
+              <Input
+                label="Product name *"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. Consulting Services"
+                required
+              />
+
+              {/* Category — auto-filled from code selection */}
+              <Input
+                label="Category"
+                value={form.productCategory}
+                onChange={(e) => setForm((f) => ({ ...f, productCategory: e.target.value }))}
+                placeholder="Auto-filled from code selection or type manually"
+              />
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-dark mb-1">Description (optional)</label>
                 <textarea
                   className="w-full px-3 py-2.5 rounded-lg border border-border text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green resize-none"
                   rows={2}
                   value={form.description}
-                  onChange={f("description")}
-                  placeholder="Optional description"
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="Enter description"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Input label="HSN Code" value={form.hsnCode} onChange={f("hsnCode")} placeholder="e.g. 9983" />
-                <Input label="Product Category" value={form.productCategory} onChange={f("productCategory")} placeholder="e.g. Services" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Input label="Unit Price (₦) *" type="number" value={form.unitPrice} onChange={f("unitPrice")} placeholder="0.00" required />
-                <div>
-                  <label className="block text-sm font-medium text-dark mb-1">Currency</label>
-                  <select
-                    className="w-full px-3 py-2.5 rounded-lg border border-border bg-white text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green"
-                    value={form.currency}
-                    onChange={f("currency")}
-                  >
-                    <option value="NGN">NGN</option>
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                    <option value="GBP">GBP</option>
-                  </select>
+              {/* Unit price */}
+              <div>
+                <label className="block text-sm font-medium text-dark mb-1">Unit Price *</label>
+                <div className="flex rounded-lg border border-border overflow-hidden focus-within:ring-2 focus-within:ring-green/30 focus-within:border-green">
+                  <span className="px-3 py-2.5 bg-surface text-sm text-muted border-r border-border">₦</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="flex-1 px-3 py-2.5 text-dark text-sm bg-white focus:outline-none"
+                    value={form.unitPrice}
+                    onChange={(e) => setForm((f) => ({ ...f, unitPrice: e.target.value }))}
+                    placeholder="0.00"
+                    required
+                  />
                 </div>
               </div>
 
+              {/* Tax category */}
               <div>
                 <label className="block text-sm font-medium text-dark mb-1">Tax Category</label>
                 <select
-                  className="w-full px-3 py-2.5 rounded-lg border border-border bg-white text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green"
+                  className={sel}
                   value={form.taxCategoryId}
-                  onChange={f("taxCategoryId")}
+                  onChange={(e) => setForm((f) => ({
+                    ...f,
+                    taxCategoryId: e.target.value,
+                  }))}
                 >
-                  <option value="">— Select tax category —</option>
-                  {TAX_OPTIONS.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
+                  {taxCategories.length === 0 ? (
+                    <>
+                      <option value="S">S — Standard VAT (7.5%)</option>
+                      <option value="Z">Z — Zero-rated (0%)</option>
+                      <option value="E">E — Exempt</option>
+                      <option value="WHT">WHT — Withholding Tax</option>
+                      <option value="O">O — Outside scope of tax</option>
+                    </>
+                  ) : (
+                    taxCategories.map((t) => (
+                      <option key={t.code} value={t.code}>{t.code} — {t.value}</option>
+                    ))
+                  )}
                 </select>
+                <p className="text-xs text-muted mt-1">
+                  Effective VAT rate: {TAX_RATE[form.taxCategoryId] ?? 0}%
+                </p>
               </div>
             </div>
 
@@ -360,7 +528,7 @@ export default function ProductsPage() {
                 disabled={!form.name || !form.unitPrice}
                 onClick={handleSubmit}
               >
-                {editProduct ? "Save changes" : "Add product"}
+                {editProduct ? "Save changes" : "Save product"}
               </Button>
             </div>
           </div>
