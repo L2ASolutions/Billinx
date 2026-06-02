@@ -475,6 +475,7 @@ export default function InvoiceDetailPage() {
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState("");
 
+  const [payLinkCopied, setPayLinkCopied] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendingToBuyer, setSendingToBuyer] = useState(false);
   const [sendToBuyerError, setSendToBuyerError] = useState("");
@@ -605,6 +606,14 @@ export default function InvoiceDetailPage() {
     }
   }
 
+  function copyPaymentLink() {
+    const link = `${window.location.origin}/pay/${invoice!.id}`;
+    navigator.clipboard.writeText(link).then(() => {
+      setPayLinkCopied(true);
+      setTimeout(() => setPayLinkCopied(false), 2000);
+    });
+  }
+
   function handleCreateCorrected() {
     if (!invoice) return;
     window.location.href = `/invoices/new?originalIrn=${encodeURIComponent(invoice.platformIrn)}&type=${invoice.invoiceType}`;
@@ -713,9 +722,14 @@ export default function InvoiceDetailPage() {
             </Link>
           )}
           {isAccepted && (
-            <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadPdf}>
-              Download PDF
-            </Button>
+            <>
+              <Button variant="secondary" size="sm" onClick={copyPaymentLink}>
+                {payLinkCopied ? "Copied!" : "Copy payment link"}
+              </Button>
+              <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadPdf}>
+                Download PDF
+              </Button>
+            </>
           )}
           {isRejected && (
             <Button size="sm" onClick={handleCreateCorrected}>

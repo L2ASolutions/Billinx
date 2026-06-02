@@ -27,6 +27,9 @@ model Tenant {
   interswitchBusinessId   String?
   telephone               String?
   businessDescription     String?
+  bankName                String?
+  bankAccount             String?
+  bankAccountName         String?
   nrsApiKey               Bytes?
   nrsApiKeyIv             Bytes?
   nrsApiSecret            Bytes?
@@ -165,6 +168,8 @@ model IdempotencyRecord {
   metadata              Json?
   originalIrn           String?
   qrCodeBase64          String?
+  paymentLink           String?
+  buyerEmail            String?
   status                InvoiceStatus     @default(DRAFT)
   submittedAt           DateTime?
   acceptedAt            DateTime?
