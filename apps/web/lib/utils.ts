@@ -27,3 +27,21 @@ export function formatCurrency(amount: number, currency = 'NGN'): string {
     minimumFractionDigits: 2,
   }).format(amount);
 }
+
+export function formatInvoiceNumber(inv: {
+  invoiceNumber?: string;
+  platformIrn?: string;
+  irn?: string;
+  id?: string;
+}): string {
+  if (inv.invoiceNumber) return inv.invoiceNumber;
+  const irnRaw = inv.platformIrn ?? inv.irn;
+  if (irnRaw) {
+    const part = irnRaw.split('-')[0];
+    const match = part.match(/^INV(\d{4})(\d{4})$/);
+    if (match) return `INV-${match[1]}-${match[2]}`;
+    if (part.startsWith('INV')) return part;
+  }
+  if (inv.id) return `INV-${inv.id.slice(0, 8).toUpperCase()}`;
+  return '—';
+}
