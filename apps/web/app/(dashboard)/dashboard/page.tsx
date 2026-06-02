@@ -32,14 +32,12 @@ const DEFAULT_PREFS: DashboardPrefs = {
 // ── Section open/close state (localStorage) ───────────────────────────────────
 
 interface SectionState {
-  financialPosition: boolean;
   taxPosition: boolean;
   compliancePosition: boolean;
 }
 
 const SECTION_KEY = 'billinx_dashboard_sections';
 const DEFAULT_SECTIONS: SectionState = {
-  financialPosition: true,
   taxPosition: false,
   compliancePosition: false,
 };
@@ -689,50 +687,47 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* ── Collapsible Section 1: Financial Position ───────────────────── */}
-        <div className="space-y-0">
-          <SectionHeader
-            title="Financial Position"
-            summary={statsLoading || incomingStatsLoading ? '…' : financialSummary}
-            summaryColor={financialSummaryColor}
-            open={sections.financialPosition}
-            onToggle={() => toggleSection('financialPosition')}
-          />
-          <CollapsibleSection open={sections.financialPosition}>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <FinancialCard
-                label="Outstanding Receivables"
-                value={formatCurrency(outstandingAmount, 'NGN')}
-                sub1={`${outstandingCount} invoice${outstandingCount !== 1 ? 's' : ''} · ${overdueCount} overdue`}
-                color="green"
-                href="/payments"
-                loading={statsLoading}
-              />
-              <FinancialCard
-                label="Expected Cash Collections"
-                value={formatCurrency(expectedCash, 'NGN')}
-                sub1={totalWhtExpected > 0 ? `After WHT deductions of ${formatCurrency(totalWhtExpected, 'NGN')}` : 'No WHT deductions pending'}
-                color="green"
-                href="/payments"
-                loading={statsLoading}
-              />
-              <FinancialCard
-                label="Outstanding Payables"
-                value={formatCurrency(outstandingPayables, 'NGN')}
-                sub1={`${outstandingPayablesCount} invoice${outstandingPayablesCount !== 1 ? 's' : ''} pending payment`}
-                color="red"
-                href="/incoming-invoices"
-                loading={incomingStatsLoading}
-              />
-              <FinancialCard
-                label="Net Cash Position"
-                value={formatCurrency(Math.abs(netCash), 'NGN')}
-                sub1={netCash > 0 ? 'Net receivable position' : netCash < 0 ? 'Net payable position' : 'Balanced position'}
-                color={netCashPositive ? 'green' : netCashNegative ? 'red' : 'gray'}
-                loading={statsLoading || incomingStatsLoading}
-              />
-            </div>
-          </CollapsibleSection>
+        {/* ── Section 1: Financial Position (always expanded) ─────────────── */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-5 py-3.5 bg-gray-50 rounded-xl border border-border">
+            <span className="font-semibold text-dark text-sm">Financial Position</span>
+            <span className={`text-sm font-medium ${financialSummaryColor === 'green' ? 'text-[#1D9E75]' : financialSummaryColor === 'red' ? 'text-red-600' : 'text-gray-500'}`}>
+              {statsLoading || incomingStatsLoading ? '…' : financialSummary}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <FinancialCard
+              label="Outstanding Receivables"
+              value={formatCurrency(outstandingAmount, 'NGN')}
+              sub1={`${outstandingCount} invoice${outstandingCount !== 1 ? 's' : ''} · ${overdueCount} overdue`}
+              color="green"
+              href="/payments"
+              loading={statsLoading}
+            />
+            <FinancialCard
+              label="Expected Cash Collections"
+              value={formatCurrency(expectedCash, 'NGN')}
+              sub1={totalWhtExpected > 0 ? `After WHT deductions of ${formatCurrency(totalWhtExpected, 'NGN')}` : 'No WHT deductions pending'}
+              color="green"
+              href="/payments"
+              loading={statsLoading}
+            />
+            <FinancialCard
+              label="Outstanding Payables"
+              value={formatCurrency(outstandingPayables, 'NGN')}
+              sub1={`${outstandingPayablesCount} invoice${outstandingPayablesCount !== 1 ? 's' : ''} pending payment`}
+              color="red"
+              href="/incoming-invoices"
+              loading={incomingStatsLoading}
+            />
+            <FinancialCard
+              label="Net Cash Position"
+              value={formatCurrency(Math.abs(netCash), 'NGN')}
+              sub1={netCash > 0 ? 'Net receivable position' : netCash < 0 ? 'Net payable position' : 'Balanced position'}
+              color={netCashPositive ? 'green' : netCashNegative ? 'red' : 'gray'}
+              loading={statsLoading || incomingStatsLoading}
+            />
+          </div>
         </div>
 
         {/* ── Collapsible Section 2: Tax Position ─────────────────────────── */}
