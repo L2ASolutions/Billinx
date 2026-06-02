@@ -476,6 +476,7 @@ export default function InvoiceDetailPage() {
   const [paymentError, setPaymentError] = useState("");
 
   const [payLinkCopied, setPayLinkCopied] = useState(false);
+  const [payLinkToast, setPayLinkToast] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendingToBuyer, setSendingToBuyer] = useState(false);
   const [sendToBuyerError, setSendToBuyerError] = useState("");
@@ -610,7 +611,9 @@ export default function InvoiceDetailPage() {
     const link = `${window.location.origin}/pay/${invoice!.id}`;
     navigator.clipboard.writeText(link).then(() => {
       setPayLinkCopied(true);
+      setPayLinkToast(true);
       setTimeout(() => setPayLinkCopied(false), 2000);
+      setTimeout(() => setPayLinkToast(false), 2500);
     });
   }
 
@@ -770,6 +773,31 @@ export default function InvoiceDetailPage() {
           </div>
         )}
 
+        {/* Payment link — accepted invoices */}
+        {isAccepted && (
+          <div className="bg-white rounded-xl border border-border p-6">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-semibold text-dark">Payment link</h2>
+            </div>
+            <p className="text-xs text-muted mb-3">Share with buyer to receive payment online</p>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface border border-border font-mono text-xs text-muted truncate select-all">
+                {typeof window !== "undefined" ? `${window.location.origin}/pay/${invoice.id}` : `/pay/${invoice.id}`}
+              </div>
+              <button
+                onClick={copyPaymentLink}
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green text-white text-xs font-medium hover:bg-green-dark transition-colors"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                {payLinkCopied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* WHT information — accepted invoices with WHT */}
         {isAccepted && invoice.whtApplicable && (
           <div className="bg-amber-50 rounded-xl border border-amber-200 p-6">
@@ -889,6 +917,7 @@ export default function InvoiceDetailPage() {
               lineItems={invoice.lineItems}
               qrCode={invoice.qrCode}
               qrCodeBase64={invoice.qrCodeBase64}
+              invoiceId={invoice.id}
             />
           </div>
         )}
@@ -1163,6 +1192,16 @@ export default function InvoiceDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ── Payment link copied toast ───────────────────────────────────────── */}
+      <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${payLinkToast ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2 pointer-events-none"}`}>
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-green text-white text-sm font-medium rounded-xl shadow-lg">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Payment link copied!
+        </div>
+      </div>
     </>
   );
 }
