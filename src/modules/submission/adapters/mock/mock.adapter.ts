@@ -81,11 +81,13 @@ export class MockAdapter implements AppAdapter {
   }
 
   private generateFirsIrn(platformIrn: string): string {
+    // platformIrn format: INV20260001-SVC00001-20260602
     const parts = platformIrn.split('-');
-    const tin = parts[0] ?? 'UNK';
-    const date = parts[1] ?? '20260101';
+    const datePart = parts[2] ?? '20260101';
+    const serviceId = parts[1] ?? 'SVC00001';
+    const acm = serviceId.substring(0, 3).toUpperCase();
     const uid = crypto.randomBytes(4).toString('hex').toUpperCase();
-    return `NGA-MBS-${date.substring(0, 4)}-${date.substring(4, 6)}-${date.substring(6, 8)}-${tin}-${uid}`;
+    return `NGA-MBS-${datePart.substring(0, 4)}-${datePart.substring(4, 6)}-${datePart.substring(6, 8)}-${acm}-${uid}`;
   }
 
   private generateCsid(): string {
