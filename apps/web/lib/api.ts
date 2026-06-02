@@ -556,3 +556,55 @@ export const adminApi = {
   unlockAccount: (tenantId: string, email: string) =>
     aApi.post('/v1/admin/users/unlock', { tenantId, email }),
 };
+
+// ── Public payment API (no auth) ──────────────────────────────────────────────
+
+const PUBLIC_BASE =
+  typeof window === 'undefined'
+    ? (process.env.API_URL ?? 'http://localhost:3000')
+    : '/api';
+
+async function publicGet<T>(path: string): Promise<T> {
+  const res = await fetch(`${PUBLIC_BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(body?.message ?? `Request failed: ${res.status}`), {
+      status: res.status,
+    });
+  }
+  return res.json();
+}
+
+async function publicPost<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${PUBLIC_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const b = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(b?.message ?? `Request failed: ${res.status}`), {
+      status: res.status,
+    });
+  }
+  return res.json();
+}
+
+export const publicPayApi = {
+  getInvoice: (invoiceId: string) =>
+    publicGet<unknown>(`/v1/invoices/pay/${invoiceId}`),
+  paystackInit: (invoiceId: string, email: string) =>
+    publicPost<{ authorizationUrl: string; reference: string }>(
+      '/v1/payments/paystack/initialize',
+      { invoiceId, email },
+    ),
+  paystackVerify: (reference: string) =>
+    publicGet<unknown>(`/v1/payments/paystack/verify/${encodeURIComponent(reference)}`),
+  flutterwaveInit: (invoiceId: string, email: string) =>
+    publicPost<{ paymentLink: string }>(
+      '/v1/payments/flutterwave/initialize',
+      { invoiceId, email },
+    ),
+};

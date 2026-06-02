@@ -605,4 +605,27 @@ export class InvoiceController {
     const ctx = this.getCtx(req);
     return this.invoiceService.submitDraft(id, ctx.tenantId, ctx.actor, body);
   }
+
+  // ── Send to buyer ──────────────────────────────────────────────────────────
+
+  @Post('dashboard/:id/send')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Send invoice to buyer by email (dashboard)' })
+  async sendToBuyerDashboard(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.sendToBuyer(id, ctx.tenantId);
+  }
+
+  // ── Public payment page ────────────────────────────────────────────────────
+
+  @Get('pay/:invoiceId')
+  @ApiOperation({ summary: 'Get public invoice data for the payment page' })
+  async getPublicInvoice(@Param('invoiceId') id: string) {
+    return this.invoiceService.getPublicInvoice(id);
+  }
 }
