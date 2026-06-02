@@ -604,7 +604,7 @@ export default function DashboardPage() {
 
       <div className="p-6 space-y-6">
         {/* ── Row 1: Invoice Activity (always visible) ────────────────────── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Outgoing Invoices */}
           <Link href="/invoices" className="block">
             <div className="bg-[#1a2b4a] rounded-xl border border-[#1a2b4a] p-5 h-full">
@@ -649,28 +649,6 @@ export default function DashboardPage() {
                   <p className="text-3xl font-bold text-white">{incomingStats?.total ?? 0}</p>
                   <p className="text-xs text-emerald-200 mt-1.5">
                     {incomingStats?.approved ?? 0} approved · {((incomingStats?.total ?? 0) - (incomingStats?.paid ?? 0))} pending payment
-                  </p>
-                </>
-              )}
-            </div>
-          </Link>
-
-          {/* Outstanding Receivables */}
-          <Link href="/payments" className="block">
-            <div className="bg-white rounded-xl border border-border p-5 h-full">
-              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3">Outstanding Receivables</p>
-              {statsLoading ? (
-                <>
-                  <Sk className="h-9 w-24 mb-2" />
-                  <Sk className="h-3 w-36" />
-                </>
-              ) : (
-                <>
-                  <p className={`text-3xl font-bold ${overdueCount > 0 ? 'text-red-600' : 'text-dark'}`}>
-                    {formatCurrency(outstandingAmount, 'NGN')}
-                  </p>
-                  <p className="text-xs text-muted mt-1.5">
-                    {overdueCount > 0 ? `${overdueCount} overdue` : 'None overdue'}
                   </p>
                 </>
               )}
