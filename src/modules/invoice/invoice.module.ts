@@ -44,6 +44,6 @@ import { TenantModule } from '../tenant/tenant.module';
     ExportService,
     RedisService,
   ],
-  exports: [InvoiceService, InvoiceRepository],
+  exports: [InvoiceService, InvoiceRepository, PaymentService],
 })
 export class InvoiceModule {}

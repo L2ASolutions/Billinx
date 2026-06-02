@@ -288,7 +288,7 @@ export class UserController {
   @ApiOperation({ summary: 'Update current tenant profile' })
   async updateMyTenant(@Body() body: Record<string, any>) {
     const ctx = getRequestContext();
-    const allowed = ['name', 'telephone', 'businessDescription'] as const;
+    const allowed = ['name', 'telephone', 'businessDescription', 'bankName', 'bankAccount', 'bankAccountName'] as const;
     const data: Record<string, any> = {};
     for (const key of allowed) {
       if (body[key] !== undefined) data[key] = body[key];

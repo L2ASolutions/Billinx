@@ -575,7 +575,72 @@ export class EmailService {
     this.send(opts.to, subject, html);
   }
 
-  // ─── 10. Account locked ─────────────────────────────────────────────────────
+  // ─── 10. Invoice sent to buyer ───────────────────────────────────────────────
+
+  sendInvoiceToBuyer(opts: {
+    to: string;
+    buyerName: string;
+    sellerName: string;
+    invoiceNumber: string;
+    firsReference: string | null;
+    totalAmount: string;
+    dueDate: string;
+    paymentLink: string;
+    bankName: string | null;
+    bankAccount: string | null;
+    bankAccountName: string | null;
+  }): void {
+    const bankSection =
+      opts.bankName && opts.bankAccount
+        ? `${divider()}
+<p style="margin:0 0 12px;font-size:15px;font-weight:600;color:${BRAND_DARK};">Bank Transfer Details</p>
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+  style="background:#f8faf9;border:1px solid #dde3ec;border-radius:6px;margin:0 0 20px;">
+  <tr><td style="padding:20px;">
+    <div style="margin-bottom:10px;"><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Bank</span><br /><strong style="color:${BRAND_DARK};">${opts.bankName}</strong></div>
+    <div style="margin-bottom:10px;"><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Account Number</span><br /><code style="font-size:14px;color:${BRAND_DARK};">${opts.bankAccount}</code></div>
+    ${opts.bankAccountName ? `<div style="margin-bottom:10px;"><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Account Name</span><br /><strong style="color:${BRAND_DARK};">${opts.bankAccountName}</strong></div>` : ''}
+    <div><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Reference</span><br /><code style="font-size:14px;color:${BRAND_DARK};">${opts.invoiceNumber}</code></div>
+  </td></tr>
+</table>`
+        : '';
+
+    const html = baseLayout(
+      `Invoice ${opts.invoiceNumber} from ${opts.sellerName}`,
+      `<div style="display:inline-block;background:#e6f9f3;border:1px solid #1D9E75;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
+        <span style="font-size:12px;font-weight:600;color:${BRAND_GREEN};text-transform:uppercase;letter-spacing:0.5px;">&#10003; FIRS Certified Invoice</span>
+      </div>` +
+        h1(`Invoice from ${opts.sellerName}`) +
+        p(`Dear ${opts.buyerName},`) +
+        p(`Please find your invoice from <strong>${opts.sellerName}</strong>.`) +
+        `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+          style="background:#f8faf9;border:1px solid #d4edda;border-radius:6px;margin:0 0 20px;">
+          <tr><td style="padding:20px;">
+            <div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Invoice Number (IRN)</span><br /><code style="font-size:13px;color:${BRAND_DARK};font-weight:600;">${opts.invoiceNumber}</code></div>
+            ${opts.firsReference ? `<div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">FIRS Reference</span><br /><code style="font-size:13px;color:${BRAND_DARK};">${opts.firsReference}</code></div>` : ''}
+            <div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Amount</span><br /><strong style="font-size:18px;color:${BRAND_GREEN};">${opts.totalAmount}</strong></div>
+            <div><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Due Date</span><br /><strong style="color:${BRAND_DARK};">${opts.dueDate}</strong></div>
+          </td></tr>
+        </table>` +
+        ctaButton(opts.paymentLink, 'Pay Online Now') +
+        bankSection +
+        divider() +
+        p(
+          `This is a FIRS-certified e-invoice. The QR code on the invoice can be scanned to verify authenticity directly with FIRS.`,
+        ) +
+        p(
+          `Regards,<br /><strong>${opts.sellerName}</strong>`,
+        ),
+    );
+
+    this.send(
+      opts.to,
+      `Invoice ${opts.invoiceNumber} from ${opts.sellerName}`,
+      html,
+    );
+  }
+
+  // ─── 12. Account locked ─────────────────────────────────────────────────────
 
   sendAccountLocked(opts: {
     to: string;

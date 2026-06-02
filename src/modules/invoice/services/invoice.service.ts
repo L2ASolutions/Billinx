@@ -21,6 +21,7 @@ import {
 import { XmlInvoiceBuilder } from './xml-invoice.builder';
 import { checkRole } from '../../../shared/utils/role-checker';
 import { SubmissionService } from '../../submission/services/submission.service';
+import { EmailService } from '../../../shared/email/email.service';
 
 export interface CreateInvoiceResult {
   invoice: InvoiceResponse;
@@ -41,6 +42,7 @@ export class InvoiceService {
     private readonly submissionService: SubmissionService,
     private readonly eventEmitter: EventEmitter2,
     private readonly xmlBuilder: XmlInvoiceBuilder,
+    private readonly emailService: EmailService,
   ) {}
 
   async createInvoice(
@@ -1220,5 +1222,203 @@ export class InvoiceService {
     });
 
     return this.mapToResponse(updated);
+  }
+
+  // ── Public payment page ──────────────────────────────────────────────────
+
+  async getPublicInvoice(invoiceId: string) {
+    const invoice = await this.prisma.asAdmin((tx) =>
+      tx.invoice.findUnique({
+        where: { id: invoiceId },
+        select: {
+          id: true,
+          platformIrn: true,
+          firsConfirmedIrn: true,
+          issueDate: true,
+          dueDate: true,
+          status: true,
+          paymentStatus: true,
+          currency: true,
+          totalAmount: true,
+          subtotal: true,
+          vatAmount: true,
+          amountPaid: true,
+          lineItems: true,
+          taxTotal: true,
+          legalMonetaryTotal: true,
+          qrCodeBase64: true,
+          paymentLink: true,
+          buyerEmail: true,
+          buyerName: true,
+          buyerTin: true,
+          sellerName: true,
+          sellerTin: true,
+          metadata: true,
+          tenantId: true,
+          acceptedAt: true,
+          whtApplicable: true,
+          whtAmount: true,
+        },
+      }),
+    );
+
+    if (!invoice) throw new NotFoundException('Invoice not found');
+
+    const tenant = await this.prisma.asAdmin((tx) =>
+      tx.tenant.findUnique({
+        where: { id: invoice.tenantId },
+        select: {
+          name: true,
+          telephone: true,
+          registeredAddress: true,
+          bankName: true,
+          bankAccount: true,
+          bankAccountName: true,
+        },
+      }),
+    );
+
+    const meta = (invoice.metadata ?? {}) as Record<string, any>;
+    const sellerParty = meta.sellerParty ?? {};
+    const buyerParty = meta.buyerParty ?? {};
+
+    const amountOutstanding = Math.max(
+      0,
+      Number(invoice.totalAmount) - Number(invoice.amountPaid ?? 0),
+    );
+
+    const billinxUrl =
+      process.env.BILLINX_URL ?? 'http://localhost:3001';
+
+    return {
+      id: invoice.id,
+      invoiceNumber: invoice.platformIrn,
+      irn: invoice.platformIrn,
+      firsReference: invoice.firsConfirmedIrn ?? null,
+      issueDate: invoice.issueDate,
+      dueDate: invoice.dueDate ?? null,
+      status: invoice.status,
+      paymentStatus: invoice.paymentStatus ?? 'UNPAID',
+      acceptedAt: invoice.acceptedAt ?? null,
+      currency: invoice.currency,
+      seller: {
+        partyName: invoice.sellerName,
+        tin: invoice.sellerTin,
+        address: sellerParty.postalAddress ?? tenant?.registeredAddress ?? null,
+        telephone: tenant?.telephone ?? null,
+        bankName: tenant?.bankName ?? null,
+        bankAccount: tenant?.bankAccount ?? null,
+        bankAccountName: tenant?.bankAccountName ?? null,
+      },
+      buyer: {
+        partyName: invoice.buyerName,
+        tin: invoice.buyerTin ?? null,
+        email: invoice.buyerEmail ?? buyerParty.email ?? null,
+      },
+      lineItems: invoice.lineItems,
+      taxTotal: invoice.taxTotal,
+      legalMonetaryTotal: {
+        ...(invoice.legalMonetaryTotal as object),
+        payableAmount: Number(invoice.totalAmount),
+      },
+      amountPaid: Number(invoice.amountPaid ?? 0),
+      amountOutstanding,
+      qrCode: invoice.qrCodeBase64 ?? null,
+      paymentLink: invoice.paymentLink ?? `${billinxUrl}/pay/${invoice.id}`,
+      whtApplicable: invoice.whtApplicable,
+      whtAmount: invoice.whtAmount ? Number(invoice.whtAmount) : null,
+    };
+  }
+
+  // ── Send to buyer ─────────────────────────────────────────────────────────
+
+  async sendToBuyer(invoiceId: string, tenantId: string) {
+    const invoice = await this.prisma.asAdmin((tx) =>
+      tx.invoice.findUnique({
+        where: { id: invoiceId },
+        select: {
+          id: true,
+          tenantId: true,
+          platformIrn: true,
+          firsConfirmedIrn: true,
+          status: true,
+          currency: true,
+          totalAmount: true,
+          dueDate: true,
+          buyerName: true,
+          buyerEmail: true,
+          sellerName: true,
+          metadata: true,
+        },
+      }),
+    );
+
+    if (!invoice || invoice.tenantId !== tenantId) {
+      throw new NotFoundException('Invoice not found');
+    }
+
+    if (invoice.status !== 'ACCEPTED') {
+      throw new BadRequestException(
+        'Invoice must be ACCEPTED before sending to buyer',
+      );
+    }
+
+    const meta = (invoice.metadata ?? {}) as Record<string, any>;
+    const buyerParty = meta.buyerParty ?? {};
+    const buyerEmail = invoice.buyerEmail ?? buyerParty.email;
+
+    if (!buyerEmail) {
+      throw new BadRequestException(
+        'No buyer email on file. Update the invoice with the buyer email.',
+      );
+    }
+
+    const tenant = await this.prisma.asAdmin((tx) =>
+      tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: {
+          name: true,
+          bankName: true,
+          bankAccount: true,
+          bankAccountName: true,
+        },
+      }),
+    );
+
+    const billinxUrl = process.env.BILLINX_URL ?? 'http://localhost:3001';
+    const paymentLink = `${billinxUrl}/pay/${invoice.id}`;
+    const totalFormatted = `${invoice.currency} ${Number(invoice.totalAmount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+    const dueDateStr = invoice.dueDate
+      ? new Date(invoice.dueDate).toLocaleDateString('en-NG', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        })
+      : 'N/A';
+
+    this.emailService.sendInvoiceToBuyer({
+      to: buyerEmail,
+      buyerName: invoice.buyerName,
+      sellerName: invoice.sellerName,
+      invoiceNumber: invoice.platformIrn,
+      firsReference: invoice.firsConfirmedIrn ?? null,
+      totalAmount: totalFormatted,
+      dueDate: dueDateStr,
+      paymentLink,
+      bankName: tenant?.bankName ?? null,
+      bankAccount: tenant?.bankAccount ?? null,
+      bankAccountName: tenant?.bankAccountName ?? null,
+    });
+
+    this.activityService.track({
+      tenantId,
+      eventType: 'INVOICE_SENT_TO_BUYER',
+      actor: 'user',
+      entityType: 'Invoice',
+      entityId: invoiceId,
+      payload: { invoiceId, buyerEmail, platformIrn: invoice.platformIrn },
+    });
+
+    return { sent: true, to: buyerEmail };
   }
 }
