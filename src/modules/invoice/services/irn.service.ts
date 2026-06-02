@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import * as crypto from 'crypto';
 
 @Injectable()
 export class IrnService {
@@ -8,13 +7,17 @@ export class IrnService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async generateIrn(tenantTin: string): Promise<string> {
-    const date = this.getDateString();
-    const uid = crypto.randomUUID().split('-')[0];
-    const counter = await this.getNextCounter(tenantTin, date);
-    const paddedCounter = String(counter).padStart(4, '0');
-    const irn = `${tenantTin}-${date}-${uid}-${paddedCounter}`;
-
+  async generateIrn(
+    tenantId: string,
+    issueDate: string,
+    serviceId: string,
+  ): Promise<string> {
+    const datePart = issueDate.replace(/-/g, '').substring(0, 8);
+    const year = datePart.substring(0, 4);
+    const svcId = (serviceId || 'SVC00001').substring(0, 8).padEnd(8, '0');
+    const seq = await this.getNextInvoiceSequence(tenantId, year);
+    const invoiceNumber = `INV${year}${String(seq).padStart(4, '0')}`;
+    const irn = `${invoiceNumber}-${svcId}-${datePart}`;
     this.logger.log(`Generated IRN: ${irn}`);
     return irn;
   }
@@ -29,12 +32,16 @@ export class IrnService {
     return !existing;
   }
 
-  async generateUniqueIrn(tenantTin: string): Promise<string> {
-    let irn = await this.generateIrn(tenantTin);
+  async generateUniqueIrn(
+    tenantId: string,
+    issueDate: string,
+    serviceId: string,
+  ): Promise<string> {
+    let irn = await this.generateIrn(tenantId, issueDate, serviceId);
     let attempts = 0;
 
     while (!(await this.isIrnUnique(irn)) && attempts < 5) {
-      irn = await this.generateIrn(tenantTin);
+      irn = await this.generateIrn(tenantId, issueDate, serviceId);
       attempts++;
     }
 
@@ -45,34 +52,24 @@ export class IrnService {
     return irn;
   }
 
-  private getDateString(): string {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}${month}${day}`;
-  }
-
-  private async getNextCounter(
-    tenantTin: string,
-    date: string,
+  private async getNextInvoiceSequence(
+    tenantId: string,
+    year: string,
   ): Promise<number> {
-    const prefix = `${tenantTin}-${date}`;
-
-    const latest = await this.prisma.asAdmin(async (tx) => {
-      return tx.invoice.findFirst({
+    const latest = await this.prisma.asAdmin((tx) =>
+      tx.invoice.findFirst({
         where: {
-          platformIrn: { startsWith: prefix },
+          tenantId,
+          platformIrn: { startsWith: `INV${year}` },
         },
         orderBy: { createdAt: 'desc' },
         select: { platformIrn: true },
-      });
-    });
+      }),
+    );
 
     if (!latest) return 1;
 
-    const parts = latest.platformIrn.split('-');
-    const lastCounter = parseInt(parts[parts.length - 1], 10);
-    return isNaN(lastCounter) ? 1 : lastCounter + 1;
+    const match = latest.platformIrn.match(/^INV\d{4}(\d{4})/);
+    return match ? parseInt(match[1], 10) + 1 : 1;
   }
 }
