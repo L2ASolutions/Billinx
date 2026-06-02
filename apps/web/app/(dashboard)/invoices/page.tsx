@@ -9,6 +9,37 @@ import { Input } from "@/components/ui/Input";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { invoiceApi } from "@/lib/api";
 
+function CopyPayLinkButton({ invoiceId }: { invoiceId: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const link = `${window.location.origin}/pay/${invoiceId}`;
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+  return (
+    <button
+      onClick={copy}
+      title={copied ? "Copied!" : "Copy payment link"}
+      className="inline-flex items-center justify-center w-7 h-7 rounded-lg hover:bg-green-50 text-muted hover:text-green transition-colors"
+    >
+      {copied ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-green">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 async function sendReminder(invoiceId: string) {
   try {
     await invoiceApi.sendReminder(invoiceId);
@@ -461,22 +492,27 @@ export default function InvoicesPage() {
                       </td>
                       {/* Actions */}
                       <td className="px-6 py-3 text-right whitespace-nowrap">
-                        {inv.status === "DRAFT" && (
-                          <button
-                            onClick={() => router.push(`/invoices/new?id=${inv.id}`)}
-                            className="text-xs font-medium text-green hover:text-green-dark hover:underline transition-colors"
-                          >
-                            Continue →
-                          </button>
-                        )}
-                        {inv.isOverdue && inv.status === "ACCEPTED" && (
-                          <button
-                            onClick={() => sendReminder(inv.id)}
-                            className="text-xs font-medium text-red-600 hover:text-red-700 hover:underline transition-colors"
-                          >
-                            Send reminder
-                          </button>
-                        )}
+                        <div className="inline-flex items-center gap-1 justify-end">
+                          {inv.status === "ACCEPTED" && (
+                            <CopyPayLinkButton invoiceId={inv.id} />
+                          )}
+                          {inv.status === "DRAFT" && (
+                            <button
+                              onClick={() => router.push(`/invoices/new?id=${inv.id}`)}
+                              className="text-xs font-medium text-green hover:text-green-dark hover:underline transition-colors"
+                            >
+                              Continue →
+                            </button>
+                          )}
+                          {inv.isOverdue && inv.status === "ACCEPTED" && (
+                            <button
+                              onClick={() => sendReminder(inv.id)}
+                              className="text-xs font-medium text-red-600 hover:text-red-700 hover:underline transition-colors ml-1"
+                            >
+                              Send reminder
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
