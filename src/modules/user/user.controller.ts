@@ -288,10 +288,28 @@ export class UserController {
   @ApiOperation({ summary: 'Update current tenant profile' })
   async updateMyTenant(@Body() body: Record<string, any>) {
     const ctx = getRequestContext();
-    const allowed = ['name', 'contactEmail', 'contactPhone', 'address'] as const;
+    const allowed = [
+      'name', 'contactEmail', 'contactPhone', 'address',
+      'telephone', 'businessDescription',
+      'businessName', 'industry', 'registrationNumber',
+      'phone', 'website', 'city', 'country',
+    ] as const;
     const data: Record<string, any> = {};
     for (const key of allowed) {
       if (body[key] !== undefined) data[key] = body[key];
+    }
+    // Merge state/lga/postalZone into registeredAddress Json
+    if (body.state !== undefined || body.lga !== undefined || body.postalZone !== undefined) {
+      const tenant = await this.prisma.asAdmin((tx) =>
+        tx.tenant.findUniqueOrThrow({ where: { id: ctx.tenantId }, select: { registeredAddress: true } }),
+      );
+      const existing = (tenant.registeredAddress as Record<string, any>) ?? {};
+      data.registeredAddress = {
+        ...existing,
+        ...(body.state !== undefined ? { state: body.state } : {}),
+        ...(body.lga !== undefined ? { lga: body.lga } : {}),
+        ...(body.postalZone !== undefined ? { postalZone: body.postalZone } : {}),
+      };
     }
     return this.prisma.asAdmin((tx) =>
       tx.tenant.update({ where: { id: ctx.tenantId }, data }),

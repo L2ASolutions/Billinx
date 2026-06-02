@@ -15,6 +15,17 @@ const INVOICE_TYPE_CODES: Record<string, string> = {
   PROFORMA: '325',
 };
 
+const PAYMENT_MEANS_CODES: Record<string, string> = {
+  BANK_TRANSFER: '30',
+  PAYSTACK: '48',
+  FLUTTERWAVE: '48',
+  MANUAL: '10',
+  CASH: '10',
+  CHEQUE: '20',
+  CARD: '48',
+  DIRECT_DEBIT: '49',
+};
+
 interface NrsSuccessResponse {
   code: number;
   message: string;
@@ -450,9 +461,20 @@ export class InterswitchAdapter implements AppAdapter {
     if (invoice.paymentTermsNote)
       (payload as any).payment_terms_note = invoice.paymentTermsNote;
 
-    // Optional JSON fields
-    if (invoice.paymentMeans)
+    // Payment means — use stored if present, otherwise build a default from provider
+    if (invoice.paymentMeans && Array.isArray(invoice.paymentMeans) && invoice.paymentMeans.length > 0) {
       (payload as any).payment_means = invoice.paymentMeans;
+    } else {
+      const providerCode = PAYMENT_MEANS_CODES[invoice.paymentProvider ?? ''] ?? '30';
+      (payload as any).payment_means = [
+        {
+          payment_means_code: providerCode,
+          payment_due_date: invoice.dueDate
+            ? this.toISODate(invoice.dueDate)
+            : this.toISODate(invoice.issueDate),
+        },
+      ];
+    }
     if (invoice.allowanceCharges)
       (payload as any).allowance_charge = invoice.allowanceCharges;
     if (invoice.invoiceDeliveryPeriod)
