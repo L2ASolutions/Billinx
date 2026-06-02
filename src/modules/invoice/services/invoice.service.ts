@@ -81,7 +81,7 @@ export class InvoiceService {
     const tenant = await this.prisma.asAdmin(async (tx) => {
       return tx.tenant.findUnique({
         where: { id: tenantId },
-        select: { tin: true, appAdapterKey: true },
+        select: { tin: true, appAdapterKey: true, interswitchServiceId: true },
       });
     });
 
@@ -89,7 +89,11 @@ export class InvoiceService {
       throw new NotFoundException('Tenant not found');
     }
 
-    const platformIrn = await this.irnService.generateUniqueIrn(tenant.tin);
+    const platformIrn = await this.irnService.generateUniqueIrn(
+      tenantId,
+      request.issueDate ?? new Date().toISOString().slice(0, 10),
+      tenant.interswitchServiceId ?? 'SVC00001',
+    );
 
     if (
       (request.invoiceTypeCode === '380' ||
@@ -1058,10 +1062,15 @@ export class InvoiceService {
     request: Record<string, any>,
   ): Promise<InvoiceResponse> {
     const tenant = await this.prisma.asAdmin((tx) =>
-      tx.tenant.findUnique({ where: { id: tenantId }, select: { tin: true } }),
+      tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { tin: true, interswitchServiceId: true },
+      }),
     );
     const platformIrn = await this.irnService.generateUniqueIrn(
-      tenant?.tin ?? tenantId,
+      tenantId,
+      request.issueDate ?? new Date().toISOString().slice(0, 10),
+      tenant?.interswitchServiceId ?? 'SVC00001',
     );
 
     const invoice = await this.invoiceRepository.create({
