@@ -554,6 +554,14 @@ function RemindersTab() {
 
 // ── Company profile tab ───────────────────────────────────────────────────────
 
+interface TaxRepresentative {
+  name?: string;
+  tin?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
 interface TenantProfile {
   businessName?: string;
   tin?: string;
@@ -572,6 +580,7 @@ interface TenantProfile {
   bankName?: string;
   bankAccount?: string;
   bankAccountName?: string;
+  taxRepresentative?: TaxRepresentative;
 }
 
 function CompanyTab() {
@@ -711,10 +720,62 @@ function CompanyTab() {
         </div>
       </div>
 
+      {/* Tax representative */}
+      <TaxRepSection profile={profile} setProfile={setProfile} />
+
       <div className="flex justify-end">
         <Button type="submit" loading={saving}>Save changes</Button>
       </div>
     </form>
+  );
+}
+
+function TaxRepSection({
+  profile,
+  setProfile,
+}: {
+  profile: TenantProfile;
+  setProfile: React.Dispatch<React.SetStateAction<TenantProfile>>;
+}) {
+  const [open, setOpen] = useState(false);
+  const tr = profile.taxRepresentative ?? {};
+
+  function ufTr(field: keyof TaxRepresentative) {
+    return (e: React.ChangeEvent<HTMLInputElement>) =>
+      setProfile((p) => ({
+        ...p,
+        taxRepresentative: { ...(p.taxRepresentative ?? {}), [field]: e.target.value },
+      }));
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-border">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-6 py-4 text-sm font-semibold text-dark hover:bg-surface/50 transition-colors rounded-xl"
+      >
+        <span>Tax representative</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          className={`transition-transform text-muted ${open ? "rotate-180" : ""}`}>
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div className="px-6 pb-6 border-t border-border pt-4">
+          <p className="text-xs text-muted mb-4">If set, this will pre-fill the tax representative on every new invoice. Leave blank if not applicable.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input label="Representative name" placeholder="Full name or company" value={tr.name ?? ""} onChange={ufTr("name")} />
+            <Input label="TIN" placeholder="12345678-0001" value={tr.tin ?? ""} onChange={ufTr("tin")} />
+            <Input label="Email" type="email" placeholder="taxrep@company.com" value={tr.email ?? ""} onChange={ufTr("email")} />
+            <Input label="Phone" type="tel" placeholder="+2348012345678" value={tr.phone ?? ""} onChange={ufTr("phone")} />
+            <div className="md:col-span-2">
+              <Input label="Address" placeholder="Street address" value={tr.address ?? ""} onChange={ufTr("address")} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
