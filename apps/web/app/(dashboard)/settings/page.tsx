@@ -563,7 +563,7 @@ interface TaxRepresentative {
 }
 
 interface TenantProfile {
-  businessName?: string;
+  name?: string;
   tin?: string;
   industry?: string;
   registrationNumber?: string;
@@ -667,8 +667,8 @@ function CompanyTab() {
       <div className="bg-white rounded-xl border border-border p-6">
         <h3 className="font-semibold text-dark mb-4">Business information</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input label="Business name" placeholder="Acme Limited" value={profile.businessName ?? ""}
-            onChange={uf("businessName")} />
+          <Input label="Business name" placeholder="Acme Limited" value={profile.name ?? ""}
+            onChange={uf("name")} />
           <Input label="TIN" placeholder="12345678-0001" value={profile.tin ?? ""}
             onChange={uf("tin")} />
           <Input label="Industry" placeholder="e.g. Technology, Manufacturing" value={profile.industry ?? ""}
