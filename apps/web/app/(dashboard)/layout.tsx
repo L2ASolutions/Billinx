@@ -4,13 +4,15 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { useAuth } from "@/lib/auth";
-import { userApi } from "@/lib/api";
+import { userApi, invoiceApi, incomingInvoiceApi } from "@/lib/api";
 import { UserProfileProvider, type UserProfile } from "@/lib/userProfile";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [sentPendingBadge, setSentPendingBadge] = useState(0);
+  const [receivedBadge, setReceivedBadge] = useState(0);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -22,6 +24,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!isAuthenticated) return;
     userApi.me()
       .then((data) => setProfile(data as UserProfile))
+      .catch(() => {});
+    invoiceApi.stats()
+      .then((s: any) => setSentPendingBadge(s.pending ?? 0))
+      .catch(() => {});
+    incomingInvoiceApi.stats()
+      .then((s: any) => setReceivedBadge(s.received ?? 0))
       .catch(() => {});
   }, [isAuthenticated]);
 
@@ -42,7 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <UserProfileProvider profile={profile}>
       <div className="flex min-h-screen bg-surface">
-        <Sidebar fullName={fullName} role={role} />
+        <Sidebar fullName={fullName} role={role} invoiceBadge={sentPendingBadge} receivedBadge={receivedBadge} />
         <main className="flex-1 ml-64 min-h-screen">
           {children}
         </main>

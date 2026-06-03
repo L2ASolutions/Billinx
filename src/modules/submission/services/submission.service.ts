@@ -156,6 +156,7 @@ export class SubmissionService {
         tenantId,
         submissionAttempt.id,
         result,
+        platformIrn,
       );
     } else {
       await this.handleFailure(
@@ -220,6 +221,7 @@ export class SubmissionService {
     tenantId: string,
     attemptId: string,
     result: SubmissionResult,
+    platformIrn: string,
   ): Promise<void> {
     await this.prisma.asAdmin(async (tx) => {
       await tx.invoice.update({
@@ -250,7 +252,7 @@ export class SubmissionService {
           fromStatus: 'SUBMITTING',
           toStatus: 'ACCEPTED',
           actor: 'system:firs',
-          reason: `FIRS accepted. IRN: ${result.firsConfirmedIrn}`,
+          reason: `FIRS accepted. IRN: ${platformIrn}. FIRS Reference: ${result.firsConfirmedIrn}`,
         } as any,
       });
     });
