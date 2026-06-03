@@ -200,10 +200,11 @@ model IdempotencyRecord {
   reminderLogs          ReminderLog[]
 
   @@index([tenantId, status])
-  @@index([tenantId, createdAt])   // list query: ORDER BY createdAt DESC WHERE tenantId = ?
+  @@index([tenantId, createdAt])
+  @@index([tenantId, paymentStatus])
   @@index([tenantId, environment])
   @@index([tenantId, sourceReference])
-  @@index([tenantId, isOverdue])   // overdue filter
+  @@index([tenantId, isOverdue])
   @@index([sellerTin])
   @@index([platformIrn])
   @@index([issueDate])
