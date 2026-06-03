@@ -26,6 +26,8 @@ model Tenant {
   interswitchServiceId    String?
   interswitchBusinessId   String?
   telephone               String?
+  phone                   String?
+  industry                String?
   businessDescription     String?
   bankName                String?
   bankAccount             String?
