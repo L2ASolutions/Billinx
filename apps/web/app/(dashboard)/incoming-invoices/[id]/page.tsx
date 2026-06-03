@@ -213,9 +213,9 @@ export default function IncomingInvoiceDetailPage() {
         title="Incoming invoice"
         actions={
           <div className="flex gap-2 flex-wrap">
-            <Link href="/incoming-invoices">
+            <Link href="/invoices?tab=received">
               <Button variant="secondary" size="sm">
-                ← Back
+                ← Back to received
               </Button>
             </Link>
             {canValidate && (
