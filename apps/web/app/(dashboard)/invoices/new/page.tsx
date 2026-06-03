@@ -175,6 +175,7 @@ function QuantityCodeSelect({ value, onChange }: { value: string; onChange: (v: 
   const [codes, setCodes] = useState<{ code: string; name: string }[]>(qtyCodeCache.codes);
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (qtyCodeCache.codes.length > 0) return;
@@ -184,16 +185,36 @@ function QuantityCodeSelect({ value, onChange }: { value: string; onChange: (v: 
     }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setFilter("");
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") { setOpen(false); setFilter(""); }
+    }
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [open]);
+
   const filtered = filter
     ? codes.filter((c) => c.code.toLowerCase().includes(filter.toLowerCase()) || c.name.toLowerCase().includes(filter.toLowerCase()))
     : codes;
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
         className="w-20 px-2 py-2 rounded-lg border border-border bg-white text-dark text-xs focus:outline-none flex items-center justify-between gap-1 hover:border-green transition-colors"
       >
         <span className="font-mono truncate">{value || "EA"}</span>
@@ -217,7 +238,6 @@ function QuantityCodeSelect({ value, onChange }: { value: string; onChange: (v: 
               <button
                 key={c.code}
                 type="button"
-                onMouseDown={(e) => e.preventDefault()}
                 className={`w-full text-left px-3 py-1.5 text-xs hover:bg-surface border-b border-border last:border-0 ${value === c.code ? "bg-green-50 text-green font-semibold" : ""}`}
                 onClick={() => { onChange(c.code); setOpen(false); setFilter(""); }}
               >
