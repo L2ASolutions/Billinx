@@ -594,8 +594,19 @@ function CompanyTab() {
 
   useEffect(() => {
     referenceApi.states().then(setStates).catch(() => {});
-    api.get<TenantProfile>("/v1/tenants/me")
-      .then((data) => setProfile(data ?? {}))
+    api.get<any>("/v1/tenants/me")
+      .then((data) => {
+        const addr = (data?.registeredAddress as Record<string, any>) ?? {};
+        setProfile({
+          ...data,
+          address: addr.street ?? "",
+          city: addr.city ?? "",
+          state: addr.state ?? "",
+          lga: addr.lga ?? "",
+          postalZone: addr.postalZone ?? "",
+          country: addr.country ?? "",
+        });
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -611,7 +622,10 @@ function CompanyTab() {
     setError("");
     setSuccess("");
     try {
-      await api.patch("/v1/tenants/me", profile);
+      // Backend addressFields: street, city, state, lga, postalZone, country
+      // profile.address maps to the "street" field on the backend
+      const { address, ...rest } = profile;
+      await api.patch("/v1/tenants/me", { ...rest, street: address });
       setSuccess("Company profile saved.");
       setTimeout(() => setSuccess(""), 4000);
     } catch (err: unknown) {
