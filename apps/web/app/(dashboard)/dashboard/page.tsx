@@ -59,6 +59,13 @@ function saveSections(s: SectionState) {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface RecentPayment {
+  buyerName: string;
+  amount: number;
+  provider: string;
+  paidAt: string;
+}
+
 interface Stats {
   total: number;
   accepted: number;
@@ -73,14 +80,7 @@ interface Stats {
   outgoingAccepted?: number;
   outgoingPending?: number;
   outgoingRejected?: number;
-  collectedToday?: number;
-  collectedYesterday?: number;
-  collectedThisWeek?: number;
-  collectedLastWeek?: number;
   collectedThisMonth?: number;
-  collectedLastMonth?: number;
-  collectedThisYear?: number;
-  collectedLastYear?: number;
   outputVatOutstanding?: number;
   inputVatOutstanding?: number;
   netVatExposure?: number;
@@ -90,6 +90,7 @@ interface Stats {
   pendingWhtCertificates?: number;
   submissionAcceptanceRate?: number;
   recentInvoices: RecentInvoice[];
+  recentPayments: RecentPayment[];
 }
 
 interface IncomingStats {
@@ -156,6 +157,16 @@ const PILL: Record<string, { label: string; cls: string }> = {
   CANCELLED:             { label: 'Cancelled',   cls: 'bg-gray-100 text-gray-500' },
   CANCELLATION_REQUESTED:{ label: 'Cancelling',  cls: 'bg-gray-100 text-gray-500' },
 };
+
+// ── Payment provider pill ─────────────────────────────────────────────────────
+
+function providerPill(provider: string): string {
+  const p = provider.toLowerCase();
+  if (p.includes('paystack')) return 'bg-green-50 text-green-700';
+  if (p.includes('flutterwave')) return 'bg-orange-50 text-orange-700';
+  if (p.includes('bank') || p.includes('transfer')) return 'bg-blue-50 text-blue-700';
+  return 'bg-gray-100 text-gray-600';
+}
 
 // ── Toggle switch ─────────────────────────────────────────────────────────────
 
@@ -305,7 +316,6 @@ export default function DashboardPage() {
   const [queueLoading, setQueueLoading] = useState(true);
 
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
-  const [collectedTab, setCollectedTab] = useState<'day' | 'week' | 'month' | 'year'>('month');
 
   const [prefs, setPrefs] = useState<DashboardPrefs>(DEFAULT_PREFS);
   const [pendingPrefs, setPendingPrefs] = useState<DashboardPrefs>(DEFAULT_PREFS);
@@ -422,34 +432,6 @@ export default function DashboardPage() {
 
   const firstName = profile?.firstName ?? user?.name?.split(' ')[0] ?? 'there';
   const tenantName = user?.tenantName ?? '';
-
-  // ── Collected tab values ──────────────────────────────────────────────────
-  const collectedTabValue = (() => {
-    if (!stats) return 0;
-    if (collectedTab === 'day') return stats.collectedToday ?? 0;
-    if (collectedTab === 'week') return stats.collectedThisWeek ?? 0;
-    if (collectedTab === 'year') return stats.collectedThisYear ?? 0;
-    return stats.collectedThisMonth ?? 0;
-  })();
-
-  const collectedTabPrev = (() => {
-    if (!stats) return undefined;
-    if (collectedTab === 'day') return stats.collectedYesterday;
-    if (collectedTab === 'week') return stats.collectedLastWeek;
-    if (collectedTab === 'year') return stats.collectedLastYear;
-    return stats.collectedLastMonth;
-  })();
-
-  const collectedTabPeriodLabel = collectedTab === 'day' ? 'yesterday' : collectedTab === 'week' ? 'last week' : collectedTab === 'year' ? 'last year' : 'last month';
-
-  function collectedTrend(): string {
-    if (collectedTabPrev == null || collectedTabPrev === 0) return 'No prior data';
-    const delta = ((collectedTabValue - collectedTabPrev) / collectedTabPrev) * 100;
-    const sign = delta >= 0 ? '↑' : '↓';
-    return `${sign} ${Math.abs(Math.round(delta))}% vs ${collectedTabPeriodLabel}`;
-  }
-  const collectedTrendStr = collectedTrend();
-  const collectedTrendNeg = collectedTabPrev != null && collectedTabPrev > 0 && collectedTabValue < collectedTabPrev;
 
   const lastRefreshedLabel = lastRefreshed
     ? lastRefreshed.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })
@@ -653,38 +635,52 @@ export default function DashboardPage() {
             </div>
           </Link>
 
-          {/* Collected — with tab pills */}
-          <Link href="/payments" className="block">
-            <div className="bg-white rounded-xl border border-border p-5 h-full">
-              <p className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Collected</p>
-              <div className="flex gap-1 mb-3">
-                {(['day', 'week', 'month', 'year'] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={(e) => { e.preventDefault(); setCollectedTab(tab); }}
-                    className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
-                      collectedTab === tab ? 'bg-[#1D9E75] text-white' : 'text-muted hover:text-dark'
-                    }`}
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </button>
-                ))}
-              </div>
-              {statsLoading ? (
-                <>
-                  <Sk className="h-9 w-28 mb-2" />
-                  <Sk className="h-3 w-36" />
-                </>
-              ) : (
-                <>
-                  <p className="text-3xl font-bold text-dark">{formatCurrency(collectedTabValue, 'NGN')}</p>
-                  <p className={`text-xs mt-1.5 ${collectedTrendNeg ? 'text-red-500' : 'text-muted'}`}>
-                    {collectedTrendStr}
-                  </p>
-                </>
-              )}
+          {/* Payments card */}
+          <div className="bg-white rounded-xl border border-border p-5 h-full">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-muted uppercase tracking-wide">Payments</p>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" />
+              </svg>
             </div>
-          </Link>
+            {statsLoading ? (
+              <>
+                <Sk className="h-7 w-28 mb-1" />
+                <Sk className="h-3 w-36 mb-3" />
+                <Sk className="h-4 w-full mb-1.5" />
+                <Sk className="h-4 w-full mb-2" />
+                <Sk className="h-3 w-16" />
+              </>
+            ) : (
+              <>
+                <p className="text-2xl font-bold text-[#1D9E75]">{formatCurrency(stats?.collectedThisMonth ?? 0, 'NGN')}</p>
+                <p className="text-xs text-muted mt-0.5 mb-3">collected this month</p>
+                {!stats?.recentPayments?.length ? (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted">No payments yet</p>
+                    <Link href="/payments" className="text-xs text-green font-medium">Record payment →</Link>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {stats.recentPayments.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-dark truncate">
+                          {p.buyerName.length > 15 ? p.buyerName.slice(0, 15) + '…' : p.buyerName}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-xs font-medium text-dark">{formatCurrency(p.amount, 'NGN')}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${providerPill(p.provider)}`}>
+                            {p.provider}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    <Link href="/payments" className="text-xs text-green font-medium block pt-1">View all →</Link>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         {/* ── Section 1: Financial Position (always expanded) ─────────────── */}
