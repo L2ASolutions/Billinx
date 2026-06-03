@@ -293,6 +293,9 @@ export class UserController {
     for (const key of allowed) {
       if (body[key] !== undefined) data[key] = body[key];
     }
+    if (body.taxRepresentative !== undefined) {
+      data.taxRepresentative = body.taxRepresentative;
+    }
     // Merge address sub-fields into registeredAddress Json
     const addressFields = ['state', 'lga', 'postalZone', 'city', 'country', 'street'];
     const hasAddressField = addressFields.some((f) => body[f] !== undefined);

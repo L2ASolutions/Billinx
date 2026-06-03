@@ -16,12 +16,32 @@ interface LineItem {
   description: string;
   quantity: number;
   unitPrice: number;
+  priceUnit: string;
   taxCategory: string;
   vatRate: number;
   itemType: "product" | "service";
   hsnCode?: string;
   isicCode?: string;
   productId?: string;
+}
+
+interface AllowanceCharge {
+  chargeIndicator: boolean; // false = discount, true = surcharge
+  description: string;
+  amount: number;
+}
+
+interface PartyFields {
+  name: string;
+  tin: string;
+  email: string;
+  address: string;
+}
+
+const EMPTY_PARTY: PartyFields = { name: "", tin: "", email: "", address: "" };
+
+function hasPartyData(p: PartyFields): boolean {
+  return !!(p.name || p.tin || p.email || p.address);
 }
 
 interface Product {
@@ -62,7 +82,7 @@ const LEGACY_TYPE_TO_CODE: Record<string, string> = {
 };
 
 const EMPTY_LINE: LineItem = {
-  description: "", quantity: 1, unitPrice: 0,
+  description: "", quantity: 1, unitPrice: 0, priceUnit: "EA",
   taxCategory: "S", vatRate: 7.5, itemType: "product",
 };
 
@@ -141,6 +161,72 @@ function CodeSearch({ type, value, onSelect }: {
               <span className="text-muted ml-1">— {r.description}</span>
             </button>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Quantity code select ──────────────────────────────────────────────────────
+
+const qtyCodeCache: { codes: { code: string; name: string }[] } = { codes: [] };
+
+function QuantityCodeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [codes, setCodes] = useState<{ code: string; name: string }[]>(qtyCodeCache.codes);
+  const [filter, setFilter] = useState("");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (qtyCodeCache.codes.length > 0) return;
+    referenceApi.quantityCodes().then((c) => {
+      qtyCodeCache.codes = c;
+      setCodes(c);
+    }).catch(() => {});
+  }, []);
+
+  const filtered = filter
+    ? codes.filter((c) => c.code.toLowerCase().includes(filter.toLowerCase()) || c.name.toLowerCase().includes(filter.toLowerCase()))
+    : codes;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="w-20 px-2 py-2 rounded-lg border border-border bg-white text-dark text-xs focus:outline-none flex items-center justify-between gap-1 hover:border-green transition-colors"
+      >
+        <span className="font-mono truncate">{value || "EA"}</span>
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0 text-muted">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute z-30 left-0 mt-1 bg-white border border-border rounded-lg shadow-xl w-64">
+          <div className="p-2 border-b border-border">
+            <input
+              autoFocus
+              className="w-full px-2 py-1.5 text-xs rounded border border-border focus:outline-none focus:ring-1 focus:ring-green/30"
+              placeholder="Search unit codes…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+          </div>
+          <div className="max-h-44 overflow-y-auto">
+            {filtered.slice(0, 60).map((c) => (
+              <button
+                key={c.code}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-surface border-b border-border last:border-0 ${value === c.code ? "bg-green-50 text-green font-semibold" : ""}`}
+                onClick={() => { onChange(c.code); setOpen(false); setFilter(""); }}
+              >
+                <span className="font-mono font-medium">{c.code}</span>
+                <span className="text-muted ml-1">— {c.name}</span>
+              </button>
+            ))}
+            {filtered.length === 0 && <p className="px-3 py-2 text-xs text-muted">No match</p>}
+          </div>
         </div>
       )}
     </div>
@@ -438,11 +524,12 @@ function NewInvoiceForm() {
     buyerTelephone: "",
     buyerBusinessDescription: "",
     originalIrn: params.get("originalIrn") ?? "",
+    billingReferenceDate: "",
     sourceReference: "",
+    buyerReference: "",
     // Advanced options
     note: "",
     paymentTermsNote: "",
-    buyerReference: "",
     orderReference: "",
     actualDeliveryDate: "",
     deliveryPeriodStart: "",
@@ -464,7 +551,7 @@ function NewInvoiceForm() {
   // Pre-fill seller from tenant profile
   useEffect(() => {
     if (draftId) return;
-    api.get<{ name?: string; tin?: string; telephone?: string; businessDescription?: string; registeredAddress?: { state?: string; lga?: string } }>("/v1/tenants/me")
+    api.get<{ name?: string; tin?: string; telephone?: string; businessDescription?: string; registeredAddress?: { state?: string; lga?: string }; taxRepresentative?: any }>("/v1/tenants/me")
       .then((t) => {
         setForm((f) => ({
           ...f,
@@ -475,6 +562,14 @@ function NewInvoiceForm() {
           sellerState: t?.registeredAddress?.state ?? f.sellerState,
           sellerLga: t?.registeredAddress?.lga ?? f.sellerLga,
         }));
+        if (t?.taxRepresentative) {
+          setTaxRepParty({
+            name: t.taxRepresentative.name ?? "",
+            tin: t.taxRepresentative.tin ?? "",
+            email: t.taxRepresentative.email ?? "",
+            address: t.taxRepresentative.address ?? "",
+          });
+        }
       })
       .catch(() => {
         if (user?.tenantName) setForm((f) => ({ ...f, sellerName: user.tenantName ?? "" }));
@@ -509,10 +604,11 @@ function NewInvoiceForm() {
         buyerTelephone: data.buyer?.telephone ?? "",
         buyerBusinessDescription: data.buyer?.businessDescription ?? "",
         originalIrn: data.originalIrn ?? "",
+        billingReferenceDate: (data.billingReference?.[0]?.issueDate ?? "").slice(0, 10),
         sourceReference: data.sourceReference ?? "",
+        buyerReference: data.buyerReference ?? "",
         note: data.note ?? "",
         paymentTermsNote: data.paymentTermsNote ?? "",
-        buyerReference: data.buyerReference ?? "",
         orderReference: data.orderReference ?? "",
         actualDeliveryDate: data.actualDeliveryDate?.slice(0, 10) ?? "",
         deliveryPeriodStart: data.deliveryPeriodStart?.slice(0, 10) ?? "",
@@ -523,6 +619,7 @@ function NewInvoiceForm() {
           description: li.description ?? "",
           quantity: li.quantity ?? 1,
           unitPrice: li.unitPrice ?? 0,
+          priceUnit: li.priceUnit ?? "EA",
           taxCategory: li.taxCategory ?? "S",
           vatRate: li.vatRate ?? 7.5,
           itemType: li.isicCode ? "service" : "product",
@@ -530,12 +627,28 @@ function NewInvoiceForm() {
           isicCode: li.isicCode ?? "",
         })));
       }
+      if (Array.isArray(data.allowanceCharges)) {
+        setAllowanceCharges(data.allowanceCharges.map((ac: any) => ({
+          chargeIndicator: ac.chargeIndicator ?? false,
+          description: ac.description ?? "",
+          amount: ac.amount ?? 0,
+        })));
+      }
+      const meta = (data as any).metadata ?? {};
+      if (meta.payeeParty) setPayeeParty({ name: meta.payeeParty.name ?? "", tin: meta.payeeParty.tin ?? "", email: meta.payeeParty.email ?? "", address: meta.payeeParty.address ?? "" });
+      if (meta.shipToParty) setShipToParty({ name: meta.shipToParty.name ?? "", tin: meta.shipToParty.tin ?? "", email: meta.shipToParty.email ?? "", address: meta.shipToParty.address ?? "" });
+      if (meta.taxRepresentativeParty) setTaxRepParty({ name: meta.taxRepresentativeParty.name ?? "", tin: meta.taxRepresentativeParty.tin ?? "", email: meta.taxRepresentativeParty.email ?? "", address: meta.taxRepresentativeParty.address ?? "" });
       setDraftLoaded(true);
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
 
   const [lineItems, setLineItems] = useState<LineItem[]>([{ ...EMPTY_LINE }]);
+  const [allowanceCharges, setAllowanceCharges] = useState<AllowanceCharge[]>([]);
+  const [payeeParty, setPayeeParty] = useState<PartyFields>(EMPTY_PARTY);
+  const [shipToParty, setShipToParty] = useState<PartyFields>(EMPTY_PARTY);
+  const [taxRepParty, setTaxRepParty] = useState<PartyFields>(EMPTY_PARTY);
+  const [showAdditionalParties, setShowAdditionalParties] = useState(false);
   const [whtApplicable, setWhtApplicable] = useState(false);
   const [whtRate, setWhtRate] = useState<number>(5);
 
@@ -579,6 +692,7 @@ function NewInvoiceForm() {
               ...item,
               description: product.description ? `${product.name} — ${product.description}` : product.name,
               unitPrice: product.unitPrice,
+              priceUnit: item.priceUnit || "EA",
               taxCategory: taxCode,
               vatRate: TAX_RATE_MAP[taxCode] ?? 7.5,
               itemType: hasIsic ? "service" : "product",
@@ -592,18 +706,30 @@ function NewInvoiceForm() {
     setShowCatalog(null);
   }
 
-  const totals = lineItems.reduce(
+  const lineSubtotals = lineItems.reduce(
     (acc, item) => {
       const sub = item.quantity * item.unitPrice;
       const vat = sub * (item.vatRate / 100);
-      return { subtotal: acc.subtotal + sub, tax: acc.tax + vat, total: acc.total + sub + vat };
+      return { subtotal: acc.subtotal + sub, tax: acc.tax + vat };
     },
-    { subtotal: 0, tax: 0, total: 0 }
+    { subtotal: 0, tax: 0 }
   );
+  const totalDiscounts = allowanceCharges.filter((ac) => !ac.chargeIndicator).reduce((s, ac) => s + (ac.amount || 0), 0);
+  const totalSurcharges = allowanceCharges.filter((ac) => ac.chargeIndicator).reduce((s, ac) => s + (ac.amount || 0), 0);
+  const taxExclusive = lineSubtotals.subtotal - totalDiscounts + totalSurcharges;
+  const totals = {
+    subtotal: lineSubtotals.subtotal,
+    tax: lineSubtotals.tax,
+    discounts: totalDiscounts,
+    surcharges: totalSurcharges,
+    taxExclusive,
+    total: taxExclusive + lineSubtotals.tax,
+  };
 
   const needsOriginalIrn = ["380", "384"].includes(form.invoiceType);
 
   function buildPayload(forSubmit: boolean) {
+    const activeAllowanceCharges = allowanceCharges.filter((ac) => ac.amount > 0);
     return {
       invoiceTypeCode: form.invoiceType,
       invoiceKind: form.invoiceKind,
@@ -611,14 +737,23 @@ function NewInvoiceForm() {
       issueDate: new Date(form.issueDate).toISOString(),
       dueDate: form.paymentDueDate ? new Date(form.paymentDueDate).toISOString() : undefined,
       sourceReference: form.sourceReference || undefined,
+      buyerReference: form.buyerReference || undefined,
       originalIrn: form.originalIrn || undefined,
+      billingReference: (needsOriginalIrn && form.originalIrn)
+        ? [{ irn: form.originalIrn, issueDate: form.billingReferenceDate || undefined }]
+        : undefined,
+      allowanceCharges: activeAllowanceCharges.length > 0 ? activeAllowanceCharges : undefined,
       note: form.note || undefined,
       paymentTermsNote: form.paymentTermsNote || undefined,
-      buyerReference: form.buyerReference || undefined,
       orderReference: form.orderReference || undefined,
       actualDeliveryDate: form.actualDeliveryDate ? new Date(form.actualDeliveryDate).toISOString() : undefined,
       deliveryPeriodStart: form.deliveryPeriodStart ? new Date(form.deliveryPeriodStart).toISOString() : undefined,
       deliveryPeriodEnd: form.deliveryPeriodEnd ? new Date(form.deliveryPeriodEnd).toISOString() : undefined,
+      metadata: {
+        ...(hasPartyData(payeeParty) ? { payeeParty } : {}),
+        ...(hasPartyData(shipToParty) ? { shipToParty } : {}),
+        ...(hasPartyData(taxRepParty) ? { taxRepresentativeParty: taxRepParty } : {}),
+      },
       seller: {
         tin: form.sellerTin || undefined,
         partyName: form.sellerName || undefined,
@@ -650,6 +785,7 @@ function NewInvoiceForm() {
           description: item.description,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
+          priceUnit: item.priceUnit || "EA",
           vatRate: item.vatRate,
           hsnCode: item.itemType === "product" ? (item.hsnCode || undefined) : undefined,
           isicCode: item.itemType === "service" ? (item.isicCode || undefined) : undefined,
@@ -659,7 +795,9 @@ function NewInvoiceForm() {
       taxTotal: [{ taxAmount: totals.tax }],
       legalMonetaryTotal: {
         lineExtensionAmount: totals.subtotal,
-        taxExclusiveAmount: totals.subtotal,
+        taxExclusiveAmount: totals.taxExclusive,
+        ...(totals.discounts > 0 ? { allowanceTotalAmount: totals.discounts } : {}),
+        ...(totals.surcharges > 0 ? { chargeTotalAmount: totals.surcharges } : {}),
         taxInclusiveAmount: totals.total,
         payableAmount: totals.total,
       },
@@ -772,11 +910,19 @@ function NewInvoiceForm() {
             </div>
             <div className="grid grid-cols-2 gap-4 mt-4">
               <Input label="Payment due date (optional)" type="date" value={form.paymentDueDate} onChange={uf("paymentDueDate")} />
+              <Input label="Buyer PO / Reference (optional)" placeholder="e.g. PO-2026-00123" value={form.buyerReference} onChange={uf("buyerReference")} />
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-3">
               <Input label="Your reference (optional)" placeholder="Internal invoice ID" value={form.sourceReference} onChange={uf("sourceReference")} />
             </div>
             {needsOriginalIrn && (
-              <div className="mt-4">
-                <Input label="Original IRN *" placeholder="IRN of the original invoice" value={form.originalIrn} onChange={uf("originalIrn")} required />
+              <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
+                <p className="text-sm font-medium text-amber-900">Original invoice reference</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input label="Original IRN *" placeholder="INV20260001-SVC00001-20260602" value={form.originalIrn} onChange={uf("originalIrn")} required />
+                  <Input label="Original invoice date" type="date" value={form.billingReferenceDate} onChange={uf("billingReferenceDate")} />
+                </div>
+                <p className="text-xs text-amber-700">IRN of the invoice this credit/debit note relates to.</p>
               </div>
             )}
             {/* Advanced options */}
@@ -795,7 +941,6 @@ function NewInvoiceForm() {
               {showAdvanced && (
                 <div className="mt-4 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <Input label="Buyer reference (PO number)" placeholder="PO-2026-001" value={form.buyerReference} onChange={uf("buyerReference")} />
                     <Input label="Order reference" placeholder="ORD-001" value={form.orderReference} onChange={uf("orderReference")} />
                   </div>
                   <Input label="Note" placeholder="e.g. Payment due within 30 days" value={form.note} onChange={uf("note")} />
@@ -882,9 +1027,9 @@ function NewInvoiceForm() {
             <div className="space-y-3">
               {lineItems.map((item, i) => (
                 <div key={i} className="border border-border rounded-lg p-3 space-y-2 bg-surface/30">
-                  {/* Row 1: description, qty, unit price, subtotal, remove */}
+                  {/* Row 1: description, qty, unit, unit price, subtotal, remove */}
                   <div className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-5 flex gap-1">
+                    <div className="col-span-4 flex gap-1">
                       <input
                         className={inp("flex-1")}
                         placeholder="Description"
@@ -907,7 +1052,10 @@ function NewInvoiceForm() {
                       <input type="number" min="1" className={inp()} value={item.quantity}
                         onChange={(e) => updateLine(i, "quantity", Number(e.target.value))} required />
                     </div>
-                    <div className="col-span-3">
+                    <div className="col-span-2">
+                      <QuantityCodeSelect value={item.priceUnit} onChange={(v) => updateLine(i, "priceUnit", v)} />
+                    </div>
+                    <div className="col-span-2">
                       <input type="number" min="0" step="0.01" className={inp()} placeholder="Unit price" value={item.unitPrice}
                         onChange={(e) => updateLine(i, "unitPrice", Number(e.target.value))} required />
                     </div>
@@ -1011,15 +1159,27 @@ function NewInvoiceForm() {
             <div className="border-t border-border pt-4 mt-4 space-y-1.5 max-w-xs ml-auto">
               <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Tax summary</p>
               <div className="flex justify-between text-sm text-muted">
-                <span>Subtotal</span>
+                <span>Line items subtotal</span>
                 <span>{totals.subtotal.toLocaleString("en-NG", { minimumFractionDigits: 2 })}</span>
               </div>
+              {totals.discounts > 0 && (
+                <div className="flex justify-between text-sm text-green-700">
+                  <span>Discounts</span>
+                  <span>-{totals.discounts.toLocaleString("en-NG", { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              {totals.surcharges > 0 && (
+                <div className="flex justify-between text-sm text-amber-700">
+                  <span>Surcharges</span>
+                  <span>+{totals.surcharges.toLocaleString("en-NG", { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
               <div className="flex justify-between text-sm text-muted">
                 <span>VAT</span>
                 <span>{totals.tax.toLocaleString("en-NG", { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between text-base font-bold text-dark border-t border-border pt-1.5">
-                <span>Total ({form.currency})</span>
+                <span>Total payable ({form.currency})</span>
                 <span>{totals.total.toLocaleString("en-NG", { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
@@ -1066,6 +1226,127 @@ function NewInvoiceForm() {
               )}
             </div>
           </SectionCard>
+
+          {/* ── Allowance charges (discounts / surcharges) ──────────────────── */}
+          <SectionCard title="Discounts &amp; charges (optional)">
+            <div className="space-y-2">
+              {allowanceCharges.map((ac, i) => (
+                <div key={i} className="grid grid-cols-12 gap-2 items-center bg-surface/30 rounded-lg p-2 border border-border">
+                  <div className="col-span-3">
+                    <div className="flex rounded-md border border-border overflow-hidden text-xs">
+                      <button type="button"
+                        className={`flex-1 px-3 py-1.5 transition-colors ${!ac.chargeIndicator ? "bg-green text-white" : "bg-white text-muted hover:bg-surface"}`}
+                        onClick={() => setAllowanceCharges((cs) => cs.map((c, j) => j === i ? { ...c, chargeIndicator: false } : c))}>
+                        Discount
+                      </button>
+                      <button type="button"
+                        className={`flex-1 px-3 py-1.5 border-l border-border transition-colors ${ac.chargeIndicator ? "bg-amber-500 text-white" : "bg-white text-muted hover:bg-surface"}`}
+                        onClick={() => setAllowanceCharges((cs) => cs.map((c, j) => j === i ? { ...c, chargeIndicator: true } : c))}>
+                        Surcharge
+                      </button>
+                    </div>
+                  </div>
+                  <div className="col-span-5">
+                    <input className={inp()} placeholder="Description (e.g. Volume discount)" value={ac.description}
+                      onChange={(e) => setAllowanceCharges((cs) => cs.map((c, j) => j === i ? { ...c, description: e.target.value } : c))} />
+                  </div>
+                  <div className="col-span-3">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">₦</span>
+                      <input type="number" min="0" step="0.01" className={inp("pl-7")} placeholder="Amount"
+                        value={ac.amount || ""}
+                        onChange={(e) => setAllowanceCharges((cs) => cs.map((c, j) => j === i ? { ...c, amount: Number(e.target.value) } : c))} />
+                    </div>
+                  </div>
+                  <div className="col-span-1 flex justify-end">
+                    <button type="button" onClick={() => setAllowanceCharges((cs) => cs.filter((_, j) => j !== i))}
+                      className="text-red-300 hover:text-red-500 transition-colors">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button type="button"
+                onClick={() => setAllowanceCharges((cs) => [...cs, { chargeIndicator: false, description: "", amount: 0 }])}
+                className="text-sm text-green hover:underline flex items-center gap-1 mt-1">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Add discount / charge
+              </button>
+            </div>
+          </SectionCard>
+
+          {/* ── Additional parties ───────────────────────────────────────────── */}
+          <div className="bg-white rounded-xl border border-border">
+            <button type="button"
+              onClick={() => setShowAdditionalParties((v) => !v)}
+              className="w-full flex items-center justify-between px-6 py-4 text-sm font-semibold text-dark hover:bg-surface/50 transition-colors rounded-xl">
+              <span>Additional parties (optional)</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                className={`transition-transform text-muted ${showAdditionalParties ? "rotate-180" : ""}`}>
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+            {showAdditionalParties && (
+              <div className="px-6 pb-6 space-y-5 border-t border-border pt-4">
+                {/* Payee */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-sm font-medium text-dark">Payee party</p>
+                    <span className="text-xs text-muted bg-surface px-2 py-0.5 rounded">optional</span>
+                  </div>
+                  <p className="text-xs text-muted mb-3">Use when payment is received by a different entity than the seller.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input label="Party name" placeholder="Payee company name" value={payeeParty.name}
+                      onChange={(e) => setPayeeParty((p) => ({ ...p, name: e.target.value }))} />
+                    <Input label="TIN" placeholder="12345678-0001" value={payeeParty.tin}
+                      onChange={(e) => setPayeeParty((p) => ({ ...p, tin: e.target.value }))} />
+                    <Input label="Email" type="email" placeholder="payee@company.com" value={payeeParty.email}
+                      onChange={(e) => setPayeeParty((p) => ({ ...p, email: e.target.value }))} />
+                    <Input label="Address" placeholder="Street address" value={payeeParty.address}
+                      onChange={(e) => setPayeeParty((p) => ({ ...p, address: e.target.value }))} />
+                  </div>
+                </div>
+                <hr className="border-border" />
+                {/* Ship to */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-sm font-medium text-dark">Ship to</p>
+                    <span className="text-xs text-muted bg-surface px-2 py-0.5 rounded">optional</span>
+                  </div>
+                  <p className="text-xs text-muted mb-3">Use when goods are delivered to a different address than the buyer.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input label="Party name" placeholder="Delivery recipient name" value={shipToParty.name}
+                      onChange={(e) => setShipToParty((p) => ({ ...p, name: e.target.value }))} />
+                    <Input label="Address" placeholder="Delivery address" value={shipToParty.address}
+                      onChange={(e) => setShipToParty((p) => ({ ...p, address: e.target.value }))} />
+                  </div>
+                </div>
+                <hr className="border-border" />
+                {/* Tax representative */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-sm font-medium text-dark">Tax representative</p>
+                    <span className="text-xs text-muted bg-surface px-2 py-0.5 rounded">optional</span>
+                  </div>
+                  <p className="text-xs text-muted mb-3">Pre-filled from company profile if set in Settings → Company profile.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input label="Name" placeholder="Representative name" value={taxRepParty.name}
+                      onChange={(e) => setTaxRepParty((p) => ({ ...p, name: e.target.value }))} />
+                    <Input label="TIN" placeholder="12345678-0001" value={taxRepParty.tin}
+                      onChange={(e) => setTaxRepParty((p) => ({ ...p, tin: e.target.value }))} />
+                    <Input label="Email" type="email" placeholder="taxrep@company.com" value={taxRepParty.email}
+                      onChange={(e) => setTaxRepParty((p) => ({ ...p, email: e.target.value }))} />
+                    <Input label="Address" placeholder="Street address" value={taxRepParty.address}
+                      onChange={(e) => setTaxRepParty((p) => ({ ...p, address: e.target.value }))} />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>
