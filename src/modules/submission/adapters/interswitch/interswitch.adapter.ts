@@ -240,7 +240,8 @@ export class InterswitchAdapter implements AppAdapter {
   async updatePaymentStatus(
     irn: string,
     tenantId: string,
-    status: string,
+    status: 'PAID' | 'PARTIAL',
+    amount?: number,
   ): Promise<void> {
     const tenant = await this.loadTenant(tenantId);
     if (
@@ -285,7 +286,11 @@ export class InterswitchAdapter implements AppAdapter {
           'x-api-key': apiKey,
           'x-api-secret': apiSecret,
         },
-        body: JSON.stringify({ irn, payment_status: status }),
+        body: JSON.stringify({
+          irn,
+          payment_status: status,
+          ...(status === 'PARTIAL' && amount != null ? { amount } : {}),
+        }),
         signal: controller.signal,
       });
 
