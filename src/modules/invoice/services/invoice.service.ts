@@ -606,20 +606,7 @@ export class InvoiceService {
     // ops confuse the interactive-transaction state machine). Sequential awaits
     // inside one transaction is both safe and memory-efficient.
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfYesterday = new Date(startOfToday.getTime() - 86400000);
-    const endOfYesterday = new Date(startOfToday.getTime() - 1);
-    const dayOfWeek = now.getDay();
-    const daysToMonday = (dayOfWeek + 6) % 7;
-    const startOfThisWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToMonday);
-    const startOfLastWeek = new Date(startOfThisWeek.getTime() - 7 * 86400000);
-    const endOfLastWeek = new Date(startOfThisWeek.getTime() - 1);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-    const startOfLastYear = new Date(now.getFullYear() - 1, 0, 1);
-    const endOfLastYear = new Date(now.getFullYear(), 0, 0, 23, 59, 59, 999);
 
     const [
       total,
@@ -633,19 +620,13 @@ export class InvoiceService {
       recentInvoices,
       outstandingAgg,
       overdueCount,
-      collectedToday,
-      collectedYesterday,
-      collectedThisWeek,
-      collectedLastWeek,
       collectedThisMonth,
-      collectedLastMonth,
-      collectedThisYear,
-      collectedLastYear,
       outputVatAgg,
       inputVatAgg,
       whtExpectedAgg,
       whtCreditsAgg,
       pendingWhtCount,
+      recentPayments,
     ] = await this.prisma.asAdmin(async (tx) => {
       const total = await tx.invoice.count({ where: { tenantId } });
       const accepted = await tx.invoice.count({
@@ -702,36 +683,8 @@ export class InvoiceService {
       const overdueCount = await tx.invoice.count({
         where: { ...unpaidWhere, isOverdue: true },
       });
-      const collectedToday = await (tx as any).paymentRecord.aggregate({
-        where: { tenantId, paidAt: { gte: startOfToday } },
-        _sum: { amount: true },
-      });
-      const collectedYesterday = await (tx as any).paymentRecord.aggregate({
-        where: { tenantId, paidAt: { gte: startOfYesterday, lte: endOfYesterday } },
-        _sum: { amount: true },
-      });
-      const collectedThisWeek = await (tx as any).paymentRecord.aggregate({
-        where: { tenantId, paidAt: { gte: startOfThisWeek } },
-        _sum: { amount: true },
-      });
-      const collectedLastWeek = await (tx as any).paymentRecord.aggregate({
-        where: { tenantId, paidAt: { gte: startOfLastWeek, lte: endOfLastWeek } },
-        _sum: { amount: true },
-      });
       const collectedThisMonth = await (tx as any).paymentRecord.aggregate({
         where: { tenantId, paidAt: { gte: startOfMonth } },
-        _sum: { amount: true },
-      });
-      const collectedLastMonth = await (tx as any).paymentRecord.aggregate({
-        where: { tenantId, paidAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
-        _sum: { amount: true },
-      });
-      const collectedThisYear = await (tx as any).paymentRecord.aggregate({
-        where: { tenantId, paidAt: { gte: startOfYear } },
-        _sum: { amount: true },
-      });
-      const collectedLastYear = await (tx as any).paymentRecord.aggregate({
-        where: { tenantId, paidAt: { gte: startOfLastYear, lte: endOfLastYear } },
         _sum: { amount: true },
       });
       const outputVatAgg = await tx.invoice.aggregate({
@@ -762,16 +715,20 @@ export class InvoiceService {
           paymentStatus: 'PAID',
         } as any,
       });
+      const recentPayments = await (tx as any).paymentRecord.findMany({
+        where: { tenantId },
+        orderBy: { paidAt: 'desc' },
+        take: 2,
+        include: { invoice: { select: { buyerName: true } } },
+      });
       return [
         total, accepted, rejected, rejectedAll, pending, draft, overdue,
         amountAgg, recentInvoices,
         outstandingAgg, overdueCount,
-        collectedToday, collectedYesterday,
-        collectedThisWeek, collectedLastWeek,
-        collectedThisMonth, collectedLastMonth,
-        collectedThisYear, collectedLastYear,
+        collectedThisMonth,
         outputVatAgg, inputVatAgg, whtExpectedAgg,
         whtCreditsAgg, pendingWhtCount,
+        recentPayments,
       ] as const;
     });
 
@@ -797,14 +754,7 @@ export class InvoiceService {
       totalAmount: Number(amountAgg._sum.totalAmount ?? 0),
       outstandingAmount,
       overdueCount,
-      collectedToday: Number(collectedToday._sum.amount ?? 0),
-      collectedYesterday: Number(collectedYesterday._sum.amount ?? 0),
-      collectedThisWeek: Number(collectedThisWeek._sum.amount ?? 0),
-      collectedLastWeek: Number(collectedLastWeek._sum.amount ?? 0),
       collectedThisMonth: Number(collectedThisMonth._sum.amount ?? 0),
-      collectedLastMonth: Number(collectedLastMonth._sum.amount ?? 0),
-      collectedThisYear: Number(collectedThisYear._sum.amount ?? 0),
-      collectedLastYear: Number(collectedLastYear._sum.amount ?? 0),
       outstandingInvoiceCount: outstandingAgg._count.id,
       outputVatOutstanding,
       inputVatOutstanding,
@@ -818,6 +768,12 @@ export class InvoiceService {
         ...inv,
         totalAmount: Number(inv.totalAmount),
         createdAt: inv.createdAt.toISOString(),
+      })),
+      recentPayments: recentPayments.map((p: any) => ({
+        buyerName: p.invoice?.buyerName ?? 'Unknown',
+        amount: Number(p.amount),
+        provider: p.provider,
+        paidAt: p.paidAt.toISOString(),
       })),
     };
   }
