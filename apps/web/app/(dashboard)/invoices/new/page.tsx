@@ -1011,7 +1011,12 @@ function NewInvoiceForm() {
             <SectionCard title="Buyer">
               <div className="space-y-3">
                 <Input label="Name / company" placeholder="Buyer name or company" value={form.buyerName} onChange={uf("buyerName")} required />
-                <Input label="TIN (optional)" placeholder="12345678-0001" value={form.buyerTin} onChange={uf("buyerTin")} />
+                <div>
+                  <Input label="TIN (optional)" placeholder="12345678-0001" value={form.buyerTin} onChange={uf("buyerTin")} />
+                  <p className="mt-1 text-[11px] text-muted leading-snug">
+                    No TIN? Use RC-XXXXXXX format (e.g. RC-847789). For foreign buyers, use their country tax ID.
+                  </p>
+                </div>
                 <Input label="Email" type="email" placeholder="buyer@company.com" value={form.buyerEmail} onChange={uf("buyerEmail")} />
                 <Input label="Street address" placeholder="1 Marina Street" value={form.buyerAddress} onChange={uf("buyerAddress")} required />
                 <div className="grid grid-cols-2 gap-3">
