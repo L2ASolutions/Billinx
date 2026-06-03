@@ -133,14 +133,24 @@ export class PaymentService {
 
     this.eventEmitter.emit(eventData.eventType, eventData);
 
-    if (newPaymentStatus === 'PAID' && invoice.firsConfirmedIrn) {
-      this.interswitchAdapter
-        .updatePaymentStatus(invoice.firsConfirmedIrn, tenantId, 'PAID')
-        .catch((err) =>
-          this.logger.warn(
-            `updatePaymentStatus fire-and-forget failed for invoice ${invoiceId}: ${err.message}`,
-          ),
-        );
+    if (invoice.firsConfirmedIrn) {
+      if (newPaymentStatus === 'PAID') {
+        this.interswitchAdapter
+          .updatePaymentStatus(invoice.firsConfirmedIrn, tenantId, 'PAID')
+          .catch((err) =>
+            this.logger.warn(
+              `updatePaymentStatus PAID fire-and-forget failed for invoice ${invoiceId}: ${err.message}`,
+            ),
+          );
+      } else if (newPaymentStatus === 'PARTIAL') {
+        this.interswitchAdapter
+          .updatePaymentStatus(invoice.firsConfirmedIrn, tenantId, 'PARTIAL', newAmountPaid)
+          .catch((err) =>
+            this.logger.warn(
+              `updatePaymentStatus PARTIAL fire-and-forget failed for invoice ${invoiceId}: ${err.message}`,
+            ),
+          );
+      }
     }
 
     this.activityService.track({

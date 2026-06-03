@@ -62,6 +62,7 @@ async function main() {
       { code: 'E', value: 'Exempt' },
       { code: 'O', value: 'Outside scope of tax' },
       { code: 'WHT', value: 'Withholding Tax' },
+      { code: 'STAMP_DUTY', value: 'Stamp Duty' },
     ],
     skipDuplicates: true,
   });
