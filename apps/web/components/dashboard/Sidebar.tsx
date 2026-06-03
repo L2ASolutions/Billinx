@@ -161,11 +161,13 @@ const NAV_GROUPS: NavGroup[] = [
 
 export function Sidebar({
   invoiceBadge = 0,
+  receivedBadge = 0,
   overdueBadge = 0,
   fullName,
   role: roleProp,
 }: {
   invoiceBadge?: number;
+  receivedBadge?: number;
   overdueBadge?: number;
   fullName?: string;
   role?: string;
@@ -241,7 +243,22 @@ export function Sidebar({
                   >
                     {item.icon}
                     <span className="flex-1">{item.label}</span>
-                    {count > 0 && (
+                    {item.badge === "invoices" && (invoiceBadge > 0 || receivedBadge > 0) ? (
+                      <span className="flex items-center gap-1">
+                        {invoiceBadge > 0 && (
+                          <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-none"
+                            title="Pending sent invoices">
+                            {invoiceBadge > 99 ? "99+" : invoiceBadge}
+                          </span>
+                        )}
+                        {receivedBadge > 0 && (
+                          <span className="bg-amber-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-none"
+                            title="Unreviewed received invoices">
+                            {receivedBadge > 99 ? "99+" : receivedBadge}
+                          </span>
+                        )}
+                      </span>
+                    ) : count > 0 && (
                       <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-none">
                         {count > 99 ? "99+" : count}
                       </span>
