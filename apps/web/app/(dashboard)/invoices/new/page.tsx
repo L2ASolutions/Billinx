@@ -571,16 +571,18 @@ function NewInvoiceForm() {
   // Pre-fill seller from tenant profile
   useEffect(() => {
     if (draftId) return;
-    api.get<{ name?: string; tin?: string; telephone?: string; businessDescription?: string; registeredAddress?: { state?: string; lga?: string }; taxRepresentative?: any }>("/v1/tenants/me")
+    api.get<{ name?: string; tin?: string; telephone?: string; businessDescription?: string; registeredAddress?: { street?: string; streetName?: string; state?: string; lga?: string }; taxRepresentative?: any }>("/v1/tenants/me")
       .then((t) => {
+        const addr = t?.registeredAddress ?? {};
         setForm((f) => ({
           ...f,
           sellerName: t?.name ?? f.sellerName,
           sellerTin: t?.tin ?? f.sellerTin,
           sellerTelephone: t?.telephone ?? f.sellerTelephone,
           sellerBusinessDescription: t?.businessDescription ?? f.sellerBusinessDescription,
-          sellerState: t?.registeredAddress?.state ?? f.sellerState,
-          sellerLga: t?.registeredAddress?.lga ?? f.sellerLga,
+          sellerAddress: addr.street ?? addr.streetName ?? f.sellerAddress,
+          sellerState: addr.state ?? f.sellerState,
+          sellerLga: addr.lga ?? f.sellerLga,
         }));
         if (t?.taxRepresentative) {
           setTaxRepParty({
