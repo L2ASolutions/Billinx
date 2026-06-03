@@ -514,6 +514,7 @@ function ReceivedPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [receivedCount, setReceivedCount] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -534,6 +535,10 @@ function ReceivedPanel() {
   }, [page, activeTab]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    incomingInvoiceApi.stats().then((s) => setReceivedCount(s.received ?? 0)).catch(() => {});
+  }, []);
 
   async function doAction(id: string, action: "validate" | "approve" | "reject", e: React.MouseEvent) {
     e.stopPropagation();
@@ -567,6 +572,11 @@ function ReceivedPanel() {
                 }`}
               >
                 {label}
+                {key === "RECEIVED" && receivedCount !== null && receivedCount > 0 && (
+                  <span className="ml-1.5 inline-flex items-center justify-center text-xs font-bold rounded-full px-1.5 py-0.5 leading-none bg-amber-100 text-amber-700">
+                    {receivedCount}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -700,6 +710,13 @@ export default function InvoicesPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const topTab = (searchParams.get("tab") ?? "sent") as "sent" | "received";
+  const [sentPending, setSentPending] = useState<number | null>(null);
+  const [receivedCount, setReceivedCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    invoiceApi.stats().then((s: any) => setSentPending(s.pending ?? 0)).catch(() => {});
+    incomingInvoiceApi.stats().then((s: any) => setReceivedCount(s.received ?? 0)).catch(() => {});
+  }, []);
 
   function setTopTab(t: "sent" | "received") {
     router.push(`/invoices?tab=${t}`);
@@ -718,19 +735,29 @@ export default function InvoicesPage() {
           <p className="text-sm text-muted mt-0.5 mb-3">{headerSub}</p>
           {/* Top-level Sent / Received tabs */}
           <div className="flex gap-0 -mb-px">
-            {(["sent", "received"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTopTab(t)}
-                className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors capitalize ${
-                  topTab === t
-                    ? "border-green text-green"
-                    : "border-transparent text-muted hover:text-dark"
-                }`}
-              >
-                {t === "sent" ? "Sent" : "Received"}
-              </button>
-            ))}
+            {(["sent", "received"] as const).map((t) => {
+              const badge = t === "sent" ? sentPending : receivedCount;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setTopTab(t)}
+                  className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+                    topTab === t
+                      ? "border-green text-green"
+                      : "border-transparent text-muted hover:text-dark"
+                  }`}
+                >
+                  {t === "sent" ? "Sent" : "Received"}
+                  {badge !== null && badge > 0 && (
+                    <span className={`ml-1.5 inline-flex items-center justify-center text-xs font-bold rounded-full px-1.5 py-0.5 leading-none ${
+                      t === "received" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"
+                    }`}>
+                      {badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
         <div className="flex gap-2 mt-1">

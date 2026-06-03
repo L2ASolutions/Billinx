@@ -244,25 +244,25 @@ export function InvoiceDocument({
       <hr className="border-[#E2E8E5]" />
 
       {/* ── Footer ──────────────────────────────────────────────────────────── */}
-      <div className="flex items-end justify-between pt-6">
-        <div className="space-y-1 text-xs text-[#6B7B74] max-w-xs">
-          <p>
-            <span className="font-medium text-[#1a1a2e]">Invoice Reference (IRN):</span>{" "}
-            <span className="font-mono">{platformIrn}</span>
+      <div className="flex items-end justify-between gap-6 pt-6">
+        <div className="flex-1 min-w-0 space-y-1 text-xs text-[#6B7B74]">
+          <p className="flex gap-1 min-w-0">
+            <span className="font-medium text-[#1a1a2e] shrink-0">Invoice Reference:</span>
+            <span className="font-mono truncate">{platformIrn}</span>
           </p>
           {firsConfirmedIrn && (
-            <p>
-              <span className="font-medium text-[#1a1a2e]">FIRS Reference:</span>{" "}
-              <span className="font-mono">{firsConfirmedIrn}</span>
+            <p className="flex gap-1 min-w-0">
+              <span className="font-medium text-[#1a1a2e] shrink-0">FIRS Reference:</span>
+              <span className="font-mono truncate">{firsConfirmedIrn}</span>
             </p>
           )}
           <p>Validated by FIRS via Interswitch NRS</p>
           {isAccepted && (invoiceId || paymentLink) && (
-            <p>
-              <span className="font-medium text-[#1a1a2e]">Pay online: </span>
+            <p className="flex gap-1 min-w-0">
+              <span className="font-medium text-[#1a1a2e] shrink-0">Pay online:</span>
               <a
                 href={paymentLink ?? `/pay/${invoiceId}`}
-                className="text-[#1D9E75] hover:underline break-all"
+                className="text-[#1D9E75] hover:underline truncate"
                 target="_blank"
                 rel="noreferrer"
               >
@@ -274,7 +274,7 @@ export function InvoiceDocument({
         </div>
 
         {isAccepted && qrSrc && (
-          <div className="shrink-0 ml-8 text-center">
+          <div className="shrink-0 w-[130px] text-center">
             <div className="inline-block border border-[#E2E8E5] rounded-lg p-2 bg-white">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
