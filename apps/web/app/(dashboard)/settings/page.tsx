@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { apiKeyApi, reminderApi, webhookApi, api, referenceApi, invalidateCache } from "@/lib/api";
 import { Skeleton, SkeletonTableRow } from "@/components/ui/Skeleton";
 import { useAuth } from "@/lib/auth";
+import { useInventoryEnabled } from "@/lib/userProfile";
 import { formatDate } from "@/lib/utils";
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
@@ -813,7 +814,7 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
 }
 
 function FeaturesTab() {
-  const [inventoryEnabled, setInventoryEnabled] = useState<boolean>(false);
+  const [inventoryEnabled, setInventoryEnabledCtx] = useInventoryEnabled();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
@@ -821,7 +822,7 @@ function FeaturesTab() {
 
   useEffect(() => {
     api.get<any>('/v1/tenants/me')
-      .then((t) => setInventoryEnabled(!!t?.inventoryEnabled))
+      .then((t) => setInventoryEnabledCtx(!!t?.inventoryEnabled))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -838,7 +839,7 @@ function FeaturesTab() {
     setSaving(true);
     try {
       await api.patch('/v1/tenants/me', { inventoryEnabled: value });
-      setInventoryEnabled(value);
+      setInventoryEnabledCtx(value);
       invalidateCache('/v1/tenants/me');
       setToast(value ? "Inventory tracking enabled" : "Inventory tracking disabled");
       setTimeout(() => setToast(""), 3000);
