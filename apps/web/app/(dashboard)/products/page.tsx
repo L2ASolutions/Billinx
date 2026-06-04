@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { productApi, referenceApi } from "@/lib/api";
+import { productApi, referenceApi, api } from "@/lib/api";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { formatCurrency } from "@/lib/utils";
 
@@ -20,6 +20,12 @@ interface Product {
   currency: string;
   taxCategoryId?: string;
   isActive: boolean;
+  stockQuantity?: number;
+  reorderPoint?: number;
+  reorderQuantity?: number;
+  stockUnit?: string;
+  supplierName?: string;
+  supplierEmail?: string;
   createdAt: string;
 }
 
@@ -33,6 +39,12 @@ interface ProductForm {
   unitPrice: string;
   currency: string;
   taxCategoryId: string;
+  stockQuantity: string;
+  reorderPoint: string;
+  reorderQuantity: string;
+  stockUnit: string;
+  supplierName: string;
+  supplierEmail: string;
 }
 
 const EMPTY_FORM: ProductForm = {
@@ -45,6 +57,12 @@ const EMPTY_FORM: ProductForm = {
   unitPrice: "",
   currency: "NGN",
   taxCategoryId: "S",
+  stockQuantity: "0",
+  reorderPoint: "0",
+  reorderQuantity: "0",
+  stockUnit: "",
+  supplierName: "",
+  supplierEmail: "",
 };
 
 // Maps any stored taxCategoryId to a display label
@@ -144,6 +162,8 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [inventoryEnabled, setInventoryEnabled] = useState(false);
+  const [invSectionOpen, setInvSectionOpen] = useState(true);
 
   const [taxCategories, setTaxCategories] = useState<{ code: string; value: string }[]>([]);
 
@@ -176,6 +196,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     referenceApi.taxCategories().then(setTaxCategories).catch(() => {});
+    api.get<any>('/v1/tenants/me').then((t) => setInventoryEnabled(!!t?.inventoryEnabled)).catch(() => {});
   }, []);
 
   function openCreate() {
@@ -198,6 +219,12 @@ export default function ProductsPage() {
       unitPrice: String(p.unitPrice),
       currency: p.currency ?? "NGN",
       taxCategoryId: normaliseTax(p.taxCategoryId),
+      stockQuantity: String(p.stockQuantity ?? 0),
+      reorderPoint: String(p.reorderPoint ?? 0),
+      reorderQuantity: String(p.reorderQuantity ?? 0),
+      stockUnit: p.stockUnit ?? "",
+      supplierName: p.supplierName ?? "",
+      supplierEmail: p.supplierEmail ?? "",
     });
     setFormError("");
     setShowModal(true);
@@ -207,7 +234,7 @@ export default function ProductsPage() {
     setFormError("");
     setSubmitting(true);
     try {
-      const payload = {
+      const payload: Record<string, any> = {
         name: form.name,
         description: form.description || undefined,
         hsnCode: form.itemType === "product" ? (form.hsnCode || undefined) : undefined,
@@ -217,6 +244,14 @@ export default function ProductsPage() {
         currency: form.currency,
         taxCategoryId: form.taxCategoryId || "S",
       };
+      if (inventoryEnabled) {
+        payload.stockQuantity = parseFloat(form.stockQuantity) || 0;
+        payload.reorderPoint = parseFloat(form.reorderPoint) || 0;
+        payload.reorderQuantity = parseFloat(form.reorderQuantity) || 0;
+        payload.stockUnit = form.stockUnit || undefined;
+        payload.supplierName = form.supplierName || undefined;
+        payload.supplierEmail = form.supplierEmail || undefined;
+      }
       if (editProduct) {
         await productApi.update(editProduct.id, payload);
       } else {
@@ -312,6 +347,12 @@ export default function ProductsPage() {
                     <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden md:table-cell">Category</th>
                     <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Unit Price</th>
                     <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden lg:table-cell">Tax</th>
+                    {inventoryEnabled && (
+                      <>
+                        <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right hidden xl:table-cell">Stock</th>
+                        <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-center hidden xl:table-cell">Status</th>
+                      </>
+                    )}
                     <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Actions</th>
                   </tr>
                 </thead>
@@ -353,6 +394,22 @@ export default function ProductsPage() {
                       <td className="px-5 py-4 hidden lg:table-cell">
                         <span className="text-sm text-muted">{taxLabel(p.taxCategoryId)}</span>
                       </td>
+                      {inventoryEnabled && (
+                        <>
+                          <td className="px-5 py-4 text-right hidden xl:table-cell text-sm text-dark">
+                            {p.stockQuantity ?? 0}{p.stockUnit ? ` ${p.stockUnit}` : ""}
+                          </td>
+                          <td className="px-5 py-4 text-center hidden xl:table-cell">
+                            {(p.stockQuantity ?? 0) === 0 ? (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600">Out</span>
+                            ) : (p.stockQuantity ?? 0) <= (p.reorderPoint ?? 0) ? (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">Low</span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">In Stock</span>
+                            )}
+                          </td>
+                        </>
+                      )}
                       <td className="px-5 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
@@ -519,6 +576,56 @@ export default function ProductsPage() {
                   Effective VAT rate: {TAX_RATE[form.taxCategoryId] ?? 0}%
                 </p>
               </div>
+
+              {/* Inventory section — only shown when inventoryEnabled */}
+              {inventoryEnabled && (
+                <div className="border border-border rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setInvSectionOpen((v) => !v)}
+                    className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-dark bg-surface/50 hover:bg-surface transition-colors"
+                  >
+                    <span>Inventory</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                      className={`transition-transform text-muted ${invSectionOpen ? "rotate-180" : ""}`}>
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </button>
+                  {invSectionOpen && (
+                    <div className="p-4 space-y-3 border-t border-border">
+                      <div className="grid grid-cols-2 gap-3">
+                        <Input label="Current stock" type="number" min="0" step="0.01"
+                          value={form.stockQuantity}
+                          onChange={(e) => setForm((f) => ({ ...f, stockQuantity: e.target.value }))} />
+                        <Input label="Unit (e.g. KGM, PCS)" value={form.stockUnit}
+                          onChange={(e) => setForm((f) => ({ ...f, stockUnit: e.target.value }))}
+                          placeholder="KGM" />
+                      </div>
+                      <Input label="Reorder alert — alert when stock falls below"
+                        type="number" min="0" step="0.01"
+                        value={form.reorderPoint}
+                        onChange={(e) => setForm((f) => ({ ...f, reorderPoint: e.target.value }))} />
+                      <p className="text-xs text-muted -mt-1">Set to 0 to disable</p>
+                      <Input label="Reorder quantity — request this quantity when restocking"
+                        type="number" min="0" step="0.01"
+                        value={form.reorderQuantity}
+                        onChange={(e) => setForm((f) => ({ ...f, reorderQuantity: e.target.value }))} />
+                      <div className="pt-1">
+                        <p className="text-xs font-semibold text-dark mb-2">Preferred supplier</p>
+                        <div className="space-y-2">
+                          <Input label="Supplier name" value={form.supplierName}
+                            onChange={(e) => setForm((f) => ({ ...f, supplierName: e.target.value }))}
+                            placeholder="Company or contact name" />
+                          <Input label="Supplier email" type="email" value={form.supplierEmail}
+                            onChange={(e) => setForm((f) => ({ ...f, supplierEmail: e.target.value }))}
+                            placeholder="orders@supplier.com" />
+                          <p className="text-xs text-muted">Used for automatic reorder requests</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="px-6 py-4 border-t border-border flex gap-3 justify-end">

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/auth';
-import { invoiceApi, incomingInvoiceApi, userApi } from '@/lib/api';
+import { invoiceApi, incomingInvoiceApi, userApi, api } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { useUserProfile } from '@/lib/userProfile';
@@ -89,6 +89,8 @@ interface Stats {
   availableWhtCredits?: number;
   pendingWhtCertificates?: number;
   submissionAcceptanceRate?: number;
+  lowStockCount?: number;
+  firsAwaiting?: number;
   recentInvoices: RecentInvoice[];
   recentPayments: RecentPayment[];
 }
@@ -308,6 +310,7 @@ export default function DashboardPage() {
 
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [inventoryEnabled, setInventoryEnabled] = useState(false);
 
   const [incomingStats, setIncomingStats] = useState<IncomingStats | null>(null);
   const [incomingStatsLoading, setIncomingStatsLoading] = useState(true);
@@ -428,6 +431,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (authLoading) return;
     void loadData();
+    api.get<any>('/v1/tenants/me').then((t) => setInventoryEnabled(!!t?.inventoryEnabled)).catch(() => {});
   }, [authLoading, loadData]);
 
   const firstName = profile?.firstName ?? user?.name?.split(' ')[0] ?? 'there';
@@ -824,6 +828,34 @@ export default function DashboardPage() {
                     )}
                   </div>
                 </Link>
+
+                {/* Stock Alerts — only when inventoryEnabled */}
+                {inventoryEnabled && (
+                  <Link href="/inventory?filter=low" className="block">
+                    <div className={`bg-white rounded-xl border border-border border-l-4 ${
+                      statsLoading ? 'border-l-gray-300' :
+                      (stats?.lowStockCount ?? 0) === 0 ? 'border-l-[#1D9E75]' : 'border-l-amber-500'
+                    } p-5 h-full hover:shadow-sm transition-shadow`}>
+                      <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3">Stock Alerts</p>
+                      {statsLoading ? (
+                        <>
+                          <Sk className="h-8 w-12 mb-2" />
+                          <Sk className="h-3 w-40" />
+                        </>
+                      ) : (stats?.lowStockCount ?? 0) === 0 ? (
+                        <>
+                          <p className="text-2xl font-bold text-[#1D9E75]">0</p>
+                          <p className="text-xs text-green-600 mt-1.5">All products in stock</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-2xl font-bold text-amber-700">{stats?.lowStockCount}</p>
+                          <p className="text-xs text-amber-600 mt-1.5">Product{(stats?.lowStockCount ?? 0) !== 1 ? 's' : ''} need restocking</p>
+                        </>
+                      )}
+                    </div>
+                  </Link>
+                )}
 
                 {/* Pending WHT Certificates */}
                 <div className={`bg-white rounded-xl border border-border border-l-4 ${pendingWhtCerts == null ? 'border-l-gray-400' : pendingWhtCerts === 0 ? 'border-l-[#1D9E75]' : 'border-l-amber-500'} p-5`}>
