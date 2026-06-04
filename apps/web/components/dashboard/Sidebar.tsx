@@ -100,6 +100,13 @@ const VatIcon = () => (
   </svg>
 );
 
+const ClientsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+    <line x1="23" y1="11" x2="17" y2="11" /><line x1="20" y1="8" x2="20" y2="14" />
+  </svg>
+);
+
 const LogoutIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -142,6 +149,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Team members", href: "/team", icon: <TeamIcon /> },
       { label: "Company profile", href: "/settings?tab=company", icon: <CompanyIcon />, exact: true },
       { label: "Products", href: "/products", icon: <ProductsIcon /> },
+      { label: "Clients", href: "/clients", icon: <ClientsIcon /> },
       { label: "Incoming invoices", href: "/incoming-invoices", icon: <IncomingInvoiceIcon /> },
       { label: "VAT", href: "/vat", icon: <VatIcon /> },
       { label: "Reports", href: "/reports", icon: <ReportsIcon /> },

@@ -7,9 +7,10 @@ import { MockAdapter } from './adapters/mock/mock.adapter';
 import { InterswitchAdapter } from './adapters/interswitch/interswitch.adapter';
 import { SecretsService } from '../../infrastructure/secrets/secrets.service';
 import { CredentialService } from '../tenant/services/credential.service';
+import { ClientModule } from '../client/client.module';
 
 @Module({
-  imports: [EventEmitterModule],
+  imports: [EventEmitterModule, ClientModule],
   providers: [
     SubmissionService,
     SubmissionWorker,
