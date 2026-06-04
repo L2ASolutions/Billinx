@@ -6,6 +6,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { IncomingInvoiceService } from './incoming-invoice.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ActivityService } from '../activity/services/activity.service';
+import { EmailService } from '../../shared/email/email.service';
 
 // ── Mock request context ──────────────────────────────────────────────────────
 
@@ -95,6 +96,7 @@ describe('IncomingInvoiceService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: ActivityService, useValue: { track: activityTrack } },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        { provide: EmailService, useValue: { sendPaymentReceipt: jest.fn() } },
       ],
     }).compile();
     service = module.get(IncomingInvoiceService);

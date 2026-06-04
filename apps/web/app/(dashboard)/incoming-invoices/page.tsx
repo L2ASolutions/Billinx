@@ -15,6 +15,7 @@ interface IncomingInvoice {
   id: string;
   supplierName: string;
   supplierTin: string;
+  supplierEmail?: string;
   invoiceNumber: string;
   invoiceAmount: number;
   vatAmount: number;
@@ -24,12 +25,16 @@ interface IncomingInvoice {
   status: string;
   description?: string;
   rejectionReason?: string;
+  supplierBankName?: string;
+  supplierBankAccount?: string;
+  supplierBankAccName?: string;
   createdAt: string;
 }
 
 interface AddInvoiceForm {
   supplierName: string;
   supplierTin: string;
+  supplierEmail: string;
   invoiceNumber: string;
   invoiceDate: string;
   dueDate: string;
@@ -37,11 +42,15 @@ interface AddInvoiceForm {
   vatAmount: string;
   currency: string;
   description: string;
+  supplierBankName: string;
+  supplierBankAccount: string;
+  supplierBankAccName: string;
 }
 
 const EMPTY_FORM: AddInvoiceForm = {
   supplierName: "",
   supplierTin: "",
+  supplierEmail: "",
   invoiceNumber: "",
   invoiceDate: "",
   dueDate: "",
@@ -49,6 +58,9 @@ const EMPTY_FORM: AddInvoiceForm = {
   vatAmount: "0",
   currency: "NGN",
   description: "",
+  supplierBankName: "",
+  supplierBankAccount: "",
+  supplierBankAccName: "",
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -71,6 +83,137 @@ const STATUS_COLORS: Record<string, string> = {
   REJECTED:  "bg-red-50 text-red-600",
   PAID:      "bg-emerald-50 text-emerald-700",
 };
+
+// ── Bank Details Section ──────────────────────────────────────────────────────
+
+function BankDetailsSection({ form, f }: { form: AddInvoiceForm; f: (field: keyof AddInvoiceForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void }) {
+  const [open, setOpen] = useState(false);
+  const inp = "w-full border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green";
+  return (
+    <div className="border border-border rounded-xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-dark hover:bg-surface transition-colors"
+      >
+        <span>Supplier bank details (optional)</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${open ? "rotate-180" : ""}`}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 space-y-3 border-t border-border bg-surface/40">
+          <p className="text-xs text-muted pt-3">Add these to display payment details when you need to pay this invoice.</p>
+          <div>
+            <label className="block text-xs font-medium text-dark mb-1">Bank name</label>
+            <input className={inp} placeholder="e.g. GTBank" value={form.supplierBankName} onChange={f("supplierBankName")} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark mb-1">Account number</label>
+            <input className={inp} placeholder="e.g. 0123456789" value={form.supplierBankAccount} onChange={f("supplierBankAccount")} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-dark mb-1">Account name</label>
+            <input className={inp} placeholder="e.g. Acme Supplies Ltd" value={form.supplierBankAccName} onChange={f("supplierBankAccName")} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Quick Pay Modal ───────────────────────────────────────────────────────────
+
+const PAYMENT_PROVIDERS = [
+  { value: "BANK_TRANSFER", label: "Bank Transfer" },
+  { value: "CASH",          label: "Cash" },
+  { value: "CHEQUE",        label: "Cheque" },
+  { value: "OTHER",         label: "Other" },
+];
+
+function QuickPayModal({ invoice, onClose, onPaid }: { invoice: IncomingInvoice; onClose: () => void; onPaid: () => void }) {
+  const [form, setForm] = useState({
+    amount: String(invoice.invoiceAmount),
+    provider: "BANK_TRANSFER",
+    reference: "",
+    paidAt: new Date().toISOString().slice(0, 10),
+    notes: "",
+    sendReceipt: Boolean(invoice.supplierEmail),
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const inp = "w-full border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green";
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      await incomingInvoiceApi.markPaid(invoice.id, {
+        amount: parseFloat(form.amount),
+        reference: form.reference,
+        provider: form.provider,
+        paidAt: new Date(form.paidAt).toISOString(),
+        notes: form.notes || undefined,
+        sendReceiptToSupplier: form.sendReceipt && Boolean(invoice.supplierEmail),
+      });
+      setSuccess(form.sendReceipt && invoice.supplierEmail ? `Payment recorded. Receipt sent to ${invoice.supplierEmail}.` : "Payment recorded.");
+      setTimeout(() => { onPaid(); onClose(); }, 1500);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Payment failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-start justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h2 className="font-semibold text-dark">Pay Invoice</h2>
+            <p className="text-sm text-muted mt-0.5">{invoice.supplierName} · {formatCurrency(invoice.invoiceAmount, invoice.currency)}</p>
+          </div>
+          <button onClick={onClose} className="text-muted hover:text-dark mt-0.5">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{error}</div>}
+          {success && <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 font-medium">{success}</div>}
+          {invoice.supplierBankAccount && (
+            <div className="bg-surface border border-border rounded-xl p-4 space-y-2 text-sm">
+              <p className="text-xs font-semibold text-muted uppercase tracking-wide">Transfer to</p>
+              {invoice.supplierBankName && <div className="flex justify-between"><span className="text-muted">Bank</span><span className="font-medium">{invoice.supplierBankName}</span></div>}
+              <div className="flex justify-between"><span className="text-muted">Account</span><span className="font-mono font-medium">{invoice.supplierBankAccount}</span></div>
+              {invoice.supplierBankAccName && <div className="flex justify-between"><span className="text-muted">Account name</span><span className="font-medium">{invoice.supplierBankAccName}</span></div>}
+              <div className="flex justify-between"><span className="text-muted">Amount</span><span className="font-semibold text-green">{formatCurrency(invoice.invoiceAmount, invoice.currency)}</span></div>
+            </div>
+          )}
+          {invoice.supplierBankAccount && (
+            <div className="flex items-center gap-3"><div className="flex-1 h-px bg-border"/><span className="text-xs text-muted shrink-0">Then confirm your payment below</span><div className="flex-1 h-px bg-border"/></div>
+          )}
+          <div><label className="block text-sm font-medium text-dark mb-1">Amount paid (₦)</label><input type="number" step="0.01" min="0.01" required className={inp} value={form.amount} onChange={(e) => setForm(f => ({...f, amount: e.target.value}))} /></div>
+          <div><label className="block text-sm font-medium text-dark mb-1">Payment method</label><select className={inp + " bg-white"} value={form.provider} onChange={(e) => setForm(f => ({...f, provider: e.target.value}))}>{PAYMENT_PROVIDERS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}</select></div>
+          <div><label className="block text-sm font-medium text-dark mb-1">Payment reference</label><input required className={inp} placeholder="e.g. TRF-2026-001" value={form.reference} onChange={(e) => setForm(f => ({...f, reference: e.target.value}))} /></div>
+          <div><label className="block text-sm font-medium text-dark mb-1">Payment date</label><input type="date" required className={inp} value={form.paidAt} onChange={(e) => setForm(f => ({...f, paidAt: e.target.value}))} /></div>
+          <div><label className="block text-sm font-medium text-dark mb-1">Notes (optional)</label><input className={inp} placeholder="Any notes" value={form.notes} onChange={(e) => setForm(f => ({...f, notes: e.target.value}))} /></div>
+          {invoice.supplierEmail && (
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-border" checked={form.sendReceipt} onChange={(e) => setForm(f => ({...f, sendReceipt: e.target.checked}))} />
+              <span className="text-sm text-dark">Send confirmation to supplier<span className="block text-xs text-muted">{invoice.supplierEmail}</span></span>
+            </label>
+          )}
+          <div className="flex gap-3 pt-1">
+            <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
+            <Button type="submit" className="flex-1" loading={submitting} disabled={!form.amount || !form.reference || Boolean(success)}>Confirm Payment</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 // ── Add Invoice Modal ─────────────────────────────────────────────────────────
 
@@ -101,6 +244,7 @@ function AddInvoiceModal({
       await incomingInvoiceApi.create({
         supplierName: form.supplierName,
         supplierTin: form.supplierTin,
+        supplierEmail: form.supplierEmail || undefined,
         invoiceNumber: form.invoiceNumber,
         invoiceDate: new Date(form.invoiceDate).toISOString(),
         dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : undefined,
@@ -108,6 +252,9 @@ function AddInvoiceModal({
         vatAmount: parseFloat(form.vatAmount) || 0,
         currency: form.currency,
         description: form.description || undefined,
+        supplierBankName: form.supplierBankName || undefined,
+        supplierBankAccount: form.supplierBankAccount || undefined,
+        supplierBankAccName: form.supplierBankAccName || undefined,
       });
       onCreated();
       onClose();
@@ -166,6 +313,13 @@ function AddInvoiceModal({
             value={form.supplierTin}
             onChange={f("supplierTin")}
             placeholder="e.g. 12345678-0001"
+          />
+          <Input
+            label="Supplier email (optional)"
+            type="email"
+            value={form.supplierEmail}
+            onChange={f("supplierEmail")}
+            placeholder="supplier@company.com"
           />
           <Input
             label="Invoice number *"
@@ -234,6 +388,9 @@ function AddInvoiceModal({
               placeholder="Optional description"
             />
           </div>
+
+          {/* Supplier bank details */}
+          <BankDetailsSection form={form} f={f} />
         </div>
 
         <div className="px-6 py-4 border-t border-border flex gap-3 justify-end">
@@ -263,6 +420,7 @@ export default function IncomingInvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [payInvoice, setPayInvoice] = useState<IncomingInvoice | null>(null);
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -501,6 +659,15 @@ export default function IncomingInvoicesPage() {
                               Approve
                             </button>
                           )}
+                          {inv.status === "APPROVED" && (
+                            <button
+                              onClick={() => setPayInvoice(inv)}
+                              disabled={actionLoading === inv.id}
+                              className="text-xs font-semibold text-white bg-green hover:bg-green-dark disabled:opacity-50 px-2 py-0.5 rounded-md"
+                            >
+                              Pay
+                            </button>
+                          )}
                           {["RECEIVED", "VALIDATED", "APPROVED"].includes(
                             inv.status,
                           ) && (
@@ -557,6 +724,13 @@ export default function IncomingInvoicesPage() {
         <AddInvoiceModal
           onClose={() => setShowAdd(false)}
           onCreated={load}
+        />
+      )}
+      {payInvoice && (
+        <QuickPayModal
+          invoice={payInvoice}
+          onClose={() => setPayInvoice(null)}
+          onPaid={load}
         />
       )}
     </>

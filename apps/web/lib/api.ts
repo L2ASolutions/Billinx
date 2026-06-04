@@ -395,8 +395,16 @@ export const incomingInvoiceApi = {
     api.patch<unknown>(`/v1/incoming-invoices/${id}/reject`, { reason }),
   markPaid: (
     id: string,
-    data: { amount: number; reference: string; provider: string; paidAt: string },
+    data: {
+      amount: number;
+      reference: string;
+      provider: string;
+      paidAt: string;
+      notes?: string;
+      sendReceiptToSupplier?: boolean;
+    },
   ) => api.patch<unknown>(`/v1/incoming-invoices/${id}/mark-paid`, data),
+  sendReceipt: (id: string) => api.post<{ sent: boolean; to?: string }>(`/v1/incoming-invoices/${id}/send-receipt`, {}),
   stats: () => cachedGet<{
     total: number;
     received: number;
