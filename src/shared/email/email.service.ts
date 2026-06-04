@@ -684,4 +684,46 @@ export class EmailService {
       html,
     );
   }
+
+  sendPaymentReceipt(opts: {
+    to: string;
+    supplierName: string;
+    tenantName: string;
+    invoiceNumber: string;
+    amount: number;
+    currency: string;
+    reference: string;
+    paidAt: string;
+  }): void {
+    const formattedAmount = opts.currency === 'NGN'
+      ? `₦${Number(opts.amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
+      : `${opts.currency} ${Number(opts.amount).toLocaleString()}`;
+    const formattedDate = new Date(opts.paidAt).toLocaleDateString('en-NG', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    });
+
+    const html = baseLayout(
+      'Payment Confirmation',
+      `<div style="display:inline-block;background:#f0faf5;border:1px solid #27ae60;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
+        <span style="font-size:12px;font-weight:600;color:#1e8449;text-transform:uppercase;letter-spacing:0.5px;">&#10003; Payment Confirmed</span>
+      </div>` +
+        h1('Payment Confirmation') +
+        p(`Dear <strong>${opts.supplierName}</strong>,`) +
+        p(`We are pleased to confirm that we have processed payment for the following invoice.`) +
+        `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+              style="background:#f8fffe;border:1px solid #d5f5e3;border-radius:6px;margin:0 0 20px;">
+        <tr><td style="padding:20px;">
+          <div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Invoice Number</span><br /><strong style="font-size:15px;color:${BRAND_DARK};">${opts.invoiceNumber}</strong></div>
+          <div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Amount Paid</span><br /><strong style="font-size:18px;color:${BRAND_GREEN};">${formattedAmount}</strong></div>
+          <div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Payment Date</span><br /><span style="font-size:14px;color:#444;">${formattedDate}</span></div>
+          <div><span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Payment Reference</span><br /><code style="font-size:13px;color:${BRAND_DARK};">${opts.reference}</code></div>
+        </td></tr>
+      </table>` +
+        p(`Regards,<br /><strong>${opts.tenantName}</strong>`) +
+        divider() +
+        p(`This is an automated payment confirmation from <a href="${APP_BASE_URL}" style="color:${BRAND_GREEN};">Billinx</a>.`),
+    );
+
+    this.send(opts.to, `Payment Confirmation — Invoice ${opts.invoiceNumber}`, html);
+  }
 }
