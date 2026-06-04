@@ -608,3 +608,47 @@ export const publicPayApi = {
       { invoiceId, email },
     ),
 };
+
+export interface ClientRecord {
+  id: string;
+  companyName: string;
+  tin?: string;
+  email?: string;
+  telephone?: string;
+  businessDescription?: string;
+  contactPerson?: string;
+  notes?: string;
+  postalAddress?: Record<string, string>;
+  totalInvoices: number;
+  totalBilled: number;
+  lastInvoiceAt?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const clientApi = {
+  list: (params?: { search?: string; page?: number; limit?: number }) => {
+    const qs = params ? '?' + new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
+    ).toString() : '';
+    return api.get<{ data: ClientRecord[]; total: number; page: number; limit: number }>(`/v1/clients${qs}`);
+  },
+  frequent: () => api.get<ClientRecord[]>('/v1/clients/frequent'),
+  get: (id: string) => api.get<ClientRecord>(`/v1/clients/${id}`),
+  create: (data: Partial<ClientRecord>) => api.post<ClientRecord>('/v1/clients', data),
+  update: (id: string, data: Partial<ClientRecord>) =>
+    api.patch<ClientRecord>(`/v1/clients/${id}`, data),
+  delete: (id: string) => api.delete<{ deleted: boolean; id: string }>(`/v1/clients/${id}`),
+};
+
+export const analyticsApi = {
+  topItemsSold: (period: 'month' | 'quarter' | 'year' = 'year') =>
+    api.get<unknown[]>(`/v1/analytics/top-items-sold?period=${period}`),
+  topPurchases: (period: 'month' | 'quarter' | 'year' = 'year') =>
+    api.get<unknown[]>(`/v1/analytics/top-purchases?period=${period}`),
+  topSuppliers: () => api.get<unknown[]>('/v1/analytics/top-suppliers'),
+  topClients: () => api.get<unknown[]>('/v1/analytics/top-clients'),
+  priceTrends: (itemName: string, months = 6) =>
+    api.get<unknown[]>(`/v1/analytics/price-trends?itemName=${encodeURIComponent(itemName)}&months=${months}`),
+};

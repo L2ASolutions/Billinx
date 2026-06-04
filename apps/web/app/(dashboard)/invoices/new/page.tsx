@@ -6,7 +6,7 @@ import { Suspense } from "react";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { api, invoiceApi, productApi, referenceApi } from "@/lib/api";
+import { api, invoiceApi, productApi, referenceApi, clientApi, ClientRecord } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 
@@ -498,6 +498,15 @@ function NewInvoiceForm() {
 
   const draftId = params.get("id");
   const [activeDraftId, setActiveDraftId] = useState<string | null>(draftId);
+
+  // ── Client picker state ─────────────────────────────────────────────────────
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientResults, setClientResults] = useState<ClientRecord[]>([]);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [clientPickerLoading, setClientPickerLoading] = useState(false);
+  const [manualBuyer, setManualBuyer] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<ClientRecord | null>(null);
+  const clientSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Reference data ──────────────────────────────────────────────────────────
   const [invoiceTypes, setInvoiceTypes] = useState<{ code: string; value: string }[]>([]);
@@ -1012,6 +1021,92 @@ function NewInvoiceForm() {
             </SectionCard>
             <SectionCard title="Buyer">
               <div className="space-y-3">
+                {/* ── Client picker ── */}
+                {!manualBuyer && (
+                  <div className="relative">
+                    <label className="block text-sm font-medium text-dark mb-1">Select existing client</label>
+                    <input
+                      className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green"
+                      placeholder="Search by name or TIN…"
+                      value={selectedClient ? selectedClient.companyName : clientSearch}
+                      onFocus={() => {
+                        setShowClientDropdown(true);
+                        if (!clientSearch && !selectedClient) {
+                          setClientPickerLoading(true);
+                          clientApi.frequent().then((res) => { setClientResults(res); setClientPickerLoading(false); }).catch(() => setClientPickerLoading(false));
+                        }
+                      }}
+                      onChange={(e) => {
+                        setClientSearch(e.target.value);
+                        setSelectedClient(null);
+                        setShowClientDropdown(true);
+                        if (clientSearchRef.current) clearTimeout(clientSearchRef.current);
+                        clientSearchRef.current = setTimeout(() => {
+                          setClientPickerLoading(true);
+                          clientApi.list({ search: e.target.value, limit: 8 }).then((res) => { setClientResults(res.data); setClientPickerLoading(false); }).catch(() => setClientPickerLoading(false));
+                        }, 300);
+                      }}
+                      onBlur={() => setTimeout(() => setShowClientDropdown(false), 150)}
+                    />
+                    {showClientDropdown && (
+                      <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-border rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                        {clientPickerLoading && <div className="px-4 py-3 text-sm text-muted">Searching…</div>}
+                        {!clientPickerLoading && clientResults.length === 0 && <div className="px-4 py-3 text-sm text-muted">No clients found</div>}
+                        {!clientPickerLoading && clientResults.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-surface transition-colors border-b border-border/50 last:border-0"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setSelectedClient(c);
+                              setShowClientDropdown(false);
+                              setForm((f) => ({
+                                ...f,
+                                buyerName: c.companyName,
+                                buyerTin: c.tin ?? "",
+                                buyerEmail: c.email ?? "",
+                                buyerTelephone: c.telephone ?? "",
+                                buyerAddress: (c.postalAddress?.streetName as string) ?? "",
+                                buyerState: (c.postalAddress?.state as string) ?? "",
+                                buyerLga: (c.postalAddress?.lga as string) ?? "",
+                                buyerBusinessDescription: c.businessDescription ?? "",
+                              }));
+                            }}
+                          >
+                            <span className="font-medium text-dark">{c.companyName}</span>
+                            {c.tin && <span className="text-muted ml-2 text-xs">TIN: {c.tin}</span>}
+                            {c.totalInvoices > 0 && <span className="text-muted ml-2 text-xs">{c.totalInvoices} invoice{c.totalInvoices !== 1 ? "s" : ""}</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {selectedClient && (
+                      <button
+                        type="button"
+                        className="mt-1 text-xs text-muted hover:text-dark underline"
+                        onClick={() => { setSelectedClient(null); setClientSearch(""); setManualBuyer(true); }}
+                      >
+                        Clear selection
+                      </button>
+                    )}
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        className="text-xs text-green hover:underline font-medium"
+                        onClick={() => { setManualBuyer(true); setShowClientDropdown(false); }}
+                      >
+                        Or enter manually
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {manualBuyer && (
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted">Entering buyer manually</p>
+                    <button type="button" className="text-xs text-green hover:underline" onClick={() => { setManualBuyer(false); setSelectedClient(null); setClientSearch(""); }}>Use client picker</button>
+                  </div>
+                )}
                 <Input label="Name / company" placeholder="Buyer name or company" value={form.buyerName} onChange={uf("buyerName")} required />
                 <div>
                   <Input label="TIN (optional)" placeholder="12345678-0001" value={form.buyerTin} onChange={uf("buyerTin")} />
@@ -1045,6 +1140,29 @@ function NewInvoiceForm() {
                 </div>
                 <Input label="Telephone (optional)" type="tel" placeholder="+2348098765432" value={form.buyerTelephone} onChange={uf("buyerTelephone")} />
                 <Input label="Business description (optional)" placeholder="e.g. Manufacturing company" value={form.buyerBusinessDescription} onChange={uf("buyerBusinessDescription")} />
+                {manualBuyer && form.buyerName && !selectedClient && (
+                  <button
+                    type="button"
+                    className="text-xs text-green hover:underline font-medium"
+                    onClick={async () => {
+                      try {
+                        await clientApi.create({
+                          companyName: form.buyerName,
+                          tin: form.buyerTin || undefined,
+                          email: form.buyerEmail || undefined,
+                          telephone: form.buyerTelephone || undefined,
+                          businessDescription: form.buyerBusinessDescription || undefined,
+                          postalAddress: form.buyerAddress ? { streetName: form.buyerAddress, state: form.buyerState, lga: form.buyerLga, country: "NG" } : undefined,
+                        });
+                        alert("Client saved successfully!");
+                      } catch {
+                        alert("Could not save client (may already exist).");
+                      }
+                    }}
+                  >
+                    + Save as new client
+                  </button>
+                )}
               </div>
             </SectionCard>
           </div>
