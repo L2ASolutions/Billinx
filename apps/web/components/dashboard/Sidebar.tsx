@@ -41,17 +41,17 @@ const TeamIcon = () => (
   </svg>
 );
 
-const CompanyIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-    <polyline points="9 22 9 12 15 12 15 22" />
-  </svg>
-);
-
 const ProductsIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
     <polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
+  </svg>
+);
+
+const InventoryIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+    <path d="M12 22V12" /><path d="M3.3 7l8.7 5 8.7-5" />
   </svg>
 );
 
@@ -100,7 +100,7 @@ const VatIcon = () => (
   </svg>
 );
 
-const ClientsIcon = () => (
+const CustomersIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
     <line x1="23" y1="11" x2="17" y2="11" /><line x1="20" y1="8" x2="20" y2="14" />
@@ -126,6 +126,7 @@ interface NavItem {
   icon: React.ReactNode;
   badge?: "invoices" | "payments";
   exact?: boolean;
+  requiresInventory?: boolean;
 }
 
 interface NavGroup {
@@ -133,37 +134,39 @@ interface NavGroup {
   items: NavItem[];
 }
 
-const NAV_GROUPS: NavGroup[] = [
-  {
-    label: "Main",
-    items: [
-      { label: "Dashboard", href: "/dashboard", icon: <DashboardIcon />, exact: true },
-      { label: "Invoices", href: "/invoices", icon: <InvoiceIcon />, badge: "invoices" },
-      { label: "Submissions", href: "/submissions", icon: <SubmissionsIcon /> },
-      { label: "Payments", href: "/payments", icon: <PaymentsIcon />, badge: "payments" },
-    ],
-  },
-  {
-    label: "Management",
-    items: [
-      { label: "Team members", href: "/team", icon: <TeamIcon /> },
-      { label: "Company profile", href: "/settings?tab=company", icon: <CompanyIcon />, exact: true },
-      { label: "Products", href: "/products", icon: <ProductsIcon /> },
-      { label: "Clients", href: "/clients", icon: <ClientsIcon /> },
-      { label: "Incoming invoices", href: "/incoming-invoices", icon: <IncomingInvoiceIcon /> },
-      { label: "VAT", href: "/vat", icon: <VatIcon /> },
-      { label: "Reports", href: "/reports", icon: <ReportsIcon /> },
-      { label: "Audit log", href: "/audit-log", icon: <AuditIcon /> },
-    ],
-  },
-  {
-    label: "Account",
-    items: [
-      { label: "Settings", href: "/settings", icon: <SettingsIcon /> },
-      { label: "Support", href: "/support", icon: <SupportIcon /> },
-    ],
-  },
-];
+function buildNavGroups(inventoryEnabled: boolean): NavGroup[] {
+  return [
+    {
+      label: "Main",
+      items: [
+        { label: "Dashboard", href: "/dashboard", icon: <DashboardIcon />, exact: true },
+        { label: "Invoices", href: "/invoices", icon: <InvoiceIcon />, badge: "invoices" },
+        { label: "Submissions", href: "/submissions", icon: <SubmissionsIcon /> },
+        { label: "Payments", href: "/payments", icon: <PaymentsIcon />, badge: "payments" },
+      ],
+    },
+    {
+      label: "Management",
+      items: [
+        { label: "Team members", href: "/team", icon: <TeamIcon /> },
+        { label: "Customers", href: "/clients", icon: <CustomersIcon /> },
+        { label: "Products", href: "/products", icon: <ProductsIcon /> },
+        ...(inventoryEnabled ? [{ label: "Inventory", href: "/inventory", icon: <InventoryIcon /> }] : []),
+        { label: "Incoming invoices", href: "/incoming-invoices", icon: <IncomingInvoiceIcon /> },
+        { label: "VAT", href: "/vat", icon: <VatIcon /> },
+        { label: "Reports", href: "/reports", icon: <ReportsIcon /> },
+        { label: "Audit log", href: "/audit-log", icon: <AuditIcon /> },
+      ],
+    },
+    {
+      label: "Account",
+      items: [
+        { label: "Settings", href: "/settings", icon: <SettingsIcon /> },
+        { label: "Support", href: "/support", icon: <SupportIcon /> },
+      ],
+    },
+  ];
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -171,12 +174,14 @@ export function Sidebar({
   invoiceBadge = 0,
   receivedBadge = 0,
   overdueBadge = 0,
+  inventoryEnabled = false,
   fullName,
   role: roleProp,
 }: {
   invoiceBadge?: number;
   receivedBadge?: number;
   overdueBadge?: number;
+  inventoryEnabled?: boolean;
   fullName?: string;
   role?: string;
 }) {
@@ -194,11 +199,7 @@ export function Sidebar({
     return pathname === item.href || pathname.startsWith(item.href + "/") || pathname.startsWith(item.href + "?");
   }
 
-  function getBadgeCount(badge: NavItem["badge"]): number {
-    if (badge === "invoices") return invoiceBadge;
-    if (badge === "payments") return overdueBadge;
-    return 0;
-  }
+  const combinedInvoiceBadge = invoiceBadge + receivedBadge;
 
   const displayName = fullName ?? user?.name ?? '';
   const nameParts = displayName.trim().split(/\s+/).filter(Boolean);
@@ -207,6 +208,8 @@ export function Sidebar({
     : (nameParts[0]?.[0]?.toUpperCase() ?? 'U');
   const rawRole = roleProp ?? user?.role ?? '';
   const displayRole = rawRole ? formatRole(rawRole) : '';
+
+  const navGroups = buildNavGroups(inventoryEnabled);
 
   return (
     <aside className="w-64 bg-dark flex flex-col h-screen fixed left-0 top-0 z-20">
@@ -228,7 +231,7 @@ export function Sidebar({
 
       {/* Nav groups */}
       <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
-        {NAV_GROUPS.map((group) => (
+        {navGroups.map((group) => (
           <div key={group.label}>
             <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-white/30">
               {group.label}
@@ -236,7 +239,6 @@ export function Sidebar({
             <div className="space-y-0.5">
               {group.items.map((item) => {
                 const active = isActive(item);
-                const count = item.badge ? getBadgeCount(item.badge) : 0;
                 return (
                   <Link
                     key={item.href}
@@ -251,24 +253,14 @@ export function Sidebar({
                   >
                     {item.icon}
                     <span className="flex-1">{item.label}</span>
-                    {item.badge === "invoices" && (invoiceBadge > 0 || receivedBadge > 0) ? (
-                      <span className="flex items-center gap-1">
-                        {invoiceBadge > 0 && (
-                          <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-none"
-                            title="Pending sent invoices">
-                            {invoiceBadge > 99 ? "99+" : invoiceBadge}
-                          </span>
-                        )}
-                        {receivedBadge > 0 && (
-                          <span className="bg-amber-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-none"
-                            title="Unreviewed received invoices">
-                            {receivedBadge > 99 ? "99+" : receivedBadge}
-                          </span>
-                        )}
-                      </span>
-                    ) : count > 0 && (
+                    {item.badge === "invoices" && combinedInvoiceBadge > 0 && (
                       <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-none">
-                        {count > 99 ? "99+" : count}
+                        {combinedInvoiceBadge > 99 ? "99+" : combinedInvoiceBadge}
+                      </span>
+                    )}
+                    {item.badge === "payments" && overdueBadge > 0 && (
+                      <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-none">
+                        {overdueBadge > 99 ? "99+" : overdueBadge}
                       </span>
                     )}
                   </Link>
@@ -282,16 +274,13 @@ export function Sidebar({
       {/* User area */}
       <div className="flex-shrink-0 border-t border-white/10 p-4">
         <div className="flex items-center gap-3">
-          {/* Avatar */}
           <div className="w-9 h-9 rounded-full bg-green flex items-center justify-center text-white text-sm font-bold shrink-0">
             {initials}
           </div>
-          {/* Name / role */}
           <div className="flex-1 min-w-0">
             <p className="text-white text-sm font-bold truncate">{displayName || "—"}</p>
             <p className="text-white/40 text-xs truncate">{displayRole}</p>
           </div>
-          {/* Sign out */}
           <button
             onClick={handleLogout}
             className="text-white/40 hover:text-white transition-colors shrink-0"

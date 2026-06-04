@@ -1,6 +1,7 @@
 import {
   Injectable,
   Logger,
+  Optional,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -22,6 +23,7 @@ import { XmlInvoiceBuilder } from './xml-invoice.builder';
 import { checkRole } from '../../../shared/utils/role-checker';
 import { SubmissionService } from '../../submission/services/submission.service';
 import { EmailService } from '../../../shared/email/email.service';
+import { InventoryService } from '../../inventory/inventory.service';
 
 export interface CreateInvoiceResult {
   invoice: InvoiceResponse;
@@ -43,6 +45,7 @@ export class InvoiceService {
     private readonly eventEmitter: EventEmitter2,
     private readonly xmlBuilder: XmlInvoiceBuilder,
     private readonly emailService: EmailService,
+    @Optional() private readonly inventoryService?: InventoryService,
   ) {}
 
   async createInvoice(
@@ -614,6 +617,7 @@ export class InvoiceService {
       rejected,
       rejectedAll,
       pending,
+      firsAwaiting,
       draft,
       overdue,
       amountAgg,
@@ -643,6 +647,9 @@ export class InvoiceService {
       });
       const pending = await tx.invoice.count({
         where: { tenantId, status: { in: PENDING_STATUSES as any } },
+      });
+      const firsAwaiting = await tx.invoice.count({
+        where: { tenantId, status: { in: ['QUEUED', 'SUBMITTING'] as any } },
       });
       const draft = await tx.invoice.count({
         where: { tenantId, status: 'DRAFT' },
@@ -722,7 +729,7 @@ export class InvoiceService {
         include: { invoice: { select: { buyerName: true } } },
       });
       return [
-        total, accepted, rejected, rejectedAll, pending, draft, overdue,
+        total, accepted, rejected, rejectedAll, pending, firsAwaiting, draft, overdue,
         amountAgg, recentInvoices,
         outstandingAgg, overdueCount,
         collectedThisMonth,
@@ -738,6 +745,9 @@ export class InvoiceService {
     const outstandingAmount = Number(outstandingAgg._sum.totalAmount ?? 0);
     const availableWhtCredits = Number((whtCreditsAgg._sum as any).whtDeducted ?? 0);
     const submissionAcceptanceRate = total > 0 ? Math.round((accepted / total) * 1000) / 10 : 0;
+    const lowStockCount = this.inventoryService
+      ? await this.inventoryService.getLowStockCount(tenantId)
+      : 0;
 
     return {
       total,
@@ -745,6 +755,7 @@ export class InvoiceService {
       rejected,
       rejectedAll,
       pending,
+      firsAwaiting,
       draft,
       overdue,
       outgoingTotal: total,
@@ -764,6 +775,7 @@ export class InvoiceService {
       availableWhtCredits,
       pendingWhtCertificates: pendingWhtCount,
       submissionAcceptanceRate,
+      lowStockCount,
       recentInvoices: recentInvoices.map((inv) => ({
         ...inv,
         totalAmount: Number(inv.totalAmount),

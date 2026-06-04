@@ -1,15 +1,18 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   ConflictException,
   BadRequestException,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ActivityService } from '../activity/services/activity.service';
 import { EmailService } from '../../shared/email/email.service';
 import { getRequestContext } from '../../shared/context/request-context';
+import { InventoryService } from '../inventory/inventory.service';
 import {
   CreateIncomingInvoiceDto,
   RejectIncomingInvoiceDto,
@@ -23,11 +26,14 @@ import type {
 
 @Injectable()
 export class IncomingInvoiceService {
+  private readonly logger = new Logger(IncomingInvoiceService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityService: ActivityService,
     private readonly eventEmitter: EventEmitter2,
     private readonly emailService: EmailService,
+    @Optional() private readonly inventoryService?: InventoryService,
   ) {}
 
   async create(
@@ -228,6 +234,12 @@ export class IncomingInvoiceService {
       entityId: id,
       payload: { invoiceNumber: invoice.invoiceNumber, supplierTin: invoice.supplierTin },
     });
+
+    if (this.inventoryService) {
+      this.inventoryService.addStock(tenantId, id).catch((err) =>
+        this.logger.warn(`Stock add failed for incoming invoice ${id}: ${err.message}`),
+      );
+    }
 
     return this.map(updated);
   }

@@ -8,9 +8,10 @@ import { InterswitchAdapter } from './adapters/interswitch/interswitch.adapter';
 import { SecretsService } from '../../infrastructure/secrets/secrets.service';
 import { CredentialService } from '../tenant/services/credential.service';
 import { ClientModule } from '../client/client.module';
+import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
-  imports: [EventEmitterModule, ClientModule],
+  imports: [EventEmitterModule, ClientModule, InventoryModule],
   providers: [
     SubmissionService,
     SubmissionWorker,

@@ -6,9 +6,10 @@ import { IdentityModule } from '../identity/identity.module';
 import { ActivityModule } from '../activity/activity.module';
 import { EmailModule } from '../../shared/email/email.module';
 import { SecretsService } from '../../infrastructure/secrets/secrets.service';
+import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
-  imports: [IdentityModule, ActivityModule, EventEmitterModule, EmailModule],
+  imports: [IdentityModule, ActivityModule, EventEmitterModule, EmailModule, InventoryModule],
   controllers: [IncomingInvoiceController],
   providers: [IncomingInvoiceService, SecretsService],
   exports: [IncomingInvoiceService],

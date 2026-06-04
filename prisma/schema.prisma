@@ -37,6 +37,7 @@ model Tenant {
   nrsApiKeyIv             Bytes?
   nrsApiSecret            Bytes?
   nrsApiSecretIv          Bytes?
+  inventoryEnabled        Boolean           @default(false)
   createdAt               DateTime          @default(now())
   updatedAt               DateTime          @updatedAt
 
@@ -56,6 +57,7 @@ users         User[]
   vatEntries       VatEntry[]
   vatPeriodSummaries VatPeriodSummary[]
   clients            Client[]
+  stockMovements     StockMovement[]
 
   @@map("tenants")
 }
@@ -397,10 +399,18 @@ model ProductCatalog {
   currency        String   @default("NGN")
   taxCategoryId   String   @default("STANDARD_VAT")
   isActive        Boolean  @default(true)
+  stockQuantity   Decimal  @default(0)
+  reorderPoint    Decimal  @default(0)
+  reorderQuantity Decimal  @default(0)
+  stockUnit       String?
+  supplierName    String?
+  supplierEmail   String?
+  lastRestockedAt DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  tenant          Tenant         @relation(fields: [tenantId], references: [id])
+  stockMovements  StockMovement[]
 
   @@index([tenantId])
   @@index([tenantId, isActive])
@@ -709,6 +719,10 @@ enum ActivityEventType {
   INCOMING_INVOICE_PAID
   CLIENT_CREATED
   CLIENT_UPDATED
+  STOCK_ADJUSTED
+  STOCK_DEPLETED
+  REORDER_TRIGGERED
+  REORDER_REQUEST_SENT
 }
 
 enum ReminderTriggerType {
@@ -1062,6 +1076,39 @@ model QuantityCode {
   createdAt   DateTime @default(now())
 
   @@map("quantity_codes")
+}
+
+// ── INVENTORY / STOCK MOVEMENTS ───────────────────────────────────────────────
+
+enum StockMovementType {
+  SALE
+  PURCHASE
+  ADJUSTMENT
+  OPENING
+  RETURN
+  WRITE_OFF
+}
+
+model StockMovement {
+  id            String            @id @default(uuid())
+  tenantId      String
+  productId     String
+  type          StockMovementType
+  quantity      Decimal
+  balanceBefore Decimal
+  balanceAfter  Decimal
+  referenceType String?
+  referenceId   String?
+  notes         String?
+  createdAt     DateTime          @default(now())
+
+  tenant        Tenant            @relation(fields: [tenantId], references: [id])
+  product       ProductCatalog    @relation(fields: [productId], references: [id])
+
+  @@index([tenantId])
+  @@index([productId])
+  @@index([tenantId, createdAt])
+  @@map("stock_movements")
 }
 
 model Client {

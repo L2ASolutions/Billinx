@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { useAuth } from "@/lib/auth";
-import { userApi, invoiceApi, incomingInvoiceApi } from "@/lib/api";
+import { userApi, invoiceApi, incomingInvoiceApi, api } from "@/lib/api";
 import { UserProfileProvider, type UserProfile } from "@/lib/userProfile";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -13,6 +13,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [sentPendingBadge, setSentPendingBadge] = useState(0);
   const [receivedBadge, setReceivedBadge] = useState(0);
+  const [inventoryEnabled, setInventoryEnabled] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -26,10 +27,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       .then((data) => setProfile(data as UserProfile))
       .catch(() => {});
     invoiceApi.stats()
-      .then((s: any) => setSentPendingBadge(s.pending ?? 0))
+      .then((s: any) => setSentPendingBadge(s.firsAwaiting ?? s.pending ?? 0))
       .catch(() => {});
     incomingInvoiceApi.stats()
       .then((s: any) => setReceivedBadge(s.received ?? 0))
+      .catch(() => {});
+    api.get<any>('/v1/tenants/me')
+      .then((t: any) => setInventoryEnabled(!!t?.inventoryEnabled))
       .catch(() => {});
   }, [isAuthenticated]);
 
@@ -50,7 +54,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <UserProfileProvider profile={profile}>
       <div className="flex min-h-screen bg-surface">
-        <Sidebar fullName={fullName} role={role} invoiceBadge={sentPendingBadge} receivedBadge={receivedBadge} />
+        <Sidebar
+          fullName={fullName}
+          role={role}
+          invoiceBadge={sentPendingBadge}
+          receivedBadge={receivedBadge}
+          inventoryEnabled={inventoryEnabled}
+        />
         <main className="flex-1 ml-64 min-h-screen">
           {children}
         </main>
