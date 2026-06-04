@@ -33,7 +33,9 @@ export type ActivityEventType =
   | "INCOMING_INVOICE_APPROVED"
   | "INCOMING_INVOICE_REJECTED"
   | "INCOMING_INVOICE_PAID"
-  | "INVOICE_SENT_TO_BUYER";
+  | "INVOICE_SENT_TO_BUYER"
+  | "CLIENT_CREATED"
+  | "CLIENT_UPDATED";
 
 export type ErrorSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 

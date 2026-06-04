@@ -55,6 +55,7 @@ users         User[]
   incomingInvoices IncomingInvoice[]
   vatEntries       VatEntry[]
   vatPeriodSummaries VatPeriodSummary[]
+  clients            Client[]
 
   @@map("tenants")
 }
@@ -706,6 +707,8 @@ enum ActivityEventType {
   VAT_PERIOD_CLOSED
   INCOMING_INVOICE_REJECTED
   INCOMING_INVOICE_PAID
+  CLIENT_CREATED
+  CLIENT_UPDATED
 }
 
 enum ReminderTriggerType {
@@ -1047,4 +1050,32 @@ model QuantityCode {
   createdAt   DateTime @default(now())
 
   @@map("quantity_codes")
+}
+
+model Client {
+  id                  String    @id @default(uuid())
+  tenantId            String
+  companyName         String
+  tin                 String?
+  email               String?
+  telephone           String?
+  businessDescription String?
+  contactPerson       String?
+  notes               String?
+  postalAddress       Json?
+
+  totalInvoices       Int       @default(0)
+  totalBilled         Decimal   @default(0)
+  lastInvoiceAt       DateTime?
+
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  tenant              Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, companyName])
+  @@unique([tenantId, tin])
+  @@map("clients")
 }

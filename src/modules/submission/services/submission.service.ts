@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ActivityService } from '../../activity/services/activity.service';
@@ -12,6 +12,7 @@ import {
   AppAdapterKey,
   QueueJobData,
 } from '../../../../packages/types/submission';
+import { ClientService } from '../../client/client.service';
 
 @Injectable()
 export class SubmissionService {
@@ -24,6 +25,7 @@ export class SubmissionService {
     private readonly mockAdapter: MockAdapter,
     private readonly interswitchAdapter: InterswitchAdapter,
     private readonly eventEmitter: EventEmitter2,
+    @Optional() private readonly clientService?: ClientService,
   ) {
     this.adapters.set('mock', mockAdapter);
     this.adapters.set('interswitch', interswitchAdapter);
@@ -282,6 +284,15 @@ export class SubmissionService {
         qrCodeBase64: result.qrCodeBase64,
       },
     });
+
+    if (this.clientService) {
+      const fullInvoice = await this.prisma.invoice.findUnique({ where: { id: invoiceId } });
+      if (fullInvoice) {
+        this.clientService.syncFromInvoice(tenantId, fullInvoice).catch((err) =>
+          this.logger.warn(`Client sync failed for invoice ${invoiceId}: ${err.message}`),
+        );
+      }
+    }
 
     this.logger.log(
       `Invoice ${invoiceId} accepted by FIRS. IRN: ${result.firsConfirmedIrn}`,
