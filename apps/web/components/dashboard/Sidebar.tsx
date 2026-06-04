@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { useInventoryEnabled } from "@/lib/userProfile";
 import { cn } from "@/lib/utils";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -174,20 +175,19 @@ export function Sidebar({
   invoiceBadge = 0,
   receivedBadge = 0,
   overdueBadge = 0,
-  inventoryEnabled = false,
   fullName,
   role: roleProp,
 }: {
   invoiceBadge?: number;
   receivedBadge?: number;
   overdueBadge?: number;
-  inventoryEnabled?: boolean;
   fullName?: string;
   role?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const [inventoryEnabled] = useInventoryEnabled();
 
   function handleLogout() {
     logout();
