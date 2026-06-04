@@ -13,6 +13,7 @@ import {
   QueueJobData,
 } from '../../../../packages/types/submission';
 import { ClientService } from '../../client/client.service';
+import { InventoryService } from '../../inventory/inventory.service';
 
 @Injectable()
 export class SubmissionService {
@@ -26,6 +27,7 @@ export class SubmissionService {
     private readonly interswitchAdapter: InterswitchAdapter,
     private readonly eventEmitter: EventEmitter2,
     @Optional() private readonly clientService?: ClientService,
+    @Optional() private readonly inventoryService?: InventoryService,
   ) {
     this.adapters.set('mock', mockAdapter);
     this.adapters.set('interswitch', interswitchAdapter);
@@ -292,6 +294,12 @@ export class SubmissionService {
           this.logger.warn(`Client sync failed for invoice ${invoiceId}: ${err.message}`),
         );
       }
+    }
+
+    if (this.inventoryService) {
+      this.inventoryService.deductStock(tenantId, invoiceId).catch((err) =>
+        this.logger.warn(`Stock deduct failed for invoice ${invoiceId}: ${err.message}`),
+      );
     }
 
     this.logger.log(

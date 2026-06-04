@@ -28,6 +28,7 @@ import { ReferenceDataModule } from './modules/reference-data/reference-data.mod
 import { PaymentModule } from './modules/payment/payment.module';
 import { ClientModule } from './modules/client/client.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 import { DatabaseModule } from './infrastructure/database/database.module';
 import { SecretsService } from './infrastructure/secrets/secrets.service';
 import { IdempotencyInterceptor } from './shared/interceptors/idempotency.interceptor';
@@ -63,6 +64,7 @@ import { GlobalExceptionFilter } from './shared/filters/global-exception.filter'
     PaymentModule,
     ClientModule,
     AnalyticsModule,
+    InventoryModule,
   ],
   providers: [
     SecretsService,

@@ -650,6 +650,27 @@ export const clientApi = {
   delete: (id: string) => api.delete<{ deleted: boolean; id: string }>(`/v1/clients/${id}`),
 };
 
+// Inventory
+export const inventoryApi = {
+  list: (params?: { lowStock?: boolean; page?: number; limit?: number }) => {
+    const qs = params ? '?' + new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
+    ).toString() : '';
+    return api.get<{ data: unknown[]; total: number; page: number; limit: number }>(`/v1/inventory${qs}`);
+  },
+  alerts: () => api.get<{ data: unknown[]; total: number }>('/v1/inventory/alerts'),
+  movements: (productId: string, params?: { page?: number; limit?: number }) => {
+    const qs = params ? '?' + new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
+    ).toString() : '';
+    return api.get<{ data: unknown[]; total: number; page: number; limit: number }>(`/v1/inventory/${productId}/movements${qs}`);
+  },
+  adjust: (productId: string, data: { quantity: number; type: string; notes?: string }) =>
+    api.post<unknown>(`/v1/inventory/${productId}/adjust`, data),
+  reorder: (productId: string) =>
+    api.post<{ sent: boolean; to: string }>(`/v1/inventory/${productId}/reorder`),
+};
+
 export const analyticsApi = {
   topItemsSold: (period: 'month' | 'quarter' | 'year' = 'year') =>
     api.get<unknown[]>(`/v1/analytics/top-items-sold?period=${period}`),

@@ -22,6 +22,12 @@ export class ProductCatalogService {
         currency: data.currency ?? 'NGN',
         taxCategoryId: data.taxCategoryId ?? 'STANDARD_VAT',
         isActive: data.isActive !== undefined ? data.isActive : true,
+        stockQuantity: data.stockQuantity !== undefined ? data.stockQuantity : 0,
+        reorderPoint: data.reorderPoint !== undefined ? data.reorderPoint : 0,
+        reorderQuantity: data.reorderQuantity !== undefined ? data.reorderQuantity : 0,
+        stockUnit: data.stockUnit ?? null,
+        supplierName: data.supplierName ?? null,
+        supplierEmail: data.supplierEmail ?? null,
       },
     });
 
@@ -104,6 +110,12 @@ export class ProductCatalogService {
         taxCategoryId: data.taxCategoryId ?? existing.taxCategoryId,
         isActive:
           data.isActive !== undefined ? data.isActive : existing.isActive,
+        stockQuantity: data.stockQuantity !== undefined ? data.stockQuantity : existing.stockQuantity,
+        reorderPoint: data.reorderPoint !== undefined ? data.reorderPoint : existing.reorderPoint,
+        reorderQuantity: data.reorderQuantity !== undefined ? data.reorderQuantity : existing.reorderQuantity,
+        stockUnit: data.stockUnit !== undefined ? data.stockUnit : existing.stockUnit,
+        supplierName: data.supplierName !== undefined ? data.supplierName : existing.supplierName,
+        supplierEmail: data.supplierEmail !== undefined ? data.supplierEmail : existing.supplierEmail,
       },
     });
 
@@ -157,6 +169,13 @@ export class ProductCatalogService {
       currency: p.currency,
       taxCategoryId: p.taxCategoryId,
       isActive: p.isActive,
+      stockQuantity: Number(p.stockQuantity ?? 0),
+      reorderPoint: Number(p.reorderPoint ?? 0),
+      reorderQuantity: Number(p.reorderQuantity ?? 0),
+      stockUnit: p.stockUnit ?? undefined,
+      supplierName: p.supplierName ?? undefined,
+      supplierEmail: p.supplierEmail ?? undefined,
+      lastRestockedAt: p.lastRestockedAt?.toISOString() ?? undefined,
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
     };
