@@ -120,6 +120,26 @@ export class CreateIncomingInvoiceDto {
   @ValidateNested({ each: true })
   @Type(() => IncomingInvoiceItemDto)
   items?: IncomingInvoiceItemDto[];
+
+  @ApiPropertyOptional({ example: 'supplier@company.com' })
+  @IsOptional()
+  @IsString()
+  supplierEmail?: string;
+
+  @ApiPropertyOptional({ example: 'GTBank' })
+  @IsOptional()
+  @IsString()
+  supplierBankName?: string;
+
+  @ApiPropertyOptional({ example: '0123456789' })
+  @IsOptional()
+  @IsString()
+  supplierBankAccount?: string;
+
+  @ApiPropertyOptional({ example: 'Acme Supplies Ltd' })
+  @IsOptional()
+  @IsString()
+  supplierBankAccName?: string;
 }
 
 export class RejectIncomingInvoiceDto {
@@ -135,12 +155,12 @@ export class MarkPaidIncomingInvoiceDto {
   @IsPositive()
   amount!: number;
 
-  @ApiProperty({ example: 'TRX-2026-001' })
+  @ApiProperty({ example: 'TRF-2026-001' })
   @IsString()
   @IsNotEmpty()
   reference!: string;
 
-  @ApiProperty({ example: 'BANK_TRANSFER' })
+  @ApiProperty({ example: 'BANK_TRANSFER', enum: ['BANK_TRANSFER', 'CASH', 'CHEQUE', 'OTHER'] })
   @IsString()
   @IsNotEmpty()
   provider!: string;
@@ -148,4 +168,14 @@ export class MarkPaidIncomingInvoiceDto {
   @ApiProperty({ example: '2026-05-29T10:00:00.000Z' })
   @IsDateString()
   paidAt!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  sendReceiptToSupplier?: boolean;
 }

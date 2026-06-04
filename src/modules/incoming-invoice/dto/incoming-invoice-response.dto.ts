@@ -34,6 +34,15 @@ export interface IncomingInvoiceResponse {
   whtRate?: number;
   whtAmount?: number;
   netPayable?: number;
+  supplierEmail?: string;
+  supplierBankName?: string;
+  supplierBankAccount?: string;
+  supplierBankAccName?: string;
+  amountPaid?: number;
+  paymentReference?: string;
+  paymentProvider?: string;
+  paidAt?: string;
+  paymentNotes?: string;
   items: IncomingInvoiceItemResponse[];
   createdAt: string;
   updatedAt: string;
