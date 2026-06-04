@@ -52,14 +52,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const role = profile?.roles?.[0];
 
   return (
-    <UserProfileProvider profile={profile}>
+    <UserProfileProvider
+      profile={profile}
+      inventoryEnabled={inventoryEnabled}
+      setInventoryEnabled={setInventoryEnabled}
+    >
       <div className="flex min-h-screen bg-surface">
         <Sidebar
           fullName={fullName}
           role={role}
           invoiceBadge={sentPendingBadge}
           receivedBadge={receivedBadge}
-          inventoryEnabled={inventoryEnabled}
         />
         <main className="flex-1 ml-64 min-h-screen">
           {children}
