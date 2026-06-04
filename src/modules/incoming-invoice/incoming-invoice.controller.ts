@@ -131,4 +131,12 @@ export class IncomingInvoiceController {
     const ctx = this.getCtx(req);
     return this.incomingInvoiceService.markPaid(id, ctx.tenantId, dto);
   }
+
+  @Post(':id/send-receipt')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send payment receipt email to supplier' })
+  async sendReceipt(@Param('id') id: string, @Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.incomingInvoiceService.sendReceipt(id, ctx.tenantId);
+  }
 }

@@ -852,12 +852,24 @@ model IncomingInvoice {
   sourceReference String?
   rawPayload      Json?
   rejectionReason String?
-  whtApplicable   Boolean                @default(false)
-  whtRate         Decimal?
-  whtAmount       Decimal?
-  netPayable      Decimal?
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  whtApplicable       Boolean                @default(false)
+  whtRate             Decimal?
+  whtAmount           Decimal?
+  netPayable          Decimal?
+
+  supplierEmail       String?
+  supplierBankName    String?
+  supplierBankAccount String?
+  supplierBankAccName String?
+
+  amountPaid          Decimal?
+  paymentReference    String?
+  paymentProvider     String?
+  paidAt              DateTime?
+  paymentNotes        String?
+
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
   tenant          Tenant                 @relation(fields: [tenantId], references: [id])
   items           IncomingInvoiceItem[]

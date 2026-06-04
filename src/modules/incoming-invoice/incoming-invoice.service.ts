@@ -8,6 +8,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ActivityService } from '../activity/services/activity.service';
+import { EmailService } from '../../shared/email/email.service';
 import { getRequestContext } from '../../shared/context/request-context';
 import {
   CreateIncomingInvoiceDto,
@@ -26,6 +27,7 @@ export class IncomingInvoiceService {
     private readonly prisma: PrismaService,
     private readonly activityService: ActivityService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly emailService: EmailService,
   ) {}
 
   async create(
@@ -73,6 +75,10 @@ export class IncomingInvoiceService {
         dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
         description: dto.description ?? null,
         sourceReference: dto.sourceReference ?? null,
+        supplierEmail: dto.supplierEmail ?? null,
+        supplierBankName: dto.supplierBankName ?? null,
+        supplierBankAccount: dto.supplierBankAccount ?? null,
+        supplierBankAccName: dto.supplierBankAccName ?? null,
         status: 'RECEIVED',
         ...whtFields,
         items: dto.items?.length
@@ -276,7 +282,14 @@ export class IncomingInvoiceService {
 
     const updated = await (this.prisma as any).incomingInvoice.update({
       where: { id },
-      data: { status: 'PAID' },
+      data: {
+        status: 'PAID',
+        amountPaid: dto.amount,
+        paymentReference: dto.reference,
+        paymentProvider: dto.provider,
+        paidAt: new Date(dto.paidAt),
+        paymentNotes: dto.notes ?? null,
+      },
       include: { items: true },
     });
 
@@ -296,7 +309,46 @@ export class IncomingInvoiceService {
       },
     });
 
+    if (dto.sendReceiptToSupplier && invoice.supplierEmail) {
+      const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+      this.emailService.sendPaymentReceipt({
+        to: invoice.supplierEmail,
+        supplierName: invoice.supplierName,
+        tenantName: tenant?.name ?? 'Your customer',
+        invoiceNumber: invoice.invoiceNumber,
+        amount: dto.amount,
+        currency: invoice.currency,
+        reference: dto.reference,
+        paidAt: dto.paidAt,
+      });
+    }
+
     return this.map(updated);
+  }
+
+  async sendReceipt(id: string, tenantId: string): Promise<{ sent: boolean; to?: string }> {
+    const invoice = await this.requireInvoice(id, tenantId);
+
+    if (invoice.status !== 'PAID') {
+      throw new BadRequestException('Invoice must be PAID before sending a receipt');
+    }
+    if (!invoice.supplierEmail) {
+      throw new BadRequestException('No supplier email on record for this invoice');
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    this.emailService.sendPaymentReceipt({
+      to: invoice.supplierEmail,
+      supplierName: invoice.supplierName,
+      tenantName: tenant?.name ?? 'Your customer',
+      invoiceNumber: invoice.invoiceNumber,
+      amount: Number(invoice.amountPaid ?? invoice.invoiceAmount),
+      currency: invoice.currency,
+      reference: invoice.paymentReference ?? 'N/A',
+      paidAt: (invoice.paidAt ?? invoice.updatedAt).toISOString(),
+    });
+
+    return { sent: true, to: invoice.supplierEmail };
   }
 
   private async requireInvoice(id: string, tenantId: string): Promise<any> {
@@ -344,6 +396,15 @@ export class IncomingInvoiceService {
       whtRate: invoice.whtRate != null ? Number(invoice.whtRate) : undefined,
       whtAmount: invoice.whtAmount != null ? Number(invoice.whtAmount) : undefined,
       netPayable: invoice.netPayable != null ? Number(invoice.netPayable) : undefined,
+      supplierEmail: invoice.supplierEmail ?? undefined,
+      supplierBankName: invoice.supplierBankName ?? undefined,
+      supplierBankAccount: invoice.supplierBankAccount ?? undefined,
+      supplierBankAccName: invoice.supplierBankAccName ?? undefined,
+      amountPaid: invoice.amountPaid != null ? Number(invoice.amountPaid) : undefined,
+      paymentReference: invoice.paymentReference ?? undefined,
+      paymentProvider: invoice.paymentProvider ?? undefined,
+      paidAt: invoice.paidAt?.toISOString() ?? undefined,
+      paymentNotes: invoice.paymentNotes ?? undefined,
       items: (invoice.items ?? []).map(
         (item: any): IncomingInvoiceItemResponse => ({
           id: item.id,
