@@ -183,13 +183,13 @@ export default function ClientsPage() {
 
   return (
     <>
-      <Topbar title="Clients" />
+      <Topbar title="Customers" />
       {showModal && <ClientModal client={editClient} onClose={closeModal} onSave={afterSave} />}
 
       <div className="p-6 space-y-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-dark">Clients</h1>
+            <h1 className="text-xl font-bold text-dark">Customers</h1>
             <p className="text-sm text-muted mt-0.5">Your buyer profiles</p>
           </div>
           <Button onClick={openAdd}>+ Add client</Button>

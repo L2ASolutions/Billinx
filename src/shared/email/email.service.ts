@@ -726,4 +726,32 @@ export class EmailService {
 
     this.send(opts.to, `Payment Confirmation — Invoice ${opts.invoiceNumber}`, html);
   }
+
+  sendReorderRequest(opts: {
+    to: string;
+    supplierName: string;
+    tenantName: string;
+    productName: string;
+    productCode?: string;
+    currentStock: number;
+    reorderQuantity: number;
+    stockUnit?: string;
+  }): void {
+    const unit = opts.stockUnit ?? 'units';
+    const html = baseLayout(
+      'Restock Request',
+      `<p style="font-size:16px;color:#2c3e50;">Dear ${opts.supplierName},</p>
+      <p style="color:#444;line-height:1.6;">Our stock for the following item has reached the reorder point:</p>
+      <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+        <tr><td style="padding:8px;color:#666;width:160px;">Product</td><td style="padding:8px;font-weight:600;color:#2c3e50;">${opts.productName}</td></tr>
+        ${opts.productCode ? `<tr><td style="padding:8px;color:#666;">Code</td><td style="padding:8px;font-family:monospace;color:#2c3e50;">${opts.productCode}</td></tr>` : ''}
+        <tr><td style="padding:8px;color:#666;">Current Stock</td><td style="padding:8px;color:#e74c3c;font-weight:600;">${opts.currentStock} ${unit}</td></tr>
+        <tr><td style="padding:8px;color:#666;">Requested Quantity</td><td style="padding:8px;color:#27ae60;font-weight:600;">${opts.reorderQuantity} ${unit}</td></tr>
+      </table>
+      <p style="color:#444;line-height:1.6;">Please send us an invoice at your earliest convenience.</p>
+      <p style="color:#444;line-height:1.6;">Regards,<br/><strong>${opts.tenantName}</strong></p>
+      <p style="font-size:11px;color:#aaa;margin-top:24px;">Sent via Billinx · billinx.ng</p>`,
+    );
+    this.send(opts.to, `Restock Request — ${opts.productName}`, html);
+  }
 }

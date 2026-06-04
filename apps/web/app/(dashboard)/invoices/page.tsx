@@ -7,7 +7,7 @@ import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
-import { invoiceApi, incomingInvoiceApi } from "@/lib/api";
+import { invoiceApi, incomingInvoiceApi, invalidateCache } from "@/lib/api";
 import { formatCurrency, formatDate, formatInvoiceNumber } from "@/lib/utils";
 
 // ── Copy pay-link button ──────────────────────────────────────────────────────
@@ -332,7 +332,7 @@ function SentPanel() {
         total:    s.total    ?? 0,
         accepted: s.accepted ?? 0,
         rejected: s.rejectedAll ?? s.rejected ?? 0,
-        pending:  s.pending  ?? 0,
+        pending:  s.firsAwaiting ?? s.pending ?? 0,
         draft:    s.draft    ?? 0,
         overdue:  s.overdue  ?? s.overdueCount ?? 0,
       });
@@ -547,7 +547,9 @@ function ReceivedPanel() {
       if (action === "validate") await incomingInvoiceApi.validate(id);
       else if (action === "approve") await incomingInvoiceApi.approve(id);
       else await incomingInvoiceApi.reject(id, "Rejected by reviewer");
+      invalidateCache('/v1/incoming-invoices/stats');
       await load();
+      incomingInvoiceApi.stats().then((s) => setReceivedCount(s.received ?? 0)).catch(() => {});
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -714,7 +716,7 @@ export default function InvoicesPage() {
   const [receivedCount, setReceivedCount] = useState<number | null>(null);
 
   useEffect(() => {
-    invoiceApi.stats().then((s: any) => setSentPending(s.pending ?? 0)).catch(() => {});
+    invoiceApi.stats().then((s: any) => setSentPending(s.firsAwaiting ?? s.pending ?? 0)).catch(() => {});
     incomingInvoiceApi.stats().then((s: any) => setReceivedCount(s.received ?? 0)).catch(() => {});
   }, []);
 

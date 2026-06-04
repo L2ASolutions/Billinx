@@ -5,14 +5,14 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { apiKeyApi, reminderApi, webhookApi, api, referenceApi } from "@/lib/api";
+import { apiKeyApi, reminderApi, webhookApi, api, referenceApi, invalidateCache } from "@/lib/api";
 import { Skeleton, SkeletonTableRow } from "@/components/ui/Skeleton";
 import { useAuth } from "@/lib/auth";
 import { formatDate } from "@/lib/utils";
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
-type MainTab = "company" | "notifications" | "security" | "invoicing" | "integrations";
+type MainTab = "company" | "notifications" | "security" | "invoicing" | "integrations" | "features";
 type IntegTab = "apikeys" | "webhooks" | "reminders";
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -793,6 +793,171 @@ function TaxRepSection({
   );
 }
 
+// ── Features tab ──────────────────────────────────────────────────────────────
+
+function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!checked)}
+      className={`w-10 h-6 rounded-full transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-green/30 ${
+        disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
+      } ${checked ? "bg-green" : "bg-gray-200"}`}
+    >
+      <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform mx-1 mt-1 ${checked ? "translate-x-4" : "translate-x-0"}`} />
+    </button>
+  );
+}
+
+function FeaturesTab() {
+  const [inventoryEnabled, setInventoryEnabled] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState("");
+  const [confirmDisable, setConfirmDisable] = useState(false);
+
+  useEffect(() => {
+    api.get<any>('/v1/tenants/me')
+      .then((t) => setInventoryEnabled(!!t?.inventoryEnabled))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleInventoryToggle(value: boolean) {
+    if (!value) {
+      setConfirmDisable(true);
+      return;
+    }
+    await applyInventoryChange(true);
+  }
+
+  async function applyInventoryChange(value: boolean) {
+    setSaving(true);
+    try {
+      await api.patch('/v1/tenants/me', { inventoryEnabled: value });
+      setInventoryEnabled(value);
+      invalidateCache('/v1/tenants/me');
+      setToast(value ? "Inventory tracking enabled" : "Inventory tracking disabled");
+      setTimeout(() => setToast(""), 3000);
+    } catch {
+      setToast("Failed to update feature setting");
+      setTimeout(() => setToast(""), 3000);
+    } finally {
+      setSaving(false);
+      setConfirmDisable(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {[0, 1, 2].map(i => (
+          <div key={i} className="h-28 rounded-xl bg-surface border border-border animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {toast && (
+        <div className="p-3 bg-green-light border border-green/20 rounded-xl text-sm text-dark">{toast}</div>
+      )}
+
+      <div>
+        <h2 className="text-base font-semibold text-dark">Platform Features</h2>
+        <p className="text-sm text-muted mt-0.5">Enable or disable optional features for your account</p>
+      </div>
+
+      {/* Inventory Management */}
+      <div className="bg-white rounded-xl border border-border p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-lg bg-surface flex items-center justify-center shrink-0">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-dark">
+              <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+              <path d="M12 22V12" /><path d="M3.3 7l8.7 5 8.7-5" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-dark">Inventory Management</p>
+            <p className="text-xs text-muted mt-1 leading-relaxed">
+              Track stock levels across your products. Set reorder points and get alerts when stock runs low.
+              Stock is automatically updated when invoices are created or received.
+            </p>
+          </div>
+          <Toggle checked={inventoryEnabled} onChange={handleInventoryToggle} disabled={saving} />
+        </div>
+      </div>
+
+      {/* POS Integration */}
+      <div className="bg-white rounded-xl border border-border p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-lg bg-surface flex items-center justify-center shrink-0">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
+              <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-dark">POS Integration</p>
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Coming soon</span>
+            </div>
+            <p className="text-xs text-muted mt-1 leading-relaxed">
+              Connect point-of-sale terminals to submit retail transactions to FIRS automatically.
+            </p>
+          </div>
+          <Toggle checked={false} onChange={() => {}} disabled={true} />
+        </div>
+      </div>
+
+      {/* Email Invoice Intake */}
+      <div className="bg-white rounded-xl border border-border p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-lg bg-surface flex items-center justify-center shrink-0">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+              <polyline points="22,6 12,13 2,6" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-dark">Email Invoice Intake</p>
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Coming soon</span>
+            </div>
+            <p className="text-xs text-muted mt-1 leading-relaxed">
+              Receive supplier invoices automatically via your dedicated Billinx inbox address.
+            </p>
+          </div>
+          <Toggle checked={false} onChange={() => {}} disabled={true} />
+        </div>
+      </div>
+
+      {/* Confirm disable modal */}
+      {confirmDisable && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="font-semibold text-dark">Disable inventory tracking?</h2>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-muted">
+                Your stock data will be kept but automatic tracking will stop.
+              </p>
+            </div>
+            <div className="px-6 py-4 border-t border-border flex gap-3 justify-end">
+              <Button variant="secondary" onClick={() => setConfirmDisable(false)}>Cancel</Button>
+              <Button variant="danger" loading={saving} onClick={() => applyInventoryChange(false)}>Disable</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Settings page ─────────────────────────────────────────────────────────────
 
 const MAIN_TABS: { id: MainTab; label: string }[] = [
@@ -801,6 +966,7 @@ const MAIN_TABS: { id: MainTab; label: string }[] = [
   { id: "security",      label: "Security" },
   { id: "invoicing",     label: "Invoicing" },
   { id: "integrations",  label: "Integrations" },
+  { id: "features",      label: "Features" },
 ];
 
 const INTEG_TABS: { id: IntegTab; label: string }[] = [
@@ -931,6 +1097,9 @@ function SettingsContent() {
                 </div>
               </div>
             )}
+
+            {/* Features */}
+            {mainTab === "features" && <FeaturesTab />}
 
             {/* Integrations */}
             {mainTab === "integrations" && (

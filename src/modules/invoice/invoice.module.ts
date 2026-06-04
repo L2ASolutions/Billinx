@@ -21,9 +21,10 @@ import { ExportService } from '../export/export.service';
 import { RedisService } from '../../shared/redis/redis.service';
 import { EmailModule } from '../../shared/email/email.module';
 import { TenantModule } from '../tenant/tenant.module';
+import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
-  imports: [EventEmitterModule, EmailModule, TenantModule],
+  imports: [EventEmitterModule, EmailModule, TenantModule, InventoryModule],
   controllers: [InvoiceController, BulkInvoiceController],
   providers: [
     InvoiceService,
