@@ -883,6 +883,11 @@ model IncomingInvoice {
   paidAt              DateTime?
   paymentNotes        String?
 
+  attachmentData      Bytes?
+  attachmentName      String?
+  attachmentMime      String?
+  attachmentSize      Int?
+
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
 
