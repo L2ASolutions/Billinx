@@ -727,6 +727,66 @@ export class EmailService {
     this.send(opts.to, `Payment Confirmation — Invoice ${opts.invoiceNumber}`, html);
   }
 
+  sendBuyerPaymentReceipt(opts: {
+    to: string;
+    buyerName: string;
+    sellerName: string;
+    invoiceNumber: string;
+    irn: string;
+    amount: number;
+    currency: string;
+    paidAt: Date;
+    reference: string;
+    provider: string;
+    paymentLink?: string;
+  }): void {
+    const formattedAmount = opts.currency === 'NGN'
+      ? `₦${Number(opts.amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
+      : `${opts.currency} ${Number(opts.amount).toLocaleString()}`;
+    const formattedDate = opts.paidAt.toLocaleDateString('en-NG', {
+      day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+
+    const viewInvoiceBtn = opts.paymentLink
+      ? `<div style="text-align:center;margin:28px 0;">
+          <a href="${opts.paymentLink}" style="display:inline-block;background:${BRAND_GREEN};color:#fff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:6px;text-decoration:none;">View Invoice</a>
+        </div>`
+      : '';
+
+    const html = baseLayout(
+      `Payment Receipt — ${opts.invoiceNumber}`,
+      `<div style="display:inline-block;background:#f0faf5;border:1px solid #27ae60;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
+        <span style="font-size:12px;font-weight:600;color:#1e8449;text-transform:uppercase;letter-spacing:0.5px;">&#10003; Payment Confirmed</span>
+      </div>` +
+      h1('Payment Receipt') +
+      p(`Dear <strong>${opts.buyerName}</strong>,`) +
+      p(`Your payment has been received and confirmed.`) +
+      `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+            style="background:#f8fffe;border:1px solid #d5f5e3;border-radius:6px;margin:0 0 20px;">
+        <tr><td style="padding:20px;">
+          <div style="font-size:11px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e0f0e8;font-weight:600;">Payment Details</div>
+          <div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;">Invoice</span><br /><strong style="font-size:15px;color:${BRAND_DARK};">${opts.invoiceNumber}</strong></div>
+          <div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;">From</span><br /><span style="font-size:14px;color:#444;">${opts.sellerName}</span></div>
+          <div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;">Amount</span><br /><strong style="font-size:18px;color:${BRAND_GREEN};">${formattedAmount}</strong></div>
+          <div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;">Paid via</span><br /><span style="font-size:14px;color:#444;">${opts.provider}</span></div>
+          <div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;">Reference</span><br /><code style="font-size:13px;color:${BRAND_DARK};">${opts.reference}</code></div>
+          <div style="margin-bottom:12px;"><span style="font-size:12px;color:#8899aa;">Date</span><br /><span style="font-size:14px;color:#444;">${formattedDate}</span></div>
+          <div style="padding-top:12px;border-top:1px solid #e0f0e8;"><span style="font-size:12px;color:#8899aa;">FIRS IRN</span><br /><code style="font-size:12px;color:${BRAND_DARK};">${opts.irn}</code></div>
+        </td></tr>
+      </table>` +
+      p(`This invoice has been validated by the Federal Inland Revenue Service (FIRS) and this payment has been recorded.`) +
+      viewInvoiceBtn +
+      p(`Regards,<br /><strong>${opts.sellerName}</strong>`) +
+      divider() +
+      p(`Powered by <a href="https://billinx.ng" style="color:${BRAND_GREEN};">Billinx</a> &middot; FIRS Accredited e-Invoicing Platform`),
+    );
+
+    this.logger.log(
+      `Payment receipt sent to ${opts.to} for invoice ${opts.invoiceNumber} amount ${opts.currency} ${opts.amount}`,
+    );
+    this.send(opts.to, `Payment Receipt — ${opts.invoiceNumber}`, html);
+  }
+
   sendReorderRequest(opts: {
     to: string;
     supplierName: string;
