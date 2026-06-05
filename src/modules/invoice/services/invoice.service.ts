@@ -967,6 +967,7 @@ export class InvoiceService {
       legalMonetaryTotal: invoice.legalMonetaryTotal,
       paymentMeans: invoice.paymentMeans as any[],
       allowanceCharges: invoice.allowanceCharges as any[],
+      billingReference: invoice.billingReference as any[],
       note: invoice.note ?? undefined,
       buyerReference: invoice.buyerReference ?? undefined,
       orderReference: invoice.orderReference ?? undefined,

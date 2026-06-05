@@ -211,6 +211,7 @@ model IdempotencyRecord {
   @@index([sellerTin])
   @@index([platformIrn])
   @@index([issueDate])
+  @@index([tenantId, issueDate])
   @@index([userId])
   @@index([paymentDueDate])
   @@map("invoices")
@@ -890,6 +891,7 @@ model IncomingInvoice {
 
   @@index([tenantId])
   @@index([tenantId, status])
+  @@index([tenantId, createdAt])
   @@index([supplierTin])
   @@unique([tenantId, invoiceNumber, supplierTin])
   @@map("incoming_invoices")
@@ -1135,6 +1137,7 @@ model Client {
 
   @@index([tenantId])
   @@index([tenantId, companyName])
+  @@index([tenantId, totalInvoices])
   @@unique([tenantId, tin])
   @@map("clients")
 }
