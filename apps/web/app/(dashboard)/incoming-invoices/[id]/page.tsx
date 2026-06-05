@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Topbar } from "@/components/dashboard/Topbar";
@@ -44,6 +44,9 @@ interface IncomingInvoiceDetail {
   paymentProvider?: string;
   paidAt?: string;
   paymentNotes?: string;
+  hasAttachment: boolean;
+  attachmentName: string | null;
+  attachmentSize: number | null;
   items: IncomingInvoiceItem[];
   createdAt: string;
   updatedAt: string;
@@ -67,6 +70,12 @@ const PAYMENT_PROVIDERS = [
 ];
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function Row({ label, value }: { label: string; value?: string | number | null }) {
   return (
@@ -311,6 +320,10 @@ export default function IncomingInvoiceDetailPage() {
   const [showPayModal, setShowPayModal] = useState(false);
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [receiptMsg, setReceiptMsg] = useState("");
+  const [attachmentUploading, setAttachmentUploading] = useState(false);
+  const [attachmentDeleting, setAttachmentDeleting] = useState(false);
+  const [attachmentMsg, setAttachmentMsg] = useState("");
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -358,6 +371,68 @@ export default function IncomingInvoiceDetailPage() {
       setReceiptMsg(err instanceof Error ? err.message : "Failed to send receipt");
     } finally {
       setReceiptLoading(false);
+    }
+  }
+
+  async function handleAttachmentUpload(file: File) {
+    setAttachmentMsg("");
+    setAttachmentUploading(true);
+    try {
+      await incomingInvoiceApi.uploadAttachment(id, file);
+      await load();
+      setAttachmentMsg("Document uploaded successfully.");
+    } catch (err: unknown) {
+      setAttachmentMsg(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setAttachmentUploading(false);
+    }
+  }
+
+  async function handleViewAttachment() {
+    try {
+      const { blob, filename } = await incomingInvoiceApi.downloadAttachment(id);
+      const url = URL.createObjectURL(blob);
+      const a = window.open(url, "_blank");
+      if (!a) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.target = "_blank";
+        link.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to open document");
+    }
+  }
+
+  async function handleDownloadAttachment() {
+    try {
+      const { blob, filename } = await incomingInvoiceApi.downloadAttachment(id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 5_000);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to download document");
+    }
+  }
+
+  async function handleDeleteAttachment() {
+    if (!confirm("Remove this document?")) return;
+    setAttachmentDeleting(true);
+    setAttachmentMsg("");
+    try {
+      await incomingInvoiceApi.deleteAttachment(id);
+      await load();
+      setAttachmentMsg("");
+    } catch (err: unknown) {
+      setAttachmentMsg(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setAttachmentDeleting(false);
     }
   }
 
@@ -522,6 +597,80 @@ export default function IncomingInvoiceDetailPage() {
                   </div>
                   {invoice.supplierBankAccName && <Row label="Account name" value={invoice.supplierBankAccName} />}
                 </dl>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Original Document */}
+        <div className="bg-white rounded-xl border border-border">
+          <div className="px-6 py-4 border-b border-border flex items-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            </svg>
+            <h2 className="font-semibold text-dark">Original Document</h2>
+          </div>
+          <div className="p-6">
+            {attachmentMsg && (
+              <div className={`mb-4 p-3 rounded-lg text-sm ${attachmentMsg.includes("successfully") ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-600"}`}>
+                {attachmentMsg}
+              </div>
+            )}
+
+            {invoice.hasAttachment ? (
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-surface flex items-center justify-center shrink-0">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-dark">{invoice.attachmentName}</p>
+                    {invoice.attachmentSize != null && (
+                      <p className="text-xs text-muted">{formatFileSize(invoice.attachmentSize)}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <Button size="sm" variant="secondary" onClick={handleViewAttachment}>
+                    View document
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={handleDownloadAttachment}>
+                    Download
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    loading={attachmentDeleting}
+                    onClick={handleDeleteAttachment}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-muted mb-3">No document uploaded yet</p>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  loading={attachmentUploading}
+                  onClick={() => attachmentInputRef.current?.click()}
+                >
+                  Upload document
+                </Button>
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleAttachmentUpload(file);
+                    e.target.value = "";
+                  }}
+                />
               </div>
             )}
           </div>

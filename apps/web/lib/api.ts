@@ -405,6 +405,18 @@ export const incomingInvoiceApi = {
     },
   ) => api.patch<unknown>(`/v1/incoming-invoices/${id}/mark-paid`, data),
   sendReceipt: (id: string) => api.post<{ sent: boolean; to?: string }>(`/v1/incoming-invoices/${id}/send-receipt`, {}),
+  uploadAttachment: (id: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return requestMultipart<{ attachmentName: string; attachmentMime: string; attachmentSize: number; uploadedAt: string }>(
+      `/v1/incoming-invoices/${id}/attachment`,
+      fd,
+    );
+  },
+  downloadAttachment: (id: string) =>
+    requestBlob(`/v1/incoming-invoices/${id}/attachment`),
+  deleteAttachment: (id: string) =>
+    api.delete<{ deleted: boolean }>(`/v1/incoming-invoices/${id}/attachment`),
   stats: () => cachedGet<{
     total: number;
     received: number;

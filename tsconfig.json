@@ -13,7 +13,7 @@
     "skipLibCheck": true,
     "strictNullChecks": true,
     "noImplicitAny": true,
-    "types": ["jest", "node"]
+    "types": ["jest", "node", "multer"]
   },
   "include": ["src/**/*", "packages/**/*", "test/**/*"],
   "exclude": ["node_modules", "dist"]

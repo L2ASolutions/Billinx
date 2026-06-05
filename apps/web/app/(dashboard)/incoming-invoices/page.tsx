@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
@@ -28,6 +28,7 @@ interface IncomingInvoice {
   supplierBankName?: string;
   supplierBankAccount?: string;
   supplierBankAccName?: string;
+  hasAttachment?: boolean;
   createdAt: string;
 }
 
@@ -217,6 +218,12 @@ function QuickPayModal({ invoice, onClose, onPaid }: { invoice: IncomingInvoice;
 
 // ── Add Invoice Modal ─────────────────────────────────────────────────────────
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function AddInvoiceModal({
   onClose,
   onCreated,
@@ -227,6 +234,10 @@ function AddInvoiceModal({
   const [form, setForm] = useState<AddInvoiceForm>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const f =
     (field: keyof AddInvoiceForm) =>
@@ -237,11 +248,32 @@ function AddInvoiceModal({
     ) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  function handleFile(file: File) {
+    setFileError("");
+    const ALLOWED = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
+    if (!ALLOWED.includes(file.type)) {
+      setFileError("Only PDF, JPG and PNG files accepted");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setFileError("File must be under 10MB");
+      return;
+    }
+    setUploadFile(file);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  }
+
   async function handleSubmit() {
     setError("");
     setSubmitting(true);
     try {
-      await incomingInvoiceApi.create({
+      const created = await incomingInvoiceApi.create({
         supplierName: form.supplierName,
         supplierTin: form.supplierTin,
         supplierEmail: form.supplierEmail || undefined,
@@ -255,7 +287,19 @@ function AddInvoiceModal({
         supplierBankName: form.supplierBankName || undefined,
         supplierBankAccount: form.supplierBankAccount || undefined,
         supplierBankAccName: form.supplierBankAccName || undefined,
-      });
+      }) as { id: string };
+
+      if (uploadFile) {
+        try {
+          await incomingInvoiceApi.uploadAttachment(created.id, uploadFile);
+        } catch {
+          setError("Invoice saved but document upload failed. You can upload it from the invoice detail.");
+          onCreated();
+          onClose();
+          return;
+        }
+      }
+
       onCreated();
       onClose();
     } catch (err: unknown) {
@@ -281,14 +325,7 @@ function AddInvoiceModal({
             onClick={onClose}
             className="text-muted hover:text-dark transition-colors"
           >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -301,6 +338,72 @@ function AddInvoiceModal({
               {error}
             </div>
           )}
+
+          {/* Upload zone */}
+          <div>
+            <label className="block text-sm font-medium text-dark mb-1">
+              Invoice document <span className="text-muted font-normal">(optional)</span>
+            </label>
+            <p className="text-xs text-muted mb-2">Upload the original paper or digital invoice for your records</p>
+
+            {uploadFile ? (
+              <div className="border border-green-200 bg-green-50 rounded-lg p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-600 shrink-0">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                  <span className="text-sm text-dark font-medium truncate">{uploadFile.name}</span>
+                  <span className="text-xs text-muted shrink-0">{formatFileSize(uploadFile.size)} · Ready to upload</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUploadFile(null)}
+                  className="text-xs text-muted hover:text-red-500 ml-3 shrink-0 font-medium"
+                >
+                  Remove ×
+                </button>
+              </div>
+            ) : (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                  fileError
+                    ? "border-red-300 bg-red-50"
+                    : dragOver
+                    ? "border-green bg-green-50"
+                    : "border-gray-300 hover:border-green hover:bg-green-50"
+                }`}
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto mb-2 text-muted">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <p className="text-sm text-dark">Drag and drop your invoice here</p>
+                <p className="text-xs text-muted mt-1">or click to browse</p>
+                <p className="text-xs text-muted mt-2">PDF, JPG or PNG · Max 10MB</p>
+              </div>
+            )}
+
+            {fileError && (
+              <p className="text-xs text-red-600 mt-1">{fileError}</p>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFile(file);
+                e.target.value = "";
+              }}
+            />
+          </div>
+
+          <div className="border-t border-border" />
 
           <Input
             label="Supplier name *"
@@ -581,6 +684,7 @@ export default function IncomingInvoicesPage() {
                       "Amount",
                       "VAT",
                       "Status",
+                      "Doc",
                       "",
                     ].map((col, i) => (
                       <th
@@ -632,6 +736,15 @@ export default function IncomingInvoicesPage() {
                         >
                           {inv.status}
                         </span>
+                      </td>
+                      <td className="px-6 py-3 text-center">
+                        {inv.hasAttachment && (
+                          <span title="Document attached" className="text-gray-400">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline">
+                              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                            </svg>
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">
