@@ -673,7 +673,7 @@ export default function DashboardPage() {
 
           {/* Card 3: FIRS Rejections */}
           <Link href="/submissions?status=REJECTED" className="block">
-            <div className={`rounded-xl border p-4 h-full hover:opacity-90 transition-opacity ${
+            <div className={`rounded-xl border p-4 h-full hover:shadow-sm transition-shadow ${
               statsLoading ? 'bg-white border-border' :
               rejectedCount === 0 ? 'bg-white border-[#1D9E75] border-l-4 border-l-[#1D9E75]' :
               'bg-white border-red-200 border-l-4 border-l-red-500'
