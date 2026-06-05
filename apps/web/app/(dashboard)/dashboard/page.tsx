@@ -673,13 +673,23 @@ export default function DashboardPage() {
 
           {/* Card 3: FIRS Rejections */}
           <Link href="/submissions?status=REJECTED" className="block">
-            <div className={`rounded-xl border p-4 h-full hover:opacity-90 transition-opacity ${
+            <div className={`rounded-xl border p-4 h-full hover:shadow-sm transition-shadow ${
               statsLoading ? 'bg-white border-border' :
               rejectedCount === 0 ? 'bg-white border-[#1D9E75] border-l-4 border-l-[#1D9E75]' :
               'bg-white border-red-200 border-l-4 border-l-red-500'
             }`}>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-muted uppercase tracking-wide">FIRS Rejections</p>
+                <div className="flex items-center gap-1">
+                  <p className="text-xs font-medium text-muted uppercase tracking-wide">FIRS Rejections</p>
+                  <div className="relative group inline-block">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 text-xs text-white bg-gray-800 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
+                      Invoices that were submitted to FIRS but failed validation. Common reasons include invalid TIN format, missing HSN code, or incorrect tax amounts. Click to view details and fix each rejection.
+                    </div>
+                  </div>
+                </div>
                 {statsLoading ? null : rejectedCount === 0 ? (
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
@@ -719,7 +729,17 @@ export default function DashboardPage() {
               'bg-white border-amber-200 border-l-4 border-l-amber-500'
             }`}>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-muted uppercase tracking-wide">Stuck Submissions</p>
+                <div className="flex items-center gap-1">
+                  <p className="text-xs font-medium text-muted uppercase tracking-wide">Stuck Submissions</p>
+                  <div className="relative group inline-block">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 text-xs text-white bg-gray-800 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
+                      Invoices that have been in the submission queue for more than 5 minutes without reaching FIRS. This usually happens due to a network issue or service interruption. Click Retry all to resubmit them to FIRS.
+                    </div>
+                  </div>
+                </div>
                 {statsLoading ? null : stuckCount === 0 ? (
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
