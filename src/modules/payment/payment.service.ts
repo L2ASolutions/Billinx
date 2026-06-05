@@ -3,16 +3,14 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
-  UnauthorizedException,
 } from '@nestjs/common';
-import * as crypto from 'crypto';
 import * as https from 'https';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { PaymentService as InvoicePaymentService } from '../invoice/services/payment.service';
+import { EmailService } from '../../shared/email/email.service';
 
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY ?? '';
 const FLW_SECRET = process.env.FLW_SECRET_KEY ?? '';
-const FLW_WEBHOOK_HASH = process.env.FLW_WEBHOOK_HASH ?? '';
 const BILLINX_URL = process.env.BILLINX_URL ?? 'http://localhost:3001';
 
 function httpsRequest(
@@ -60,6 +58,7 @@ export class PaymentProviderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly invoicePaymentService: InvoicePaymentService,
+    private readonly emailService: EmailService,
   ) {}
 
   // ── Paystack ──────────────────────────────────────────────────────────────
@@ -140,18 +139,7 @@ export class PaymentProviderService {
     };
   }
 
-  async paystackWebhook(body: Record<string, any>, signature: string) {
-    if (PAYSTACK_SECRET && PAYSTACK_SECRET !== 'sk_test_placeholder') {
-      const hash = crypto
-        .createHmac('sha512', PAYSTACK_SECRET)
-        .update(JSON.stringify(body))
-        .digest('hex');
-
-      if (hash !== signature) {
-        throw new UnauthorizedException('Invalid Paystack signature');
-      }
-    }
-
+  async paystackWebhookEvent(body: Record<string, any>) {
     if (body.event !== 'charge.success') {
       return { received: true };
     }
@@ -231,11 +219,7 @@ export class PaymentProviderService {
     return { paymentLink: result.data.link };
   }
 
-  async flutterwaveWebhook(body: Record<string, any>, signature: string) {
-    if (FLW_WEBHOOK_HASH && signature !== FLW_WEBHOOK_HASH) {
-      throw new UnauthorizedException('Invalid Flutterwave signature');
-    }
-
+  async flutterwaveWebhookEvent(body: Record<string, any>) {
     if (body.event !== 'charge.completed') {
       return { received: true };
     }
@@ -295,7 +279,8 @@ export class PaymentProviderService {
     return invoice;
   }
 
-  private extractInvoiceId(ref: string, prefix = ''): string | null {
+  private extractInvoiceId(ref: string | undefined, prefix = ''): string | null {
+    if (!ref) return null;
     // Reference format: BLX-{prefix}{invoiceId}-{timestamp}
     // e.g. BLX-abc123-1234567890 or BLX-FLW-abc123-1234567890
     const pattern = new RegExp(`^BLX-${prefix}([^-]+-[^-]+-[^-]+-[^-]+-[^-]+)-\\d+$`);
@@ -336,7 +321,16 @@ export class PaymentProviderService {
     const invoice = await this.prisma.asAdmin((tx) =>
       tx.invoice.findUnique({
         where: { id: invoiceId },
-        select: { tenantId: true },
+        select: {
+          tenantId: true,
+          platformIrn: true,
+          firsConfirmedIrn: true,
+          sellerName: true,
+          buyerName: true,
+          currency: true,
+          paymentLink: true,
+          metadata: true,
+        },
       }),
     );
 
@@ -361,6 +355,23 @@ export class PaymentProviderService {
       this.logger.log(
         `Webhook payment recorded: ${opts.reference} (${opts.amount}) for invoice ${invoiceId}`,
       );
+
+      const buyerEmail = (invoice.metadata as any)?.buyerParty?.email;
+      if (buyerEmail) {
+        this.emailService.sendBuyerPaymentReceipt({
+          to: buyerEmail,
+          buyerName: invoice.buyerName,
+          sellerName: invoice.sellerName,
+          invoiceNumber: invoice.platformIrn,
+          irn: invoice.firsConfirmedIrn ?? invoice.platformIrn,
+          amount: opts.amount,
+          currency: invoice.currency,
+          paidAt: new Date(),
+          reference: opts.reference,
+          provider: opts.provider,
+          paymentLink: invoice.paymentLink ?? undefined,
+        });
+      }
     } catch (err: any) {
       this.logger.error(
         `Webhook payment failed for invoice ${invoiceId}: ${err.message}`,

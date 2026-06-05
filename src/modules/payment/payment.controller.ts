@@ -8,7 +8,12 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  Req,
+  RawBodyRequest,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { Request } from 'express';
+import * as crypto from 'crypto';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PaymentProviderService } from './payment.service';
 
@@ -41,10 +46,23 @@ export class PaymentController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Paystack webhook receiver' })
   async paystackWebhook(
-    @Body() body: Record<string, any>,
     @Headers('x-paystack-signature') signature: string,
+    @Req() req: RawBodyRequest<Request>,
   ) {
-    return this.paymentService.paystackWebhook(body, signature ?? '');
+    const paystackSecret = process.env.PAYSTACK_SECRET_KEY ?? '';
+    if (paystackSecret && paystackSecret !== 'sk_test_placeholder') {
+      const hash = crypto
+        .createHmac('sha512', paystackSecret)
+        .update(req.rawBody ?? Buffer.alloc(0))
+        .digest('hex');
+      if (hash !== signature) {
+        throw new UnauthorizedException('Invalid Paystack signature');
+      }
+    }
+    const event = req.rawBody
+      ? JSON.parse(req.rawBody.toString())
+      : req.body;
+    return this.paymentService.paystackWebhookEvent(event);
   }
 
   // ── Flutterwave ───────────────────────────────────────────────────────────
@@ -63,9 +81,16 @@ export class PaymentController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Flutterwave webhook receiver' })
   async flutterwaveWebhook(
-    @Body() body: Record<string, any>,
     @Headers('verif-hash') signature: string,
+    @Req() req: RawBodyRequest<Request>,
   ) {
-    return this.paymentService.flutterwaveWebhook(body, signature ?? '');
+    const secretHash = process.env.FLW_WEBHOOK_HASH ?? '';
+    if (secretHash && signature !== secretHash) {
+      throw new UnauthorizedException('Invalid Flutterwave signature');
+    }
+    const event = req.rawBody
+      ? JSON.parse(req.rawBody.toString())
+      : req.body;
+    return this.paymentService.flutterwaveWebhookEvent(event);
   }
 }

@@ -15,6 +15,7 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log'],
+    rawBody: true,
   });
 
   // Trust the first proxy hop (AWS ALB / Nginx) so req.ip and X-Forwarded-For are correct
@@ -61,7 +62,20 @@ async function bootstrap() {
     }),
   );
 
-  app.use(express.json({ limit: '10mb' }));
+  // Capture raw body bytes before parsing — required for Paystack/Flutterwave HMAC
+  // verification. We register this before app.listen() so NestJS's registerParserMiddleware
+  // sees 'jsonParser' already in the stack (via isMiddlewareApplied) and skips adding its
+  // own 100kb-limited version, preserving our 10mb limit for bulk invoice endpoints.
+  app.use(
+    express.json({
+      limit: '10mb',
+      verify: (req: any, _res: any, buf: Buffer) => {
+        if (buf && buf.length) {
+          req.rawBody = buf;
+        }
+      },
+    }),
+  );
   app.use(express.text({ type: 'application/xml' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
