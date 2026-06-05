@@ -43,6 +43,9 @@ export interface IncomingInvoiceResponse {
   paymentProvider?: string;
   paidAt?: string;
   paymentNotes?: string;
+  hasAttachment: boolean;
+  attachmentName: string | null;
+  attachmentSize: number | null;
   items: IncomingInvoiceItemResponse[];
   createdAt: string;
   updatedAt: string;

@@ -165,6 +165,71 @@ export class IncomingInvoiceService {
     return this.map(invoice);
   }
 
+  async uploadAttachment(
+    id: string,
+    tenantId: string,
+    file: Express.Multer.File,
+  ): Promise<{ attachmentName: string; attachmentMime: string; attachmentSize: number; uploadedAt: string }> {
+    await this.requireInvoice(id, tenantId);
+
+    const ALLOWED = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!ALLOWED.includes(file.mimetype)) {
+      throw new BadRequestException('Only PDF and image files are accepted');
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      throw new BadRequestException('File must be under 10MB');
+    }
+
+    const updated = await (this.prisma as any).incomingInvoice.update({
+      where: { id },
+      data: {
+        attachmentData: file.buffer,
+        attachmentName: file.originalname,
+        attachmentMime: file.mimetype,
+        attachmentSize: file.size,
+      },
+      select: { attachmentName: true, attachmentMime: true, attachmentSize: true, updatedAt: true },
+    });
+
+    return {
+      attachmentName: updated.attachmentName,
+      attachmentMime: updated.attachmentMime,
+      attachmentSize: updated.attachmentSize,
+      uploadedAt: updated.updatedAt.toISOString(),
+    };
+  }
+
+  async getAttachment(
+    id: string,
+    tenantId: string,
+  ): Promise<{ data: Buffer; name: string; mime: string }> {
+    const invoice = await (this.prisma as any).incomingInvoice.findFirst({
+      where: { id, tenantId },
+      select: { attachmentData: true, attachmentName: true, attachmentMime: true },
+    });
+    if (!invoice) throw new NotFoundException(`Incoming invoice ${id} not found`);
+    if (!invoice.attachmentData) throw new NotFoundException('No attachment found for this invoice');
+    return {
+      data: invoice.attachmentData as Buffer,
+      name: invoice.attachmentName as string,
+      mime: invoice.attachmentMime as string,
+    };
+  }
+
+  async deleteAttachment(id: string, tenantId: string): Promise<{ deleted: boolean }> {
+    await this.requireInvoice(id, tenantId);
+    await (this.prisma as any).incomingInvoice.update({
+      where: { id },
+      data: {
+        attachmentData: null,
+        attachmentName: null,
+        attachmentMime: null,
+        attachmentSize: null,
+      },
+    });
+    return { deleted: true };
+  }
+
   async validate(id: string, tenantId: string): Promise<IncomingInvoiceResponse> {
     const invoice = await this.requireInvoice(id, tenantId);
 
@@ -417,6 +482,9 @@ export class IncomingInvoiceService {
       paymentProvider: invoice.paymentProvider ?? undefined,
       paidAt: invoice.paidAt?.toISOString() ?? undefined,
       paymentNotes: invoice.paymentNotes ?? undefined,
+      hasAttachment: invoice.attachmentName != null,
+      attachmentName: invoice.attachmentName ?? null,
+      attachmentSize: invoice.attachmentSize != null ? Number(invoice.attachmentSize) : null,
       items: (invoice.items ?? []).map(
         (item: any): IncomingInvoiceItemResponse => ({
           id: item.id,
