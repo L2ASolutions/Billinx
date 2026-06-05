@@ -68,6 +68,7 @@ export interface InvoiceResponse {
   legalMonetaryTotal: any;
   paymentMeans?: any[];
   allowanceCharges?: any[];
+  billingReference?: any[];
   note?: string;
   buyerReference?: string;
   orderReference?: string;
