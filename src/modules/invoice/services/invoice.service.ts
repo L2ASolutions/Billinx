@@ -631,6 +631,12 @@ export class InvoiceService {
       whtCreditsAgg,
       pendingWhtCount,
       recentPayments,
+      stuckCount,
+      recentRejectedInvoices,
+      incomingTotal,
+      incomingToReview,
+      incomingApproved,
+      incomingPaid,
     ] = await this.prisma.asAdmin(async (tx) => {
       const total = await tx.invoice.count({ where: { tenantId } });
       const accepted = await tx.invoice.count({
@@ -728,6 +734,35 @@ export class InvoiceService {
         take: 2,
         include: { invoice: { select: { buyerName: true } } },
       });
+      const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+      const stuckCount = await tx.invoice.count({
+        where: {
+          tenantId,
+          status: { in: ['QUEUED', 'SUBMITTING'] as any },
+          updatedAt: { lt: fiveMinutesAgo },
+        },
+      });
+      const recentRejectedInvoices = await tx.invoice.findMany({
+        where: { tenantId, status: 'REJECTED' },
+        orderBy: { rejectedAt: 'desc' },
+        take: 3,
+        select: {
+          id: true,
+          platformIrn: true,
+          buyerName: true,
+          rejectedAt: true,
+          stateHistory: {
+            where: { toStatus: 'REJECTED' },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { reason: true },
+          },
+        },
+      });
+      const incomingTotal = await (tx as any).incomingInvoice.count({ where: { tenantId } });
+      const incomingToReview = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'RECEIVED' } });
+      const incomingApproved = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'APPROVED' } });
+      const incomingPaid = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'PAID' } });
       return [
         total, accepted, rejected, rejectedAll, pending, firsAwaiting, draft, overdue,
         amountAgg, recentInvoices,
@@ -736,6 +771,8 @@ export class InvoiceService {
         outputVatAgg, inputVatAgg, whtExpectedAgg,
         whtCreditsAgg, pendingWhtCount,
         recentPayments,
+        stuckCount, recentRejectedInvoices,
+        incomingTotal, incomingToReview, incomingApproved, incomingPaid,
       ] as const;
     });
 
@@ -776,6 +813,26 @@ export class InvoiceService {
       pendingWhtCertificates: pendingWhtCount,
       submissionAcceptanceRate,
       lowStockCount,
+      rejectedCount: rejected,
+      stuckCount,
+      recentRejections: recentRejectedInvoices.map((inv: any) => ({
+        invoiceNumber: inv.platformIrn,
+        buyerName: inv.buyerName,
+        rejectionReason: inv.stateHistory[0]?.reason ?? null,
+        rejectedAt: inv.rejectedAt ? inv.rejectedAt.toISOString() : null,
+      })),
+      outgoingStats: {
+        total,
+        pending: firsAwaiting + draft,
+        accepted,
+        rejected: rejectedAll,
+      },
+      incomingStats: {
+        total: incomingTotal,
+        toReview: incomingToReview,
+        approved: incomingApproved,
+        paid: incomingPaid,
+      },
       recentInvoices: recentInvoices.map((inv) => ({
         ...inv,
         totalAmount: Number(inv.totalAmount),
