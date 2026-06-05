@@ -12,6 +12,7 @@ import { NotificationBell } from '@/components/dashboard/NotificationBell';
 // ── Dashboard prefs ───────────────────────────────────────────────────────────
 
 interface DashboardPrefs {
+  showFinancialPosition: boolean;
   showRecentInvoices: boolean;
   showSubmissionQueue: boolean;
   showRecentActivity: boolean;
@@ -21,6 +22,7 @@ interface DashboardPrefs {
 }
 
 const DEFAULT_PREFS: DashboardPrefs = {
+  showFinancialPosition: true,
   showRecentInvoices: true,
   showSubmissionQueue: true,
   showRecentActivity: true,
@@ -32,12 +34,14 @@ const DEFAULT_PREFS: DashboardPrefs = {
 // ── Section open/close state (localStorage) ───────────────────────────────────
 
 interface SectionState {
+  financialPosition: boolean;
   taxPosition: boolean;
   compliancePosition: boolean;
 }
 
 const SECTION_KEY = 'billinx_dashboard_sections';
 const DEFAULT_SECTIONS: SectionState = {
+  financialPosition: false,
   taxPosition: false,
   compliancePosition: false,
 };
@@ -66,6 +70,13 @@ interface RecentPayment {
   paidAt: string;
 }
 
+interface RecentRejection {
+  invoiceNumber: string;
+  buyerName: string;
+  rejectionReason: string | null;
+  rejectedAt: string | null;
+}
+
 interface Stats {
   total: number;
   accepted: number;
@@ -91,6 +102,11 @@ interface Stats {
   submissionAcceptanceRate?: number;
   lowStockCount?: number;
   firsAwaiting?: number;
+  rejectedCount?: number;
+  stuckCount?: number;
+  recentRejections?: RecentRejection[];
+  outgoingStats?: { total: number; pending: number; accepted: number; rejected: number };
+  incomingStats?: { total: number; toReview: number; approved: number; paid: number };
   recentInvoices: RecentInvoice[];
   recentPayments: RecentPayment[];
 }
@@ -319,6 +335,7 @@ export default function DashboardPage() {
   const [queueLoading, setQueueLoading] = useState(true);
 
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [retryingAll, setRetryingAll] = useState(false);
 
   const [prefs, setPrefs] = useState<DashboardPrefs>(DEFAULT_PREFS);
   const [pendingPrefs, setPendingPrefs] = useState<DashboardPrefs>(DEFAULT_PREFS);
@@ -346,12 +363,13 @@ export default function DashboardPage() {
           if (dashboardWidgets && Object.keys(dashboardWidgets).length > 0) {
             const raw = dashboardWidgets as Record<string, boolean>;
             const merged: DashboardPrefs = {
-              showRecentInvoices:    raw.showRecentInvoices    ?? true,
-              showSubmissionQueue:   raw.showSubmissionQueue   ?? true,
-              showRecentActivity:    raw.showRecentActivity    ?? true,
-              showFirsStatus:        raw.showFirsStatus        ?? true,
-              showTaxPosition:       raw.showTaxPosition       ?? (raw.showFinancialCards ?? true),
-              showCompliancePosition:raw.showCompliancePosition ?? true,
+              showFinancialPosition:   raw.showFinancialPosition   ?? true,
+              showRecentInvoices:      raw.showRecentInvoices      ?? true,
+              showSubmissionQueue:     raw.showSubmissionQueue     ?? true,
+              showRecentActivity:      raw.showRecentActivity      ?? true,
+              showFirsStatus:          raw.showFirsStatus          ?? true,
+              showTaxPosition:         raw.showTaxPosition         ?? (raw.showFinancialCards ?? true),
+              showCompliancePosition:  raw.showCompliancePosition  ?? true,
             };
             setPrefs(merged);
             setPendingPrefs(merged);
@@ -395,6 +413,15 @@ export default function DashboardPage() {
   function cancelPrefs() {
     setPendingPrefs(prefs);
     setCustomiseOpen(false);
+  }
+
+  async function handleRetryAll() {
+    setRetryingAll(true);
+    try {
+      await api.post('/v1/admin/queue/retry-failed', {});
+      await loadData();
+    } catch {}
+    setRetryingAll(false);
   }
 
   const loadData = useCallback(async () => {
@@ -469,6 +496,14 @@ export default function DashboardPage() {
   const acceptanceRate = stats?.submissionAcceptanceRate ?? (submissionTotal > 0 ? Math.round((submissionAccepted / submissionTotal) * 1000) / 10 : 0);
   const pendingWhtCerts = stats?.pendingWhtCertificates;
 
+  // ── Row 1 computed values ──────────────────────────────────────────────────
+  const rejectedCount = stats?.rejectedCount ?? stats?.rejected ?? 0;
+  const stuckCount = stats?.stuckCount ?? 0;
+  const recentRejections = stats?.recentRejections ?? [];
+  const outgoingStatsData = stats?.outgoingStats;
+  const incomingStatsFromDashboard = stats?.incomingStats;
+  const firstRejection = recentRejections[0];
+
   // Section summaries
   const financialSummary = netCash === 0
     ? '₦0 balanced'
@@ -526,12 +561,9 @@ export default function DashboardPage() {
               <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl border border-border shadow-lg z-50 p-4">
                 <p className="text-xs font-semibold text-dark uppercase tracking-wide mb-2">Sections</p>
                 <div className="space-y-2.5 mb-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-dark">Financial Position</span>
-                    <span className="text-xs text-muted italic">Always visible</span>
-                  </div>
                   {(
                     [
+                      { key: 'showFinancialPosition', label: 'Financial Position' },
                       { key: 'showTaxPosition', label: 'Tax Position' },
                       { key: 'showCompliancePosition', label: 'Compliance Position' },
                     ] as const
@@ -587,148 +619,240 @@ export default function DashboardPage() {
       </header>
 
       <div className="p-6 space-y-6">
-        {/* ── Row 1: Invoice Activity (always visible) ────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Outgoing Invoices */}
+        {/* ── Row 1: 4 compact status cards (always visible) ──────────────── */}
+        <div className="grid grid-cols-4 gap-4">
+          {/* Card 1: Outgoing Invoices */}
           <Link href="/invoices" className="block">
-            <div className="bg-[#1a2b4a] rounded-xl border border-[#1a2b4a] p-5 h-full">
-              <div className="flex items-center justify-between mb-3">
+            <div className="bg-[#1a2b4a] rounded-xl border border-[#1a2b4a] p-4 h-full hover:opacity-90 transition-opacity">
+              <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-medium text-blue-200 uppercase tracking-wide">Outgoing Invoices</p>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" />
                 </svg>
               </div>
               {statsLoading ? (
                 <>
-                  <div className="animate-pulse bg-blue-800/40 rounded h-9 w-16 mb-2" />
-                  <div className="animate-pulse bg-blue-800/40 rounded h-3 w-40" />
+                  <div className="animate-pulse bg-blue-800/40 rounded h-7 w-12 mb-1.5" />
+                  <div className="animate-pulse bg-blue-800/40 rounded h-3 w-36" />
                 </>
               ) : (
                 <>
-                  <p className="text-3xl font-bold text-white">{stats?.outgoingTotal ?? stats?.total ?? 0}</p>
-                  <p className="text-xs text-blue-300 mt-1.5">
-                    {stats?.outgoingAccepted ?? 0} accepted · {stats?.outgoingPending ?? 0} pending · {stats?.outgoingRejected ?? 0} rejected
+                  <p className="text-2xl font-bold text-white">{outgoingStatsData?.total ?? stats?.outgoingTotal ?? stats?.total ?? 0}</p>
+                  <p className="text-xs text-blue-300 mt-1">
+                    {outgoingStatsData?.pending ?? stats?.outgoingPending ?? 0} pending · {outgoingStatsData?.accepted ?? stats?.outgoingAccepted ?? 0} accepted · {outgoingStatsData?.rejected ?? stats?.outgoingRejected ?? 0} rejected
                   </p>
                 </>
               )}
             </div>
           </Link>
 
-          {/* Incoming Invoices */}
+          {/* Card 2: Incoming Invoices */}
           <Link href="/incoming-invoices" className="block">
-            <div className="bg-emerald-700 rounded-xl border border-emerald-700 p-5 h-full">
-              <div className="flex items-center justify-between mb-3">
+            <div className="bg-emerald-700 rounded-xl border border-emerald-700 p-4 h-full hover:opacity-90 transition-opacity">
+              <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-medium text-emerald-200 uppercase tracking-wide">Incoming Invoices</p>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6ee7b7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6ee7b7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="17" y1="7" x2="7" y2="17" /><polyline points="17 17 7 17 7 7" />
                 </svg>
               </div>
               {incomingStatsLoading ? (
                 <>
-                  <div className="animate-pulse bg-emerald-600/40 rounded h-9 w-16 mb-2" />
-                  <div className="animate-pulse bg-emerald-600/40 rounded h-3 w-40" />
+                  <div className="animate-pulse bg-emerald-600/40 rounded h-7 w-12 mb-1.5" />
+                  <div className="animate-pulse bg-emerald-600/40 rounded h-3 w-36" />
                 </>
               ) : (
                 <>
-                  <p className="text-3xl font-bold text-white">{incomingStats?.total ?? 0}</p>
-                  <p className="text-xs text-emerald-200 mt-1.5">
-                    {incomingStats?.approved ?? 0} approved · {((incomingStats?.total ?? 0) - (incomingStats?.paid ?? 0))} pending payment
+                  <p className="text-2xl font-bold text-white">{incomingStatsFromDashboard?.total ?? incomingStats?.total ?? 0}</p>
+                  <p className="text-xs text-emerald-200 mt-1">
+                    {incomingStatsFromDashboard?.toReview ?? incomingStats?.received ?? 0} to review · {incomingStatsFromDashboard?.approved ?? incomingStats?.approved ?? 0} approved · {incomingStatsFromDashboard?.paid ?? incomingStats?.paid ?? 0} paid
                   </p>
                 </>
               )}
             </div>
           </Link>
 
-          {/* Payments card */}
-          <div className="bg-white rounded-xl border border-border p-5 h-full">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-muted uppercase tracking-wide">Payments</p>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" />
-              </svg>
-            </div>
-            {statsLoading ? (
-              <>
-                <Sk className="h-7 w-28 mb-1" />
-                <Sk className="h-3 w-36 mb-3" />
-                <Sk className="h-4 w-full mb-1.5" />
-                <Sk className="h-4 w-full mb-2" />
-                <Sk className="h-3 w-16" />
-              </>
-            ) : (
-              <>
-                <p className="text-2xl font-bold text-[#1D9E75]">{formatCurrency(stats?.collectedThisMonth ?? 0, 'NGN')}</p>
-                <p className="text-xs text-muted mt-0.5 mb-3">collected this month</p>
-                {!stats?.recentPayments?.length ? (
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted">No payments yet</p>
-                    <Link href="/payments" className="text-xs text-green font-medium">Record payment →</Link>
-                  </div>
+          {/* Card 3: FIRS Rejections */}
+          <Link href="/submissions?status=REJECTED" className="block">
+            <div className={`rounded-xl border p-4 h-full hover:opacity-90 transition-opacity ${
+              statsLoading ? 'bg-white border-border' :
+              rejectedCount === 0 ? 'bg-white border-[#1D9E75] border-l-4 border-l-[#1D9E75]' :
+              'bg-white border-red-200 border-l-4 border-l-red-500'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-muted uppercase tracking-wide">FIRS Rejections</p>
+                {statsLoading ? null : rejectedCount === 0 ? (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
                 ) : (
-                  <div className="space-y-1.5">
-                    {stats.recentPayments.map((p, i) => (
-                      <div key={i} className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-dark truncate">
-                          {p.buyerName.length > 15 ? p.buyerName.slice(0, 15) + '…' : p.buyerName}
-                        </span>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-xs font-medium text-dark">{formatCurrency(p.amount, 'NGN')}</span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${providerPill(p.provider)}`}>
-                            {p.provider}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                    <Link href="/payments" className="text-xs text-green font-medium block pt-1">View all →</Link>
-                  </div>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
                 )}
-              </>
-            )}
-          </div>
+              </div>
+              {statsLoading ? (
+                <>
+                  <Sk className="h-7 w-16 mb-1.5" />
+                  <Sk className="h-3 w-32" />
+                </>
+              ) : rejectedCount === 0 ? (
+                <>
+                  <p className="text-2xl font-bold text-[#1D9E75]">All clear</p>
+                  <p className="text-xs text-green-600 mt-1">No rejected invoices</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-red-600">{rejectedCount}</p>
+                  <p className="text-xs text-red-500 mt-1 truncate">
+                    {firstRejection ? `${firstRejection.rejectionReason ?? 'Rejected'} · ${firstRejection.invoiceNumber?.slice(0, 12) ?? ''}` : `${rejectedCount} rejection${rejectedCount > 1 ? 's' : ''}`}
+                  </p>
+                </>
+              )}
+            </div>
+          </Link>
+
+          {/* Card 4: Stuck Submissions */}
+          <Link href="/submissions?status=QUEUED" className="block">
+            <div className={`rounded-xl border p-4 h-full transition-opacity ${
+              statsLoading ? 'bg-white border-border' :
+              stuckCount === 0 ? 'bg-white border-[#1D9E75] border-l-4 border-l-[#1D9E75]' :
+              'bg-white border-amber-200 border-l-4 border-l-amber-500'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-muted uppercase tracking-wide">Stuck Submissions</p>
+                {statsLoading ? null : stuckCount === 0 ? (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                  </svg>
+                )}
+              </div>
+              {statsLoading ? (
+                <>
+                  <Sk className="h-7 w-16 mb-1.5" />
+                  <Sk className="h-3 w-36" />
+                </>
+              ) : stuckCount === 0 ? (
+                <>
+                  <p className="text-2xl font-bold text-[#1D9E75]">Queue clear</p>
+                  <p className="text-xs text-green-600 mt-1">All submissions processing</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-amber-700">{stuckCount} stuck</p>
+                  <p className="text-xs text-amber-600 mt-1 mb-2">Invoices not reaching FIRS</p>
+                  <button
+                    onClick={(e) => { e.preventDefault(); void handleRetryAll(); }}
+                    disabled={retryingAll}
+                    className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-xs font-medium hover:bg-amber-200 transition-colors disabled:opacity-50"
+                  >
+                    {retryingAll ? 'Retrying…' : 'Retry all'}
+                  </button>
+                </>
+              )}
+            </div>
+          </Link>
         </div>
 
-        {/* ── Section 1: Financial Position (always expanded) ─────────────── */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between px-5 py-3.5 bg-gray-50 rounded-xl border border-border">
-            <span className="font-semibold text-dark text-sm">Financial Position</span>
-            <span className={`text-sm font-medium ${financialSummaryColor === 'green' ? 'text-[#1D9E75]' : financialSummaryColor === 'red' ? 'text-red-600' : 'text-gray-500'}`}>
-              {statsLoading || incomingStatsLoading ? '…' : financialSummary}
-            </span>
+        {/* ── Section 1: Financial Position (collapsible) ──────────────────── */}
+        {prefs.showFinancialPosition && (
+          <div className="space-y-0">
+            <SectionHeader
+              title="Financial Position"
+              summary={statsLoading || incomingStatsLoading ? '…' : financialSummary}
+              summaryColor={financialSummaryColor}
+              open={sections.financialPosition}
+              onToggle={() => toggleSection('financialPosition')}
+            />
+            <CollapsibleSection open={sections.financialPosition}>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <FinancialCard
+                    label="Outstanding Receivables"
+                    value={formatCurrency(outstandingAmount, 'NGN')}
+                    sub1={`${outstandingCount} invoice${outstandingCount !== 1 ? 's' : ''} · ${overdueCount} overdue`}
+                    color="green"
+                    href="/payments"
+                    loading={statsLoading}
+                  />
+                  <FinancialCard
+                    label="Expected Cash Collections"
+                    value={formatCurrency(expectedCash, 'NGN')}
+                    sub1={totalWhtExpected > 0 ? `After WHT deductions of ${formatCurrency(totalWhtExpected, 'NGN')}` : 'No WHT deductions pending'}
+                    color="green"
+                    href="/payments"
+                    loading={statsLoading}
+                  />
+                  <FinancialCard
+                    label="Outstanding Payables"
+                    value={formatCurrency(outstandingPayables, 'NGN')}
+                    sub1={`${outstandingPayablesCount} invoice${outstandingPayablesCount !== 1 ? 's' : ''} pending payment`}
+                    color="red"
+                    href="/incoming-invoices"
+                    loading={incomingStatsLoading}
+                  />
+                  <FinancialCard
+                    label="Net Cash Position"
+                    value={formatCurrency(Math.abs(netCash), 'NGN')}
+                    sub1={netCash > 0 ? 'Net receivable position' : netCash < 0 ? 'Net payable position' : 'Balanced position'}
+                    color={netCashPositive ? 'green' : netCashNegative ? 'red' : 'gray'}
+                    loading={statsLoading || incomingStatsLoading}
+                  />
+                </div>
+
+                {/* Payments card inside Financial Position */}
+                <div className="bg-white rounded-xl border border-border p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium text-muted uppercase tracking-wide">Payments</p>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" />
+                    </svg>
+                  </div>
+                  {statsLoading ? (
+                    <>
+                      <Sk className="h-7 w-28 mb-1" />
+                      <Sk className="h-3 w-36 mb-3" />
+                      <Sk className="h-4 w-full mb-1.5" />
+                      <Sk className="h-4 w-full mb-2" />
+                      <Sk className="h-3 w-16" />
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold text-[#1D9E75]">{formatCurrency(stats?.collectedThisMonth ?? 0, 'NGN')}</p>
+                      <p className="text-xs text-muted mt-0.5 mb-3">collected this month</p>
+                      {!stats?.recentPayments?.length ? (
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted">No payments yet</p>
+                          <Link href="/payments" className="text-xs text-green font-medium">Record payment →</Link>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {stats.recentPayments.map((p, i) => (
+                            <div key={i} className="flex items-center justify-between gap-2">
+                              <span className="text-xs text-dark truncate">
+                                {p.buyerName.length > 15 ? p.buyerName.slice(0, 15) + '…' : p.buyerName}
+                              </span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <span className="text-xs font-medium text-dark">{formatCurrency(p.amount, 'NGN')}</span>
+                                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${providerPill(p.provider)}`}>
+                                  {p.provider}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                          <Link href="/payments" className="text-xs text-green font-medium block pt-1">View all →</Link>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </CollapsibleSection>
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <FinancialCard
-              label="Outstanding Receivables"
-              value={formatCurrency(outstandingAmount, 'NGN')}
-              sub1={`${outstandingCount} invoice${outstandingCount !== 1 ? 's' : ''} · ${overdueCount} overdue`}
-              color="green"
-              href="/payments"
-              loading={statsLoading}
-            />
-            <FinancialCard
-              label="Expected Cash Collections"
-              value={formatCurrency(expectedCash, 'NGN')}
-              sub1={totalWhtExpected > 0 ? `After WHT deductions of ${formatCurrency(totalWhtExpected, 'NGN')}` : 'No WHT deductions pending'}
-              color="green"
-              href="/payments"
-              loading={statsLoading}
-            />
-            <FinancialCard
-              label="Outstanding Payables"
-              value={formatCurrency(outstandingPayables, 'NGN')}
-              sub1={`${outstandingPayablesCount} invoice${outstandingPayablesCount !== 1 ? 's' : ''} pending payment`}
-              color="red"
-              href="/incoming-invoices"
-              loading={incomingStatsLoading}
-            />
-            <FinancialCard
-              label="Net Cash Position"
-              value={formatCurrency(Math.abs(netCash), 'NGN')}
-              sub1={netCash > 0 ? 'Net receivable position' : netCash < 0 ? 'Net payable position' : 'Balanced position'}
-              color={netCashPositive ? 'green' : netCashNegative ? 'red' : 'gray'}
-              loading={statsLoading || incomingStatsLoading}
-            />
-          </div>
-        </div>
+        )}
 
         {/* ── Collapsible Section 2: Tax Position ─────────────────────────── */}
         {prefs.showTaxPosition && (
