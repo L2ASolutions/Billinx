@@ -395,15 +395,8 @@ function SentPanel() {
     setError("");
     try {
       const params: Record<string, string | number> = { page, limit: 20 };
-      if (activeTab === "ATTENTION") {
-        params.status = "QUEUED,SUBMITTING,VALIDATING,REJECTED,SUBMISSION_FAILED,DEAD_LETTERED,VALIDATION_FAILED";
-        params.isOverdue = "true";
-      } else if (activeTab === "ACCEPTED") {
-        params.status = "ACCEPTED";
-        params.paymentStatus = "UNPAID,PARTIAL";
-      } else if (activeTab === "PAID") {
-        params.paymentStatus = "PAID";
-      }
+      if (activeTab === "ACCEPTED") params.status = "ACCEPTED";
+      else if (activeTab === "PAID") params.paymentStatus = "PAID";
       if (search) params.search = search;
       const res = await invoiceApi.list(params);
       setInvoices(res.data as Invoice[]);
@@ -417,26 +410,35 @@ function SentPanel() {
     }
   }, [page, activeTab, search]);
 
-  // For "Needs attention", run two queries and merge: overdue + rejection/pending statuses
+  // "Needs attention" — one call per status (backend only accepts a single status value)
   const loadAttention = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const params: Record<string, string | number> = { page, limit: 20 };
-      if (search) params.search = search;
+      const base: Record<string, string | number> = { page, limit: 20 };
+      if (search) base.search = search;
 
-      const [rejRes, overdueRes] = await Promise.all([
-        invoiceApi.list({ ...params, status: "REJECTED,SUBMISSION_FAILED,DEAD_LETTERED,VALIDATION_FAILED,QUEUED,SUBMITTING,VALIDATING" }),
-        invoiceApi.list({ ...params, isOverdue: "true" }),
+      const [rejRes, sfRes, dlRes, vfRes, overdueRes] = await Promise.all([
+        invoiceApi.list({ ...base, status: "REJECTED" }),
+        invoiceApi.list({ ...base, status: "SUBMISSION_FAILED" }),
+        invoiceApi.list({ ...base, status: "DEAD_LETTERED" }),
+        invoiceApi.list({ ...base, status: "VALIDATION_FAILED" }),
+        invoiceApi.list({ ...base, isOverdue: "true" }),
       ]);
 
       const seen = new Set<string>();
       const merged: Invoice[] = [];
-      for (const inv of [...(rejRes.data as Invoice[]), ...(overdueRes.data as Invoice[])]) {
+      for (const inv of [
+        ...(rejRes.data as Invoice[]),
+        ...(sfRes.data as Invoice[]),
+        ...(dlRes.data as Invoice[]),
+        ...(vfRes.data as Invoice[]),
+        ...(overdueRes.data as Invoice[]),
+      ]) {
         if (!seen.has(inv.id)) { seen.add(inv.id); merged.push(inv); }
       }
       setInvoices(merged);
-      setTotal(rejRes.total + overdueRes.total);
+      setTotal(merged.length);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load invoices");
       setInvoices([]);
