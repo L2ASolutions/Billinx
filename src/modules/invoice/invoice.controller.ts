@@ -472,6 +472,14 @@ export class InvoiceController {
     });
   }
 
+  @Get('dashboard/sample')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get a static sample invoice for onboarding reference (dashboard / JWT auth)' })
+  getSampleInvoice() {
+    return this.invoiceService.getSampleInvoice();
+  }
+
   @Get('dashboard/stats')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
@@ -587,6 +595,24 @@ export class InvoiceController {
   async listPaymentsDashboard(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.paymentService.listPayments(id, ctx.tenantId);
+  }
+
+  @Post('dashboard/:id/duplicate')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Duplicate an invoice as a new DRAFT (dashboard / JWT auth)' })
+  async duplicateInvoiceDashboard(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.duplicateInvoice(
+      ctx.tenantId,
+      id,
+      ctx.actor,
+      ctx.environment,
+    );
   }
 
   @Post('dashboard/:id/submit')
