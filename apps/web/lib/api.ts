@@ -249,6 +249,9 @@ export const invoiceApi = {
     api.post<unknown>(`/v1/invoices/dashboard/${id}/send`),
   sendReminder: (id: string) =>
     api.post<unknown>(`/v1/invoices/dashboard/${id}/reminder`),
+  duplicate: (id: string) =>
+    api.post<unknown>(`/v1/invoices/dashboard/${id}/duplicate`, {}),
+  getSample: () => api.get<unknown>('/v1/invoices/dashboard/sample'),
 };
 
 // Payments list (tenant-wide)

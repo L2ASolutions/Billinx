@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { invoiceApi, incomingInvoiceApi, invalidateCache } from "@/lib/api";
 import { formatCurrency, formatDate, formatInvoiceNumber } from "@/lib/utils";
+import { SampleInvoiceModal } from "@/components/invoice/SampleInvoiceModal";
 
 // ── Copy pay-link button ──────────────────────────────────────────────────────
 
@@ -31,6 +32,43 @@ function CopyPayLinkButton({ invoiceId }: { invoiceId: string }) {
       {copied ? (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-green">
           <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+function DuplicateButton({ invoiceId }: { invoiceId: string }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  async function handleDuplicate(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setLoading(true);
+    try {
+      const res = await invoiceApi.duplicate(invoiceId) as { id: string };
+      router.push(`/invoices/${res.id}?duplicated=true`);
+    } catch {
+      alert("Failed to duplicate invoice.");
+    } finally {
+      setLoading(false);
+    }
+  }
+  return (
+    <button
+      onClick={handleDuplicate}
+      disabled={loading}
+      title="Duplicate invoice"
+      className="inline-flex items-center justify-center w-7 h-7 rounded-lg hover:bg-amber-50 text-muted hover:text-amber-600 transition-colors disabled:opacity-50"
+    >
+      {loading ? (
+        <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
         </svg>
       ) : (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -301,6 +339,7 @@ function SentPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showBulk, setShowBulk] = useState(false);
+  const [showSample, setShowSample] = useState(false);
   const [counts, setCounts] = useState<InvoiceCounts | null>(null);
 
   const load = useCallback(async () => {
@@ -385,7 +424,26 @@ function SentPanel() {
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               </svg>
             </div>
-            <p className="text-muted text-sm">No invoices found.</p>
+            {activeTab === "ALL" && counts?.total === 0 ? (
+              <>
+                <p className="text-dark font-semibold mb-1">No invoices yet</p>
+                <p className="text-muted text-sm mb-4">Create your first FIRS-compliant invoice</p>
+                <Link href="/invoices/new">
+                  <Button size="sm">Create invoice</Button>
+                </Link>
+                <p className="text-muted text-xs mt-4">
+                  Not sure what to include?{" "}
+                  <button
+                    onClick={() => setShowSample(true)}
+                    className="text-green hover:underline font-medium"
+                  >
+                    View a sample invoice →
+                  </button>
+                </p>
+              </>
+            ) : (
+              <p className="text-muted text-sm">No invoices found.</p>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -461,6 +519,7 @@ function SentPanel() {
                     <td className="px-6 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <div className="inline-flex items-center gap-1 justify-end">
                         {inv.status === "ACCEPTED" && <CopyPayLinkButton invoiceId={inv.id} />}
+                        {inv.status === "ACCEPTED" && <DuplicateButton invoiceId={inv.id} />}
                         {inv.status === "DRAFT" && (
                           <button
                             onClick={(e) => { e.stopPropagation(); router.push(`/invoices/new?id=${inv.id}`); }}
@@ -499,6 +558,7 @@ function SentPanel() {
       )}
 
       {showBulk && <BulkUploadModal onClose={() => setShowBulk(false)} />}
+      {showSample && <SampleInvoiceModal onClose={() => setShowSample(false)} />}
     </div>
   );
 }
