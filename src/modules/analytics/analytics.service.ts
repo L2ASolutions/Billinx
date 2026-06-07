@@ -300,4 +300,37 @@ export class AnalyticsService {
         invoiceCount: v.invoiceCount,
       }));
   }
+
+  async revenueVsExpenses(tenantId: string, months = 6) {
+    const now = new Date();
+    const result: Array<{
+      month: string;
+      revenue: number;
+      expenses: number;
+      net: number;
+    }> = [];
+
+    for (let i = months - 1; i >= 0; i--) {
+      const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+      const label = start.toLocaleString('en-NG', { month: 'short', year: 'numeric' });
+
+      const [revenueAgg, expensesAgg] = await Promise.all([
+        (this.prisma as any).invoice.aggregate({
+          where: { tenantId, status: 'ACCEPTED', createdAt: { gte: start, lt: end } },
+          _sum: { totalAmount: true },
+        }),
+        (this.prisma as any).incomingInvoice.aggregate({
+          where: { tenantId, createdAt: { gte: start, lt: end } },
+          _sum: { totalAmount: true },
+        }),
+      ]);
+
+      const revenue = Number(revenueAgg._sum.totalAmount ?? 0);
+      const expenses = Number(expensesAgg._sum.totalAmount ?? 0);
+      result.push({ month: label, revenue, expenses, net: revenue - expenses });
+    }
+
+    return result;
+  }
 }
