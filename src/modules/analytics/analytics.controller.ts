@@ -75,4 +75,20 @@ export class AnalyticsController {
       months ? parseInt(months, 10) : 6,
     );
   }
+
+  @Get('revenue-vs-expenses')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Monthly revenue vs expenses for last N months' })
+  @ApiQuery({ name: 'months', required: false })
+  async revenueVsExpenses(
+    @Req() req: Request,
+    @Query('months') months?: string,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.analyticsService.revenueVsExpenses(
+      ctx.tenantId,
+      months ? parseInt(months, 10) : 6,
+    );
+  }
 }
