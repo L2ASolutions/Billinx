@@ -1356,6 +1356,195 @@ export class InvoiceService {
     };
   }
 
+  // ── Duplicate invoice ────────────────────────────────────────────────────
+
+  async duplicateInvoice(
+    tenantId: string,
+    id: string,
+    actor: string,
+    environment: string,
+  ): Promise<InvoiceResponse & { isDuplicate: boolean }> {
+    const original = await this.invoiceRepository.findById(id);
+    if (!original || original.tenantId !== tenantId) {
+      throw new NotFoundException(`Invoice ${id} not found`);
+    }
+
+    const tenant = await this.prisma.asAdmin((tx) =>
+      tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { interswitchServiceId: true },
+      }),
+    );
+
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    const dueDate = new Date(today);
+    dueDate.setDate(dueDate.getDate() + 30);
+
+    const platformIrn = await this.irnService.generateUniqueIrn(
+      tenantId,
+      todayStr,
+      tenant?.interswitchServiceId ?? 'SVC00001',
+    );
+
+    const meta = (original.metadata as any) ?? {};
+    const newInvoice = await this.invoiceRepository.create({
+      tenantId,
+      environment,
+      schemaVersion: (original as any).schemaVersion ?? '2.0',
+      invoiceTypeCode: original.invoiceTypeCode,
+      invoiceKind: (original as any).invoiceKind ?? null,
+      platformIrn,
+      status: 'DRAFT',
+      issueDate: today,
+      dueDate,
+      currency: original.currency,
+      sellerTin: original.sellerTin,
+      sellerName: original.sellerName,
+      buyerTin: null,
+      buyerName: '',
+      subtotal: Number(original.subtotal),
+      vatAmount: Number(original.vatAmount),
+      totalAmount: Number(original.totalAmount),
+      amountPaid: 0,
+      paymentStatus: null,
+      lineItems: JSON.parse(JSON.stringify(original.lineItems ?? [])),
+      taxTotal: JSON.parse(JSON.stringify(original.taxTotal ?? [])),
+      legalMonetaryTotal: JSON.parse(JSON.stringify(original.legalMonetaryTotal ?? {})),
+      allowanceCharges: original.allowanceCharges
+        ? JSON.parse(JSON.stringify(original.allowanceCharges))
+        : null,
+      invoiceDeliveryPeriod: (original as any).invoiceDeliveryPeriod
+        ? JSON.parse(JSON.stringify((original as any).invoiceDeliveryPeriod))
+        : null,
+      note: original.note ?? null,
+      paymentTermsNote: (original as any).paymentTermsNote ?? null,
+      metadata: JSON.parse(
+        JSON.stringify({
+          ...meta,
+          sellerParty: meta.sellerParty ?? null,
+          buyerParty: null,
+          duplicatedFromId: original.id,
+        }),
+      ),
+    });
+
+    await this.invoiceRepository.addStateHistory({
+      invoiceId: newInvoice.id,
+      tenantId,
+      toStatus: 'DRAFT',
+      actor,
+      reason: `Duplicated from ${original.platformIrn}`,
+    });
+
+    this.activityService.track({
+      tenantId,
+      eventType: 'INVOICE_CREATED',
+      actor,
+      entityType: 'Invoice',
+      entityId: newInvoice.id,
+      payload: {
+        invoiceId: newInvoice.id,
+        platformIrn,
+        action: 'duplicated',
+        originalId: original.id,
+        originalIrn: original.platformIrn,
+      },
+    });
+
+    return { ...this.mapToResponse(newInvoice), isDuplicate: true };
+  }
+
+  // ── Sample invoice ────────────────────────────────────────────────────────
+
+  getSampleInvoice() {
+    return {
+      invoiceNumber: 'INV-2026-SAMPLE',
+      invoiceTypeCode: '381',
+      invoiceKind: 'B2B',
+      currency: 'NGN',
+      issueDate: '2026-06-01',
+      dueDate: '2026-07-01',
+      note: 'Payment due within 30 days',
+      seller: {
+        partyName: 'Your Company Name Ltd',
+        tin: '12345678-0001',
+        email: 'your@company.ng',
+        telephone: '+2348012345678',
+        postalAddress: {
+          streetName: '10 Your Street',
+          cityName: 'Lagos',
+          state: 'NG-LA',
+          lga: 'NG-LA-IK',
+          country: 'NG',
+        },
+      },
+      buyer: {
+        partyName: 'Customer Company Ltd',
+        tin: '87654321-0001',
+        email: 'customer@company.ng',
+        telephone: '+2348098765432',
+        postalAddress: {
+          streetName: '20 Customer Street',
+          cityName: 'Abuja',
+          state: 'NG-FC',
+          country: 'NG',
+        },
+      },
+      lineItems: [
+        {
+          hsnCode: '6201',
+          productCategory: 'Computer programming activities',
+          invoicedQuantity: 1,
+          lineExtensionAmount: 500000,
+          item: {
+            name: 'Software Development Services',
+            description: 'Monthly software development retainer',
+          },
+          price: {
+            priceAmount: 500000,
+            baseQuantity: 1,
+            priceUnit: 'EA',
+          },
+          taxCategory: {
+            id: 'STANDARD_VAT',
+            percent: 7.5,
+          },
+        },
+      ],
+      taxTotal: [
+        {
+          taxAmount: 37500,
+          taxSubtotal: [
+            {
+              taxableAmount: 500000,
+              taxAmount: 37500,
+              taxCategory: { id: 'STANDARD_VAT', percent: 7.5 },
+            },
+          ],
+        },
+      ],
+      legalMonetaryTotal: {
+        lineExtensionAmount: 500000,
+        taxExclusiveAmount: 500000,
+        taxInclusiveAmount: 537500,
+        payableAmount: 537500,
+      },
+      irn: 'INV20260001-SVC00001-20260601',
+      annotations: {
+        seller_partyName: 'Your registered business name',
+        seller_tin: 'Your FIRS Tax Identification Number',
+        seller_email: 'Business email for correspondence',
+        buyer_partyName: 'Your customer company name',
+        buyer_tin: 'Customer TIN (use RC-XXXXX if no TIN)',
+        lineItems_hsnCode: 'Product/service code from FIRS list',
+        lineItems_taxCategory: 'STANDARD_VAT = 7.5% Nigerian VAT',
+        irn: 'Auto-generated by Billinx when submitted',
+        legalMonetaryTotal: 'All amounts calculated automatically',
+      },
+    };
+  }
+
   // ── Send to buyer ─────────────────────────────────────────────────────────
 
   async sendToBuyer(invoiceId: string, tenantId: string) {

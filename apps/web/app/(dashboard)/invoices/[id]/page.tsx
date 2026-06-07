@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
@@ -457,6 +457,10 @@ function SubmissionProgress({ invoice, onCorrect }: { invoice: InvoiceDetail; on
 
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const isDuplicated = searchParams.get("duplicated") === "true";
+  const [showDuplicatedBanner, setShowDuplicatedBanner] = useState(isDuplicated);
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -464,6 +468,7 @@ export default function InvoiceDetailPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [xmlDownloading, setXmlDownloading] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
 
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
@@ -622,6 +627,32 @@ export default function InvoiceDetailPage() {
     window.location.href = `/invoices/new?originalIrn=${encodeURIComponent(invoice.platformIrn)}&type=${invoice.invoiceType}`;
   }
 
+  async function handleDuplicate() {
+    if (!invoice) return;
+    setDuplicating(true);
+    try {
+      const res = await invoiceApi.duplicate(invoice.id) as { id: string };
+      router.push(`/invoices/${res.id}?duplicated=true`);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to duplicate invoice.");
+    } finally {
+      setDuplicating(false);
+    }
+  }
+
+  async function handleCreateCreditNote() {
+    if (!invoice) return;
+    setDuplicating(true);
+    try {
+      const res = await invoiceApi.duplicate(invoice.id) as { id: string; platformIrn: string };
+      router.push(`/invoices/${res.id}?duplicated=true&creditNote=true&originalIrn=${encodeURIComponent(invoice.platformIrn)}`);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to create credit note.");
+    } finally {
+      setDuplicating(false);
+    }
+  }
+
   if (loading) {
     return (
       <>
@@ -732,6 +763,9 @@ export default function InvoiceDetailPage() {
               <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadPdf}>
                 Download PDF
               </Button>
+              <Button variant="secondary" size="sm" loading={duplicating} onClick={handleDuplicate}>
+                Duplicate
+              </Button>
             </>
           )}
           {isRejected && (
@@ -753,11 +787,53 @@ export default function InvoiceDetailPage() {
       </div>
 
       <div className="p-6 space-y-6 pb-24">
+        {/* Duplicated banner */}
+        {showDuplicatedBanner && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="2" className="text-amber-600 shrink-0 mt-0.5">
+                <rect x="9" y="9" width="13" height="13" rx="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+              <div>
+                <p className="text-sm font-semibold text-amber-800">Invoice duplicated</p>
+                <p className="text-sm text-amber-700 mt-0.5">
+                  Update the buyer details and dates, then submit when ready.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowDuplicatedBanner(false)}
+              className="text-amber-500 hover:text-amber-700 shrink-0"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        )}
+
         {/* Overdue banner */}
         {invoice.isOverdue && <OverdueBanner dueDate={invoice.paymentDueDate} />}
 
         {/* Accepted banner */}
         {isAccepted && <AcceptedBanner invoice={invoice} />}
+
+        {/* Create credit note — accepted invoices */}
+        {isAccepted && (
+          <div className="bg-white rounded-xl border border-border px-5 py-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-dark">Need to issue a credit note?</p>
+              <p className="text-sm text-muted mt-0.5">
+                Creates a new credit note pre-filled from this invoice.
+              </p>
+            </div>
+            <Button variant="secondary" size="sm" loading={duplicating} onClick={handleCreateCreditNote}>
+              Create credit note
+            </Button>
+          </div>
+        )}
 
         {/* FIRS details (accepted) */}
         {isAccepted && (
@@ -979,6 +1055,9 @@ export default function InvoiceDetailPage() {
             >
               Send to buyer
             </button>
+            <Button variant="secondary" size="sm" loading={duplicating} onClick={handleDuplicate}>
+              Duplicate
+            </Button>
             <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadPdf}>
               Download PDF
             </Button>

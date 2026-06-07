@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { api, invoiceApi, productApi, referenceApi, clientApi, ClientRecord } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { SampleInvoiceModal } from "@/components/invoice/SampleInvoiceModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -492,6 +493,7 @@ function NewInvoiceForm() {
   const [error, setError] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [showCatalog, setShowCatalog] = useState<number | null>(null);
+  const [showSample, setShowSample] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [draftSaving, setDraftSaving] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
@@ -885,6 +887,16 @@ function NewInvoiceForm() {
     <>
       <Topbar title={draftLoaded ? "Continue editing draft" : "Create invoice"} />
       <div className="p-6">
+        <div className="max-w-4xl flex justify-end mb-2">
+          <button
+            type="button"
+            onClick={() => setShowSample(true)}
+            className="text-xs text-muted hover:text-green transition-colors"
+          >
+            View sample invoice →
+          </button>
+        </div>
+        {showSample && <SampleInvoiceModal onClose={() => setShowSample(false)} />}
         {draftLoaded && (
           <div className="max-w-4xl mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex items-center gap-2">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
