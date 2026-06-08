@@ -19,9 +19,14 @@ export function getInvoiceStatusPill(inv: {
     return { label: "Overdue", cls: "bg-red-100 text-red-800" };
   }
 
-  // 2. Needs attention — FIRS rejected or failed states
-  if (["REJECTED", "SUBMISSION_FAILED", "DEAD_LETTERED", "VALIDATION_FAILED", "PENDING_RESUBMISSION"].includes(inv.status)) {
-    return { label: "Needs attention", cls: "bg-amber-100 text-amber-800" };
+  // 2. Rejected — FIRS rejected
+  if (inv.status === "REJECTED") {
+    return { label: "Rejected", cls: "bg-red-100 text-red-800" };
+  }
+
+  // 3. Failed states — needs resubmission
+  if (["SUBMISSION_FAILED", "DEAD_LETTERED", "VALIDATION_FAILED", "PENDING_RESUBMISSION"].includes(inv.status)) {
+    return { label: "Failed", cls: "bg-red-50 text-red-700" };
   }
 
   // 3. Accepted — FIRS accepted, not yet paid
@@ -44,7 +49,7 @@ export function getInvoiceStatusPill(inv: {
     return { label: "Submitting", cls: "bg-blue-50 text-blue-700" };
   }
   if (inv.status === "QUEUED" || inv.status === "VALIDATING") {
-    return { label: "Processing", cls: "bg-amber-50 text-amber-700" };
+    return { label: "Pending", cls: "bg-amber-100 text-amber-800" };
   }
 
   // 7. Draft
