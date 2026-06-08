@@ -18,6 +18,8 @@ import { UserService } from './services/user.service';
 import { MfaService } from './services/mfa.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { Roles } from '../../shared/decorators/roles.decorator';
 import { AuthRateLimitGuard } from '../../shared/guards/auth-rate-limit.guard';
 import { getRequestContext } from '../../shared/context/request-context';
 import {
@@ -283,7 +285,8 @@ export class UserController {
   }
 
   @Patch('tenants/me')
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update current tenant profile' })
   async updateMyTenant(@Body() body: Record<string, any>) {
@@ -342,21 +345,23 @@ export class UserController {
 
   @Post('users/invite')
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Invite a new user to the tenant' })
   async inviteUser(@Body() body: Record<string, any>) {
     const ctx = getRequestContext();
     return this.userService.inviteUser(
       ctx.tenantId,
-      ctx.actor,
+      ctx.actor.replace('user:', ''),
       body as InviteUserRequest,
     );
   }
 
   @Post('users/:id/roles')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Assign role to user' })
   async assignRole(@Param('id') id: string, @Body() body: Record<string, any>) {
@@ -370,7 +375,8 @@ export class UserController {
 
   @Delete('users/:id/roles/:role')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Remove role from user' })
   async removeRole(@Param('id') id: string, @Param('role') role: string) {
@@ -379,7 +385,8 @@ export class UserController {
 
   @Delete('users/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Deactivate (soft-delete) a user from the tenant' })
   async deactivateUser(@Param('id') id: string) {

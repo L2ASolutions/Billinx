@@ -9,25 +9,57 @@ import { formatDate } from "@/lib/utils";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const ROLES = ["VIEWER", "ACCOUNTANT", "API_MANAGER", "ADMIN"] as const;
+const INVITE_ROLES = ["ADMIN", "ACCOUNTANT", "API_MANAGER", "VIEWER"] as const;
 
 const ROLE_COLORS: Record<string, string> = {
-  OWNER:       "bg-purple-50 text-purple-700",
-  ADMIN:       "bg-blue-50 text-blue-700",
-  ACCOUNTANT:  "bg-green-50 text-green-700",
-  API_MANAGER: "bg-amber-50 text-amber-700",
-  VIEWER:      "bg-gray-100 text-gray-600",
+  OWNER:       "bg-emerald-50 text-emerald-700 border border-emerald-200",
+  ADMIN:       "bg-blue-50 text-blue-700 border border-blue-200",
+  ACCOUNTANT:  "bg-amber-50 text-amber-700 border border-amber-200",
+  API_MANAGER: "bg-purple-50 text-purple-700 border border-purple-200",
+  VIEWER:      "bg-gray-100 text-gray-600 border border-gray-200",
+};
+
+const ROLE_DISPLAY: Record<string, string> = {
+  OWNER:       "Owner",
+  ADMIN:       "Admin",
+  ACCOUNTANT:  "Invoice Creator",
+  API_MANAGER: "API Manager",
+  VIEWER:      "Viewer",
 };
 
 const ROLE_DESC: Record<string, string> = {
+  ADMIN:       "Full access except API keys and account deletion",
+  ACCOUNTANT:  "Can create and manage invoices. Cannot access settings or payments",
+  API_MANAGER: "Manage API keys and webhook integrations only",
   VIEWER:      "Read-only access to invoices and reports",
-  ACCOUNTANT:  "Create and manage invoices, record payments",
-  API_MANAGER: "Manage API keys and webhook integrations",
-  ADMIN:       "Full access except billing and owner settings",
-  OWNER:       "Full access including billing and team management",
 };
 
+// ── Permission matrix ─────────────────────────────────────────────────────────
+
+const PERMISSIONS: Array<{
+  label: string;
+  owner: boolean;
+  admin: boolean;
+  accountant: boolean;
+  viewer: boolean;
+}> = [
+  { label: "Create invoices",       owner: true,  admin: true,  accountant: true,  viewer: false },
+  { label: "View all invoices",     owner: true,  admin: true,  accountant: true,  viewer: true  },
+  { label: "Cancel invoices",       owner: true,  admin: true,  accountant: false, viewer: false },
+  { label: "Record payments",       owner: true,  admin: true,  accountant: false, viewer: false },
+  { label: "Manage team members",   owner: true,  admin: true,  accountant: false, viewer: false },
+  { label: "Manage API keys",       owner: true,  admin: false, accountant: false, viewer: false },
+  { label: "Manage webhooks",       owner: true,  admin: true,  accountant: false, viewer: false },
+  { label: "View activity reports", owner: true,  admin: true,  accountant: false, viewer: true  },
+  { label: "Manage account settings", owner: true, admin: true, accountant: false, viewer: false },
+  { label: "Manage products",       owner: true,  admin: true,  accountant: true,  viewer: false },
+  { label: "Export reports",        owner: true,  admin: true,  accountant: false, viewer: true  },
+  { label: "View VAT reports",      owner: true,  admin: true,  accountant: false, viewer: true  },
+];
+
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+type Tab = "members" | "invitations" | "permissions";
 
 interface Member {
   id: string;
@@ -50,6 +82,31 @@ interface Invitation {
 
 function Sk({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse bg-gray-100 rounded ${className}`} />;
+}
+
+// ── Permission cell ───────────────────────────────────────────────────────────
+
+function PermCell({ allowed }: { allowed: boolean }) {
+  if (allowed) {
+    return (
+      <td className="px-4 py-3 text-center">
+        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-50">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M2 6l3 3 5-5" stroke="#059669" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </td>
+    );
+  }
+  return (
+    <td className="px-4 py-3 text-center">
+      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-50">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M2 2l6 6M8 2l-6 6" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </span>
+    </td>
+  );
 }
 
 // ── Invite modal ──────────────────────────────────────────────────────────────
@@ -102,7 +159,7 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             <div>
               <label className="block text-sm font-medium text-dark mb-2">Role</label>
               <div className="space-y-2">
-                {ROLES.map((r) => (
+                {INVITE_ROLES.map((r) => (
                   <label key={r}
                     className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                       role === r ? "border-green bg-green-light" : "border-border hover:bg-surface"
@@ -113,10 +170,10 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                       value={r}
                       checked={role === r}
                       onChange={() => setRole(r)}
-                      className="mt-0.5 text-green focus:ring-green/30"
+                      className="mt-0.5 text-green focus:ring-green/30 shrink-0"
                     />
                     <div>
-                      <p className="text-sm font-medium text-dark">{r.replace(/_/g, " ")}</p>
+                      <p className="text-sm font-medium text-dark">{ROLE_DISPLAY[r]}</p>
                       <p className="text-xs text-muted">{ROLE_DESC[r]}</p>
                     </div>
                   </label>
@@ -137,6 +194,7 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TeamPage() {
+  const [tab, setTab] = useState<Tab>("members");
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -149,8 +207,6 @@ export default function TeamPage() {
     setLoadError("");
     try {
       const res = await userApi.list();
-      // Backend returns { data: UserResponse[], total } where UserResponse has
-      // fullName (not name) and roles: string[] (not role: string).
       const rawData = Array.isArray(res) ? res : ((res as any).data ?? []);
       const data: (Member & { status?: string })[] = (rawData as any[]).map((u: any) => ({
         id: u.id,
@@ -162,7 +218,6 @@ export default function TeamPage() {
         status: u.status,
       }));
       setMembers(data.filter((u) => u.isActive !== false));
-      // Surface pending invitations if backend returns them in the same list
       setInvitations(data.filter((u) => u.status === "PENDING") as unknown as Invitation[]);
     } catch (err: unknown) {
       setLoadError(err instanceof Error ? err.message : "Failed to load team");
@@ -192,6 +247,12 @@ export default function TeamPage() {
   const activeMembers = members.filter((m) => m.isActive !== false);
   const inactiveMembers = members.filter((m) => m.isActive === false);
 
+  const TABS: Array<{ key: Tab; label: string; count?: number }> = [
+    { key: "members",     label: "Active members",      count: activeMembers.length },
+    { key: "invitations", label: "Pending invitations", count: invitations.length   },
+    { key: "permissions", label: "Role permissions"                                  },
+  ];
+
   return (
     <>
       <Topbar
@@ -211,74 +272,133 @@ export default function TeamPage() {
           <div className="p-3 bg-green-light border border-green/20 rounded-xl text-sm text-dark">{successMsg}</div>
         )}
 
-        {/* Active members */}
-        <div className="bg-white rounded-xl border border-border overflow-hidden">
-          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-            <h2 className="font-semibold text-dark">Active members</h2>
-            {!loading && (
-              <span className="text-sm text-muted">{activeMembers.length} member{activeMembers.length !== 1 ? "s" : ""}</span>
-            )}
-          </div>
-          {loading ? (
-            <div className="p-6 space-y-3">
-              {[0, 1, 2].map((i) => <Sk key={i} className="h-14 w-full" />)}
-            </div>
-          ) : activeMembers.length === 0 ? (
-            <div className="py-12 text-center text-muted text-sm">No active members.</div>
-          ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  {["Member", "Email", "Role", "Joined", ""].map((col, i) => (
-                    <th key={col}
-                      className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${i === 4 ? "text-right" : "text-left"}`}>
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {activeMembers.map((m) => (
-                  <tr key={m.id} className="border-b border-border last:border-0 hover:bg-surface transition-colors">
-                    <td className="px-6 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-green-light flex items-center justify-center text-green text-sm font-bold shrink-0">
-                          {m.name?.[0]?.toUpperCase() ?? "?"}
-                        </div>
-                        <span className="text-sm font-medium text-dark">{m.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-3 text-sm text-muted">{m.email}</td>
-                    <td className="px-6 py-3">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[m.role] ?? "bg-gray-100 text-gray-600"}`}>
-                        {m.role?.replace(/_/g, " ") ?? m.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-sm text-muted">{formatDate(m.createdAt)}</td>
-                    <td className="px-6 py-3 text-right">
-                      {m.role !== "OWNER" && (
-                        <button
-                          onClick={() => handleRemove(m.id, m.name)}
-                          className="text-xs text-red-400 hover:text-red-600 transition-colors">
-                          Remove
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+        {/* Tab bar */}
+        <div className="border-b border-border">
+          <nav className="flex gap-1 -mb-px">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                  tab === t.key
+                    ? "border-green text-green"
+                    : "border-transparent text-muted hover:text-dark hover:border-gray-300"
+                }`}
+              >
+                {t.label}
+                {t.count !== undefined && !loading && (
+                  <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs ${
+                    tab === t.key ? "bg-green-light text-green" : "bg-gray-100 text-muted"
+                  }`}>
+                    {t.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
         </div>
 
-        {/* Pending invitations */}
-        {(invitations.length > 0 || (!loading && members.length === 0)) && (
+        {/* ── Active members tab ─────────────────────────────────────────── */}
+        {tab === "members" && (
+          <div className="bg-white rounded-xl border border-border overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="font-semibold text-dark">Active members</h2>
+              {!loading && (
+                <span className="text-sm text-muted">{activeMembers.length} member{activeMembers.length !== 1 ? "s" : ""}</span>
+              )}
+            </div>
+            {loading ? (
+              <div className="p-6 space-y-3">
+                {[0, 1, 2].map((i) => <Sk key={i} className="h-14 w-full" />)}
+              </div>
+            ) : activeMembers.length === 0 ? (
+              <div className="py-12 text-center text-muted text-sm">No active members.</div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    {["Member", "Email", "Role", "Joined", ""].map((col, i) => (
+                      <th key={col}
+                        className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${i === 4 ? "text-right" : "text-left"}`}>
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeMembers.map((m) => (
+                    <tr key={m.id} className="border-b border-border last:border-0 hover:bg-surface transition-colors">
+                      <td className="px-6 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-green-light flex items-center justify-center text-green text-sm font-bold shrink-0">
+                            {m.name?.[0]?.toUpperCase() ?? "?"}
+                          </div>
+                          <span className="text-sm font-medium text-dark">{m.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-3 text-sm text-muted">{m.email}</td>
+                      <td className="px-6 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[m.role] ?? "bg-gray-100 text-gray-600"}`}>
+                          {ROLE_DISPLAY[m.role] ?? m.role?.replace(/_/g, " ") ?? m.role}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3 text-sm text-muted">{formatDate(m.createdAt)}</td>
+                      <td className="px-6 py-3 text-right">
+                        {m.role !== "OWNER" && (
+                          <button
+                            onClick={() => handleRemove(m.id, m.name)}
+                            className="text-xs text-red-400 hover:text-red-600 transition-colors">
+                            Remove
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {/* Deactivated members */}
+            {inactiveMembers.length > 0 && (
+              <div className="border-t border-border">
+                <div className="px-6 py-3 bg-gray-50">
+                  <span className="text-xs font-medium text-muted uppercase tracking-wide">Deactivated</span>
+                </div>
+                <table className="w-full">
+                  <tbody>
+                    {inactiveMembers.map((m) => (
+                      <tr key={m.id} className="border-b border-border last:border-0 opacity-50">
+                        <td className="px-6 py-3 text-sm text-dark">{m.name}</td>
+                        <td className="px-6 py-3 text-sm text-muted">{m.email}</td>
+                        <td className="px-6 py-3">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
+                            {ROLE_DISPLAY[m.role] ?? m.role?.replace(/_/g, " ") ?? m.role}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3">
+                          <span className="text-xs text-muted">Deactivated</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Pending invitations tab ────────────────────────────────────── */}
+        {tab === "invitations" && (
           <div className="bg-white rounded-xl border border-border overflow-hidden">
             <div className="px-6 py-4 border-b border-border">
               <h2 className="font-semibold text-dark">Pending invitations</h2>
             </div>
-            {invitations.length === 0 ? (
-              <div className="py-10 text-center">
+            {loading ? (
+              <div className="p-6 space-y-3">
+                {[0, 1].map((i) => <Sk key={i} className="h-12 w-full" />)}
+              </div>
+            ) : invitations.length === 0 ? (
+              <div className="py-12 text-center">
                 <p className="text-sm text-muted">No pending invitations</p>
                 <button onClick={() => setShowInvite(true)}
                   className="mt-2 text-sm text-green hover:underline font-medium">
@@ -302,7 +422,7 @@ export default function TeamPage() {
                       <td className="px-6 py-3 text-sm text-dark">{inv.email}</td>
                       <td className="px-6 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[inv.role] ?? "bg-gray-100 text-gray-600"}`}>
-                          {inv.role?.replace(/_/g, " ") ?? inv.role}
+                          {ROLE_DISPLAY[inv.role] ?? inv.role?.replace(/_/g, " ") ?? inv.role}
                         </span>
                       </td>
                       <td className="px-6 py-3 text-sm text-muted">{formatDate(inv.createdAt)}</td>
@@ -317,30 +437,58 @@ export default function TeamPage() {
           </div>
         )}
 
-        {/* Inactive / deactivated members */}
-        {inactiveMembers.length > 0 && (
+        {/* ── Role permissions tab ───────────────────────────────────────── */}
+        {tab === "permissions" && (
           <div className="bg-white rounded-xl border border-border overflow-hidden">
-            <div className="px-6 py-4 border-b border-border">
-              <h2 className="font-semibold text-dark text-muted">Deactivated</h2>
+            <div className="px-6 py-5 border-b border-border">
+              <h2 className="font-semibold text-dark">Role permissions</h2>
+              <p className="mt-0.5 text-sm text-muted">What each role can access in your Billinx account</p>
             </div>
-            <table className="w-full">
-              <tbody>
-                {inactiveMembers.map((m) => (
-                  <tr key={m.id} className="border-b border-border last:border-0 opacity-50">
-                    <td className="px-6 py-3 text-sm text-dark">{m.name}</td>
-                    <td className="px-6 py-3 text-sm text-muted">{m.email}</td>
-                    <td className="px-6 py-3">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
-                        {m.role?.replace(/_/g, " ") ?? m.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3">
-                      <span className="text-xs text-muted">Deactivated</span>
-                    </td>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border bg-gray-50">
+                    <th className="px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide text-left w-64">
+                      Permission
+                    </th>
+                    {[
+                      { label: "Owner",           color: "bg-emerald-100 text-emerald-700" },
+                      { label: "Admin",            color: "bg-blue-100 text-blue-700"      },
+                      { label: "Invoice Creator",  color: "bg-amber-100 text-amber-700"    },
+                      { label: "Viewer",           color: "bg-gray-100 text-gray-600"      },
+                    ].map(({ label, color }) => (
+                      <th key={label} className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${color}`}>
+                          {label}
+                        </span>
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {PERMISSIONS.map((perm, idx) => (
+                    <tr key={perm.label} className={`border-b border-border last:border-0 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}`}>
+                      <td className="px-6 py-3 text-sm text-dark font-medium">{perm.label}</td>
+                      <PermCell allowed={perm.owner}      />
+                      <PermCell allowed={perm.admin}      />
+                      <PermCell allowed={perm.accountant} />
+                      <PermCell allowed={perm.viewer}     />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="px-6 py-4 bg-gray-50 border-t border-border">
+              <p className="text-xs text-muted">
+                Permissions are determined by role. To change a team member&apos;s permissions, update their role in the{" "}
+                <button onClick={() => setTab("members")} className="text-green hover:underline font-medium">
+                  Active members
+                </button>{" "}
+                section.
+              </p>
+            </div>
           </div>
         )}
       </div>

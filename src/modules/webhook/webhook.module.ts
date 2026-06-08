@@ -10,6 +10,7 @@ import { TokenService } from '../identity/services/token.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';
 import { ApiKeyGuard } from '../identity/guards/api-key.guard';
 import { FlexAuthGuard } from '../identity/guards/flex-auth.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
 import { EmailModule } from '../../shared/email/email.module';
 import { ActivityModule } from '../activity/activity.module';
 
@@ -27,6 +28,7 @@ import { ActivityModule } from '../activity/activity.module';
     JwtGuard,
     ApiKeyGuard,
     FlexAuthGuard,
+    RolesGuard,
   ],
   exports: [WebhookService],
 })

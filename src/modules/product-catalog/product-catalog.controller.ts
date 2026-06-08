@@ -21,6 +21,8 @@ import {
 import { Request } from 'express';
 import { ProductCatalogService } from './product-catalog.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { Roles } from '../../shared/decorators/roles.decorator';
 @ApiTags('Products')
 @Controller('v1/products')
 export class ProductCatalogController {
@@ -94,7 +96,8 @@ export class ProductCatalogController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a product from the catalog' })
   async deleteProduct(@Param('id') id: string, @Req() req: Request) {
