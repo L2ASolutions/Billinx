@@ -695,4 +695,8 @@ export const analyticsApi = {
   topClients: () => api.get<unknown[]>('/v1/analytics/top-clients'),
   priceTrends: (itemName: string, months = 6) =>
     api.get<unknown[]>(`/v1/analytics/price-trends?itemName=${encodeURIComponent(itemName)}&months=${months}`),
+  revenueVsExpenses: (months = 6) =>
+    api.get<{ month: string; revenue: number; expenses: number; net: number }[]>(
+      `/v1/analytics/revenue-vs-expenses?months=${months}`,
+    ),
 };
