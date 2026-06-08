@@ -19,6 +19,8 @@ import {
   UpdateReminderRuleDto,
 } from './services/reminder.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { Roles } from '../../shared/decorators/roles.decorator';
 
 @ApiTags('Reminder Rules')
 @Controller('v1/reminder-rules')
@@ -40,6 +42,8 @@ export class ReminderController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(RolesGuard)
+  @Roles('OWNER', 'ADMIN')
   @ApiOperation({ summary: 'Create a custom reminder rule' })
   async createRule(@Req() req: Request, @Body() body: CreateReminderRuleDto) {
     const { tenantId } = this.getCtx(req);
@@ -61,6 +65,8 @@ export class ReminderController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(RolesGuard)
+  @Roles('OWNER', 'ADMIN')
   @ApiOperation({ summary: 'Delete a reminder rule' })
   async deleteRule(@Req() req: Request, @Param('id') id: string) {
     const { tenantId } = this.getCtx(req);

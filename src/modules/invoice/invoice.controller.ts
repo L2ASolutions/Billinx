@@ -31,6 +31,8 @@ import { PaymentService } from './services/payment.service';
 import { ExportService } from '../export/export.service';
 import { ApiKeyGuard } from '../identity/guards/api-key.guard';
 import { JwtGuard } from '../identity/guards/jwt.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { Roles } from '../../shared/decorators/roles.decorator';
 import {
   InvoiceFilterParams,
   InvoiceStatus,
@@ -380,7 +382,8 @@ export class InvoiceController {
 
   @Post('dashboard/save-draft')
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Save a new DRAFT invoice without queuing for FIRS submission' })
   async saveDraftDashboard(
@@ -411,7 +414,8 @@ export class InvoiceController {
   }
 
   @Post('dashboard')
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create invoice from dashboard (JWT auth)' })
   async createInvoiceDashboard(
@@ -546,7 +550,8 @@ export class InvoiceController {
 
   @Patch('dashboard/:id/cancel')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cancel an invoice (dashboard / JWT auth)' })
   async cancelInvoiceDashboard(
@@ -565,7 +570,8 @@ export class InvoiceController {
 
   @Post('dashboard/:id/payments')
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN')
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Record a payment against an invoice (dashboard / JWT auth)',
