@@ -28,6 +28,13 @@ export function formatCurrency(amount: number, currency = 'NGN'): string {
   }).format(amount);
 }
 
+export function formatCurrencyShort(amount: number, currency = 'NGN'): string {
+  const symbol = currency === 'NGN' ? '₦' : currency + ' ';
+  if (amount >= 1_000_000) return `${symbol}${(amount / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (amount >= 1_000) return `${symbol}${Math.round(amount / 1_000)}K`;
+  return formatCurrency(amount, currency);
+}
+
 export function formatInvoiceNumber(inv: {
   invoiceNumber?: string;
   platformIrn?: string;
