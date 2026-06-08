@@ -3,12 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { invoiceApi, incomingInvoiceApi, invalidateCache } from "@/lib/api";
 import { formatCurrency, formatDate, formatInvoiceNumber } from "@/lib/utils";
+import { getInvoiceStatusPill } from "@/lib/invoice-utils";
 import { SampleInvoiceModal } from "@/components/invoice/SampleInvoiceModal";
 
 // ── Copy pay-link button ──────────────────────────────────────────────────────
@@ -34,7 +34,6 @@ function CopyPayLinkButton({ invoiceId }: { invoiceId: string }) {
           <polyline points="20 6 9 17 4 12" />
         </svg>
       ) : (
-        /* Link2 — chain link icon, clearly represents a URL/link */
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M9 17H7A5 5 0 0 1 7 7h2"/>
           <path d="M15 7h2a5 5 0 1 1 0 10h-2"/>
@@ -73,7 +72,6 @@ function DuplicateButton({ invoiceId }: { invoiceId: string }) {
           <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
         </svg>
       ) : (
-        /* Files icon — two overlapping document pages, clearly "duplicate a file" */
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M3 7a2 2 0 0 1 2-2h9l5 5v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>
           <path d="M14 2v5h5"/>
@@ -85,30 +83,22 @@ function DuplicateButton({ invoiceId }: { invoiceId: string }) {
   );
 }
 
-async function sendReminder(invoiceId: string, e: React.MouseEvent) {
-  e.stopPropagation();
-  try {
-    await invoiceApi.sendReminder(invoiceId);
-    alert("Payment reminder sent.");
-  } catch {
-    alert("Failed to send reminder.");
-  }
-}
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Invoice {
   id: string;
   platformIrn: string;
   buyerName: string;
+  buyer?: { email?: string; partyName?: string };
   totalAmount: number;
+  amountPaid?: number;
   currency: string;
   status: string;
   invoiceType: string;
   firsConfirmedIrn?: string;
-  rejectionCode?: string;
   paymentStatus?: string;
   isOverdue?: boolean;
+  dueDate?: string;
   paymentDueDate?: string;
   createdAt: string;
 }
@@ -116,81 +106,89 @@ interface Invoice {
 interface IncomingInvoice {
   id: string;
   supplierName?: string;
+  supplierEmail?: string;
   supplierTin?: string;
   platformIrn?: string;
+  invoiceNumber?: string;
   issueDate?: string;
   dueDate?: string;
   totalAmount?: number;
-  vatAmount?: number;
   currency?: string;
   status: string;
+  paymentStatus?: string;
   createdAt: string;
 }
 
 interface BulkBatchStatus {
   batchId: string;
   total: number;
-  queued: number;
-  processing: number;
   accepted: number;
   rejected: number;
-  failed: number;
   percentComplete: number;
   status: string;
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Received status pill (incoming invoices) ──────────────────────────────────
 
-const STATUS_TABS = [
-  { key: "ALL",      label: "All" },
-  { key: "ACCEPTED", label: "Accepted" },
-  { key: "PENDING",  label: "Pending" },
-  { key: "REJECTED", label: "Rejected" },
-  { key: "DRAFT",    label: "Draft" },
-  { key: "OVERDUE",  label: "Overdue" },
-] as const;
+function receivedStatusPill(inv: IncomingInvoice) {
+  if (inv.paymentStatus === "PAID" || inv.status === "PAID") {
+    return { label: "Paid", cls: "bg-green-100 text-green-800", strikethrough: false };
+  }
+  if (inv.status === "APPROVED") {
+    return { label: "Approved", cls: "bg-green-50 text-green-700 ring-1 ring-green-200", strikethrough: false };
+  }
+  if (inv.status === "VALIDATED") {
+    return { label: "Validated", cls: "bg-blue-50 text-blue-700", strikethrough: false };
+  }
+  if (inv.status === "RECEIVED") {
+    return { label: "To review", cls: "bg-amber-100 text-amber-800", strikethrough: false };
+  }
+  if (inv.status === "REJECTED") {
+    return { label: "Rejected", cls: "bg-red-100 text-red-800", strikethrough: false };
+  }
+  return { label: inv.status, cls: "bg-gray-100 text-gray-600", strikethrough: false };
+}
 
-type StatusTab = typeof STATUS_TABS[number]["key"];
+// ── Due date cell ─────────────────────────────────────────────────────────────
 
-const INCOMING_STATUS_TABS = [
-  { key: "ALL",       label: "All" },
-  { key: "RECEIVED",  label: "Received" },
-  { key: "VALIDATED", label: "Validated" },
-  { key: "APPROVED",  label: "Approved" },
-  { key: "PAID",      label: "Paid" },
-  { key: "REJECTED",  label: "Rejected" },
-] as const;
+function DueDateCell({ dueDate, isOverdue }: { dueDate?: string; isOverdue?: boolean }) {
+  if (!dueDate) return <span className="text-sm text-muted">—</span>;
 
-type IncomingStatusTab = typeof INCOMING_STATUS_TABS[number]["key"];
+  const due = new Date(dueDate);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const diffDays = Math.round((dueDay.getTime() - today.getTime()) / 86400000);
 
-const STATUS_COLORS: Record<string, string> = {
-  ACCEPTED:          "bg-green-50 text-green-700",
-  REJECTED:          "bg-red-50 text-red-600",
-  DRAFT:             "bg-gray-100 text-gray-600",
-  QUEUED:            "bg-blue-50 text-blue-600",
-  SUBMITTING:        "bg-amber-50 text-amber-700",
-  SUBMITTED:         "bg-blue-50 text-blue-700",
-  VALIDATION_FAILED: "bg-red-50 text-red-600",
-  SUBMISSION_FAILED: "bg-red-50 text-red-600",
-  DEAD_LETTERED:     "bg-red-100 text-red-700",
-  CANCELLED:         "bg-gray-100 text-gray-500",
-  VALIDATING:        "bg-blue-50 text-blue-600",
-};
+  if (isOverdue || diffDays < 0) {
+    const days = Math.abs(diffDays);
+    return (
+      <div>
+        <span className="text-sm text-red-600 font-medium">{formatDate(dueDate)}</span>
+        <p className="text-xs text-red-500 mt-0.5">{days} day{days !== 1 ? "s" : ""} ago</p>
+      </div>
+    );
+  }
+  if (diffDays === 0) {
+    return (
+      <div>
+        <span className="text-sm text-amber-600 font-medium">{formatDate(dueDate)}</span>
+        <p className="text-xs text-amber-500 mt-0.5">Due today</p>
+      </div>
+    );
+  }
+  return <span className="text-sm text-dark">{formatDate(dueDate)}</span>;
+}
 
-const INCOMING_STATUS_COLORS: Record<string, string> = {
-  RECEIVED:  "bg-gray-100 text-gray-600",
-  VALIDATED: "bg-blue-50 text-blue-700",
-  APPROVED:  "bg-green-50 text-green-700",
-  PAID:      "bg-emerald-100 text-emerald-800",
-  REJECTED:  "bg-red-50 text-red-600",
-};
+// ── Status pill cell ──────────────────────────────────────────────────────────
 
-const PAYMENT_STATUS_COLORS: Record<string, string> = {
-  PAID:    "bg-green-50 text-green-700",
-  PARTIAL: "bg-blue-50 text-blue-600",
-  UNPAID:  "bg-amber-50 text-amber-700",
-  OVERDUE: "bg-red-50 text-red-600",
-};
+function StatusPillCell({ pill }: { pill: { label: string; cls: string; strikethrough?: boolean } }) {
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${pill.cls}`}>
+      {pill.strikethrough ? <s>{pill.label}</s> : pill.label}
+    </span>
+  );
+}
 
 // ── Bulk Upload Modal ─────────────────────────────────────────────────────────
 
@@ -224,27 +222,23 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
       const res = await invoiceApi.bulkUploadCsv(file) as { batchId?: string };
       if (res?.batchId) {
         setBatchId(res.batchId);
-        pollBatch(res.batchId);
+        intervalRef.current = setInterval(async () => {
+          try {
+            const status = await invoiceApi.getBulkStatus(res.batchId!) as BulkBatchStatus;
+            setBatchStatus(status);
+            if (status.percentComplete >= 100 || ["COMPLETED", "FAILED"].includes(status.status)) {
+              if (intervalRef.current) clearInterval(intervalRef.current);
+            }
+          } catch {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+          }
+        }, 2000);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);
     }
-  }
-
-  function pollBatch(id: string) {
-    intervalRef.current = setInterval(async () => {
-      try {
-        const status = await invoiceApi.getBulkStatus(id) as BulkBatchStatus;
-        setBatchStatus(status);
-        if (status.percentComplete >= 100 || ["COMPLETED", "FAILED"].includes(status.status)) {
-          if (intervalRef.current) clearInterval(intervalRef.current);
-        }
-      } catch {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-      }
-    }, 2000);
   }
 
   return (
@@ -261,9 +255,7 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
         <div className="p-6 space-y-4">
           {!batchId ? (
             <>
-              {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{error}</div>
-              )}
+              {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{error}</div>}
               <div
                 className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
                   dragging ? "border-green bg-green-light" : "border-border hover:border-green/50"
@@ -312,26 +304,34 @@ function BulkUploadModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="px-6 py-4 border-t border-border flex gap-3 justify-end">
           <Button variant="secondary" onClick={onClose}>{batchId ? "Close" : "Cancel"}</Button>
-          {!batchId && (
-            <Button loading={uploading} disabled={!file} onClick={handleUpload}>
-              Upload &amp; Import
-            </Button>
-          )}
+          {!batchId && <Button loading={uploading} disabled={!file} onClick={handleUpload}>Upload &amp; Import</Button>}
         </div>
       </div>
     </div>
   );
 }
 
-// ── Sent invoices panel ───────────────────────────────────────────────────────
+// ── Sent panel ────────────────────────────────────────────────────────────────
 
-interface InvoiceCounts {
+type SentTab = "ALL" | "ATTENTION" | "ACCEPTED" | "PAID";
+
+const SENT_TABS: { key: SentTab; label: string }[] = [
+  { key: "ALL",       label: "All" },
+  { key: "ATTENTION", label: "Needs attention" },
+  { key: "ACCEPTED",  label: "Accepted" },
+  { key: "PAID",      label: "Paid" },
+];
+
+interface DashboardStats {
   total: number;
   accepted: number;
-  rejected: number;
-  pending: number;
-  draft: number;
-  overdue: number;
+  rejectedAll?: number;
+  rejected?: number;
+  pending?: number;
+  firsAwaiting?: number;
+  draft?: number;
+  overdue?: number;
+  overdueCount?: number;
 }
 
 function SentPanel() {
@@ -340,21 +340,20 @@ function SentPanel() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<StatusTab>("ALL");
+  const [activeTab, setActiveTab] = useState<SentTab>("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showBulk, setShowBulk] = useState(false);
   const [showSample, setShowSample] = useState(false);
-  const [counts, setCounts] = useState<InvoiceCounts | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const params: Record<string, string | number> = { page, limit: 20 };
-      if (activeTab === "PENDING") params.status = "QUEUED,SUBMITTING,VALIDATING";
-      else if (activeTab === "OVERDUE") params.isOverdue = "true";
-      else if (activeTab !== "ALL") params.status = activeTab;
+      if (activeTab === "ACCEPTED") params.status = "ACCEPTED";
+      else if (activeTab === "PAID") params.paymentStatus = "PAID";
       if (search) params.search = search;
       const res = await invoiceApi.list(params);
       setInvoices(res.data as Invoice[]);
@@ -368,183 +367,205 @@ function SentPanel() {
     }
   }, [page, activeTab, search]);
 
-  useEffect(() => { load(); }, [load]);
+  const loadAttention = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const base: Record<string, string | number> = { page, limit: 20 };
+      if (search) base.search = search;
+
+      const [rejRes, sfRes, dlRes, vfRes, overdueRes] = await Promise.all([
+        invoiceApi.list({ ...base, status: "REJECTED" }),
+        invoiceApi.list({ ...base, status: "SUBMISSION_FAILED" }),
+        invoiceApi.list({ ...base, status: "DEAD_LETTERED" }),
+        invoiceApi.list({ ...base, status: "VALIDATION_FAILED" }),
+        invoiceApi.list({ ...base, isOverdue: "true" }),
+      ]);
+
+      const seen = new Set<string>();
+      const merged: Invoice[] = [];
+      for (const inv of [
+        ...(rejRes.data as Invoice[]),
+        ...(sfRes.data as Invoice[]),
+        ...(dlRes.data as Invoice[]),
+        ...(vfRes.data as Invoice[]),
+        ...(overdueRes.data as Invoice[]),
+      ]) {
+        if (!seen.has(inv.id)) { seen.add(inv.id); merged.push(inv); }
+      }
+      setInvoices(merged);
+      setTotal(merged.length);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load invoices");
+      setInvoices([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, search]);
 
   useEffect(() => {
-    invoiceApi.stats().then((s: any) => {
-      setCounts({
-        total:    s.total    ?? 0,
-        accepted: s.accepted ?? 0,
-        rejected: s.rejectedAll ?? s.rejected ?? 0,
-        pending:  s.firsAwaiting ?? s.pending ?? 0,
-        draft:    s.draft    ?? 0,
-        overdue:  s.overdue  ?? s.overdueCount ?? 0,
-      });
-    }).catch(() => {});
+    if (activeTab === "ATTENTION") loadAttention();
+    else load();
+  }, [activeTab, load, loadAttention]);
+
+  useEffect(() => {
+    invoiceApi.stats().then((s: any) => setStats(s)).catch(() => {});
   }, []);
 
-  const totalPages = Math.ceil(total / 20);
-  const TAB_COUNTS: Record<StatusTab, number> = {
-    ALL:      counts?.total ?? 0,
-    ACCEPTED: counts?.accepted ?? 0,
-    PENDING:  counts?.pending ?? 0,
-    REJECTED: counts?.rejected ?? 0,
-    DRAFT:    counts?.draft ?? 0,
-    OVERDUE:  counts?.overdue ?? 0,
+  const attentionCount = stats
+    ? (stats.rejectedAll ?? stats.rejected ?? 0) + (stats.overdue ?? stats.overdueCount ?? 0) + (stats.firsAwaiting ?? stats.pending ?? 0)
+    : 0;
+
+  const tabCounts: Record<SentTab, number | null> = {
+    ALL:       stats?.total ?? null,
+    ATTENTION: attentionCount || null,
+    ACCEPTED:  stats?.accepted ?? null,
+    PAID:      null,
   };
+
+  const totalPages = Math.ceil(total / 20);
 
   return (
     <div className="p-6 space-y-4">
       {error && <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>}
 
+      {attentionCount > 0 && (
+        <div
+          className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-sm cursor-pointer hover:bg-amber-100 transition-colors"
+          onClick={() => { setActiveTab("ATTENTION"); setPage(1); }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-600 shrink-0">
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span className="font-semibold text-amber-800">{attentionCount} invoice{attentionCount !== 1 ? "s" : ""} need attention</span>
+          <span className="text-amber-600">→</span>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-border overflow-hidden">
+        {/* Tab bar + search */}
         <div className="flex items-center justify-between px-4 border-b border-border">
           <div className="flex">
-            {STATUS_TABS.map(({ key, label }) => (
-              <button key={key}
-                onClick={() => { setActiveTab(key); setPage(1); }}
-                className={`px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  activeTab === key ? "border-green text-green" : "border-transparent text-muted hover:text-dark"
-                }`}
-              >
-                {label}{counts ? ` (${TAB_COUNTS[key]})` : ""}
-              </button>
-            ))}
+            {SENT_TABS.map(({ key, label }) => {
+              const count = tabCounts[key];
+              return (
+                <button key={key}
+                  onClick={() => { setActiveTab(key); setPage(1); }}
+                  className={`px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                    activeTab === key ? "border-green text-green" : "border-transparent text-muted hover:text-dark"
+                  }`}
+                >
+                  {label}
+                  {count !== null && count > 0 && (
+                    <span className={`inline-flex items-center justify-center text-xs font-bold rounded-full px-1.5 py-0.5 leading-none ${
+                      key === "ATTENTION" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"
+                    }`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
-          <div className="py-2 w-56">
-            <Input placeholder="Search IRN, buyer…" value={search}
+          <div className="py-2 w-52">
+            <Input placeholder="Search customer, IRN…" value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
           </div>
         </div>
 
+        {/* Table */}
         {loading ? (
           <div className="px-6 py-4 space-y-2">
             {[0,1,2,3,4,5].map(i => <SkeletonTableRow key={i} />)}
           </div>
         ) : invoices.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center mx-auto mb-3">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="1.8" className="text-muted">
+          <div className="p-14 text-center">
+            <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center mx-auto mb-4">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="9" y1="15" x2="15" y2="15" />
               </svg>
             </div>
-            {activeTab === "ALL" && counts?.total === 0 ? (
+            {activeTab === "ALL" && (stats?.total ?? 0) === 0 ? (
               <>
-                <p className="text-dark font-semibold mb-1">No invoices yet</p>
-                <p className="text-muted text-sm mb-4">Create your first FIRS-compliant invoice</p>
-                <Link href="/invoices/new">
-                  <Button size="sm">Create invoice</Button>
-                </Link>
-                <p className="text-muted text-xs mt-4">
+                <p className="font-semibold text-dark mb-1">No invoices yet</p>
+                <p className="text-sm text-muted mb-5">Create your first invoice and submit it to FIRS in minutes.</p>
+                <div className="flex items-center justify-center gap-3">
+                  <Link href="/invoices/new"><Button size="sm">Create invoice →</Button></Link>
+                </div>
+                <p className="text-xs text-muted mt-4">
                   Not sure what to include?{" "}
-                  <button
-                    onClick={() => setShowSample(true)}
-                    className="text-green hover:underline font-medium"
-                  >
+                  <button onClick={() => setShowSample(true)} className="text-green hover:underline font-medium">
                     View a sample invoice →
                   </button>
                 </p>
               </>
             ) : (
-              <p className="text-muted text-sm">No invoices found.</p>
+              <p className="text-sm text-muted">No invoices found.</p>
             )}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border">
-                  {["Invoice", "Buyer", "Date", "FIRS Status", "IRN / Ref", "Payment", "Amount", ""].map((col, i) => (
-                    <th key={col + i}
-                      className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${i === 6 ? "text-right" : "text-left"}`}>
-                      {col}
-                    </th>
-                  ))}
+                <tr className="border-b border-border bg-surface/50">
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Recipient</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice #</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Amount</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden sm:table-cell">Due date</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Status</th>
+                  <th className="px-5 py-3 w-16" />
                 </tr>
               </thead>
               <tbody>
-                {invoices.map((inv) => (
-                  <tr key={inv.id}
-                    onClick={() => router.push(`/invoices/${inv.id}`)}
-                    className={`border-b border-border last:border-0 cursor-pointer transition-colors ${
-                      inv.isOverdue ? "bg-red-50/30 hover:bg-red-50/60" : "hover:bg-surface"
-                    }`}
-                  >
-                    {/* Invoice # */}
-                    <td className="px-6 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-semibold text-dark">
-                          {formatInvoiceNumber(inv)}
-                        </span>
-                        {inv.isOverdue && (
-                          <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-600">Overdue</span>
+                {invoices.map((inv) => {
+                  const pill = getInvoiceStatusPill(inv);
+                  const dueDate = inv.paymentDueDate ?? inv.dueDate;
+                  return (
+                    <tr key={inv.id}
+                      onClick={() => router.push(`/invoices/${inv.id}`)}
+                      className="border-b border-border last:border-0 cursor-pointer hover:bg-gray-50 transition-colors"
+                    >
+                      {/* Recipient */}
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-medium text-dark truncate max-w-[180px]" title={inv.buyerName}>
+                          {inv.buyerName || "—"}
+                        </p>
+                      </td>
+                      {/* Invoice # */}
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-semibold text-dark leading-tight">{formatInvoiceNumber(inv)}</p>
+                        <p className="text-xs text-muted mt-0.5">{formatDate(inv.createdAt)}</p>
+                      </td>
+                      {/* Amount */}
+                      <td className="px-5 py-3.5 text-right">
+                        <p className="text-sm font-semibold text-dark tabular-nums">{formatCurrency(inv.totalAmount, inv.currency)}</p>
+                        {inv.paymentStatus === "PARTIAL" && (inv.amountPaid ?? 0) > 0 && (
+                          <p className="text-xs text-muted mt-0.5">
+                            {formatCurrency(inv.amountPaid!, inv.currency)} paid
+                          </p>
                         )}
-                      </div>
-                      <p className="text-xs text-muted mt-0.5">{formatDate(inv.createdAt)}</p>
-                    </td>
-                    {/* Buyer */}
-                    <td className="px-6 py-3 text-sm text-dark">{inv.buyerName}</td>
-                    {/* Date — now shown under invoice number; this col = invoice type */}
-                    <td className="px-6 py-3 text-xs text-muted">{inv.invoiceType?.replace(/_/g, " ") ?? "—"}</td>
-                    {/* FIRS Status */}
-                    <td className="px-6 py-3">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[inv.status] ?? "bg-gray-100 text-gray-600"}`}>
-                        {(inv.status ?? '').replace(/_/g, " ")}
-                      </span>
-                    </td>
-                    {/* IRN / rejection */}
-                    <td className="px-6 py-3">
-                      {["REJECTED","SUBMISSION_FAILED","DEAD_LETTERED","VALIDATION_FAILED"].includes(inv.status) ? (
-                        <span className="text-xs text-red-600 italic font-mono">{inv.rejectionCode ?? "Rejected"}</span>
-                      ) : (inv.firsConfirmedIrn ?? inv.platformIrn) ? (
-                        <span className="text-xs font-mono text-muted truncate block max-w-[130px]"
-                          title={inv.firsConfirmedIrn ?? inv.platformIrn}>
-                          {(inv.firsConfirmedIrn ?? inv.platformIrn)!.slice(0, 16)}…
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted">—</span>
-                      )}
-                    </td>
-                    {/* Payment */}
-                    <td className="px-6 py-3">
-                      {inv.paymentStatus ? (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_STATUS_COLORS[inv.paymentStatus] ?? "bg-gray-100 text-gray-600"}`}>
-                          {inv.paymentStatus}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted">—</span>
-                      )}
-                    </td>
-                    {/* Amount */}
-                    <td className="px-6 py-3 text-sm font-medium text-dark text-right">
-                      {formatCurrency(inv.totalAmount, inv.currency)}
-                    </td>
-                    {/* Actions */}
-                    <td className="px-6 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      <div className="inline-flex items-center gap-1 justify-end">
-                        {inv.status === "ACCEPTED" && <CopyPayLinkButton invoiceId={inv.id} />}
-                        {inv.status === "ACCEPTED" && <DuplicateButton invoiceId={inv.id} />}
-                        {inv.status === "DRAFT" && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); router.push(`/invoices/new?id=${inv.id}`); }}
-                            className="text-xs font-medium text-green hover:text-green-dark hover:underline transition-colors"
-                          >
-                            Continue →
-                          </button>
-                        )}
-                        {inv.isOverdue && inv.status === "ACCEPTED" && (
-                          <button
-                            onClick={(e) => sendReminder(inv.id, e)}
-                            className="text-xs font-medium text-red-600 hover:text-red-700 hover:underline transition-colors ml-1"
-                          >
-                            Send reminder
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      {/* Due date */}
+                      <td className="px-5 py-3.5 hidden sm:table-cell">
+                        <DueDateCell dueDate={dueDate} isOverdue={inv.isOverdue} />
+                      </td>
+                      {/* Status */}
+                      <td className="px-5 py-3.5">
+                        <StatusPillCell pill={pill} />
+                      </td>
+                      {/* Actions */}
+                      <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="inline-flex items-center gap-0.5 justify-end">
+                          {inv.status === "ACCEPTED" && <CopyPayLinkButton invoiceId={inv.id} />}
+                          <DuplicateButton invoiceId={inv.id} />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -555,9 +576,9 @@ function SentPanel() {
         <div className="flex items-center justify-between text-sm text-muted">
           <span>Showing {invoices.length} of {total}</span>
           <div className="flex gap-2">
-            <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+            <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
             <span className="px-3 py-1.5 text-dark">{page} / {totalPages}</span>
-            <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
           </div>
         </div>
       )}
@@ -568,25 +589,36 @@ function SentPanel() {
   );
 }
 
-// ── Received invoices panel ───────────────────────────────────────────────────
+// ── Received panel ────────────────────────────────────────────────────────────
+
+type ReceivedTab = "ALL" | "TO_REVIEW" | "APPROVED" | "PAID";
+
+const RECEIVED_TABS: { key: ReceivedTab; label: string }[] = [
+  { key: "ALL",       label: "All" },
+  { key: "TO_REVIEW", label: "To review" },
+  { key: "APPROVED",  label: "Approved" },
+  { key: "PAID",      label: "Paid" },
+];
 
 function ReceivedPanel() {
   const router = useRouter();
   const [invoices, setInvoices] = useState<IncomingInvoice[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [activeTab, setActiveTab] = useState<IncomingStatusTab>("ALL");
+  const [activeTab, setActiveTab] = useState<ReceivedTab>("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [receivedCount, setReceivedCount] = useState<number | null>(null);
+  const [toReviewCount, setToReviewCount] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const params: Parameters<typeof incomingInvoiceApi.list>[0] = { page, limit: 20 };
-      if (activeTab !== "ALL") params.status = activeTab;
+      if (activeTab === "TO_REVIEW") params.status = "RECEIVED";
+      else if (activeTab === "APPROVED") params.status = "APPROVED";
+      else if (activeTab === "PAID") params.status = "PAID";
       const res = await incomingInvoiceApi.list(params);
       setInvoices(res.data as IncomingInvoice[]);
       setTotal(res.total);
@@ -602,7 +634,7 @@ function ReceivedPanel() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    incomingInvoiceApi.stats().then((s) => setReceivedCount(s.received ?? 0)).catch(() => {});
+    incomingInvoiceApi.stats().then((s: any) => setToReviewCount(s.received ?? 0)).catch(() => {});
   }, []);
 
   async function doAction(id: string, action: "validate" | "approve" | "reject", e: React.MouseEvent) {
@@ -614,7 +646,7 @@ function ReceivedPanel() {
       else await incomingInvoiceApi.reject(id, "Rejected by reviewer");
       invalidateCache('/v1/incoming-invoices/stats');
       await load();
-      incomingInvoiceApi.stats().then((s) => setReceivedCount(s.received ?? 0)).catch(() => {});
+      incomingInvoiceApi.stats().then((s: any) => setToReviewCount(s.received ?? 0)).catch(() => {});
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -629,19 +661,20 @@ function ReceivedPanel() {
       {error && <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>}
 
       <div className="bg-white rounded-xl border border-border overflow-hidden">
-        <div className="flex items-center justify-between px-4 border-b border-border">
+        {/* Tab bar */}
+        <div className="px-4 border-b border-border">
           <div className="flex">
-            {INCOMING_STATUS_TABS.map(({ key, label }) => (
+            {RECEIVED_TABS.map(({ key, label }) => (
               <button key={key}
                 onClick={() => { setActiveTab(key); setPage(1); }}
-                className={`px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                className={`px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
                   activeTab === key ? "border-green text-green" : "border-transparent text-muted hover:text-dark"
                 }`}
               >
                 {label}
-                {key === "RECEIVED" && receivedCount !== null && receivedCount > 0 && (
-                  <span className="ml-1.5 inline-flex items-center justify-center text-xs font-bold rounded-full px-1.5 py-0.5 leading-none bg-amber-100 text-amber-700">
-                    {receivedCount}
+                {key === "TO_REVIEW" && toReviewCount !== null && toReviewCount > 0 && (
+                  <span className="inline-flex items-center justify-center text-xs font-bold rounded-full px-1.5 py-0.5 leading-none bg-red-100 text-red-700">
+                    {toReviewCount}
                   </span>
                 )}
               </button>
@@ -649,108 +682,106 @@ function ReceivedPanel() {
           </div>
         </div>
 
+        {/* Table */}
         {loading ? (
           <div className="px-6 py-4 space-y-2">
             {[0,1,2,3,4].map(i => <SkeletonTableRow key={i} />)}
           </div>
         ) : invoices.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center mx-auto mb-3">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="1.8" className="text-muted">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <div className="p-14 text-center">
+            <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center mx-auto mb-4">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted">
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+                <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
               </svg>
             </div>
-            <p className="text-muted text-sm mb-3">No received invoices yet.</p>
+            <p className="font-semibold text-dark mb-1">No received invoices</p>
+            <p className="text-sm text-muted mb-5">Add invoices you receive from suppliers to track what you owe.</p>
             <Link href="/incoming-invoices">
-              <Button size="sm" variant="secondary">View in full →</Button>
+              <Button size="sm" variant="secondary">Add invoice →</Button>
             </Link>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border">
-                  {["Invoice #", "Supplier", "Date", "Due", "Amount", "VAT", "Status", "Actions"].map((col, i) => (
-                    <th key={col + i}
-                      className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${i >= 4 && i <= 5 ? "text-right" : "text-left"}`}>
-                      {col}
-                    </th>
-                  ))}
+                <tr className="border-b border-border bg-surface/50">
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Sender</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice #</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Amount</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden sm:table-cell">Due date</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Status</th>
+                  <th className="px-5 py-3 w-24" />
                 </tr>
               </thead>
               <tbody>
-                {invoices.map((inv) => (
-                  <tr key={inv.id}
-                    onClick={() => router.push(`/incoming-invoices/${inv.id}`)}
-                    className="border-b border-border last:border-0 cursor-pointer hover:bg-surface transition-colors"
-                  >
-                    <td className="px-6 py-3">
-                      <span className="text-sm font-semibold text-dark">
-                        {formatInvoiceNumber({ platformIrn: inv.platformIrn, id: inv.id })}
-                      </span>
-                      <p className="text-xs text-muted mt-0.5">{formatDate(inv.createdAt)}</p>
-                    </td>
-                    <td className="px-6 py-3 text-sm text-dark">{inv.supplierName ?? "—"}</td>
-                    <td className="px-6 py-3 text-sm text-muted whitespace-nowrap">
-                      {inv.issueDate ? formatDate(inv.issueDate) : "—"}
-                    </td>
-                    <td className="px-6 py-3 text-sm text-muted whitespace-nowrap">
-                      {inv.dueDate ? formatDate(inv.dueDate) : "—"}
-                    </td>
-                    <td className="px-6 py-3 text-sm font-medium text-dark text-right">
-                      {inv.totalAmount != null ? formatCurrency(inv.totalAmount, inv.currency ?? "NGN") : "—"}
-                    </td>
-                    <td className="px-6 py-3 text-sm text-muted text-right">
-                      {inv.vatAmount != null ? formatCurrency(inv.vatAmount, inv.currency ?? "NGN") : "—"}
-                    </td>
-                    <td className="px-6 py-3">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${INCOMING_STATUS_COLORS[inv.status] ?? "bg-gray-100 text-gray-600"}`}>
-                        {inv.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      <div className="inline-flex items-center gap-1.5">
+                {invoices.map((inv) => {
+                  const pill = receivedStatusPill(inv);
+                  return (
+                    <tr key={inv.id}
+                      onClick={() => router.push(`/incoming-invoices/${inv.id}`)}
+                      className="border-b border-border last:border-0 cursor-pointer hover:bg-gray-50 transition-colors"
+                    >
+                      {/* Sender */}
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-medium text-dark truncate max-w-[180px]" title={inv.supplierName}>
+                          {inv.supplierName ?? "—"}
+                        </p>
+                      </td>
+                      {/* Invoice # */}
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-semibold text-dark leading-tight">
+                          {formatInvoiceNumber({ platformIrn: inv.invoiceNumber ?? inv.platformIrn, id: inv.id })}
+                        </p>
+                        <p className="text-xs text-muted mt-0.5">{formatDate(inv.createdAt)}</p>
+                      </td>
+                      {/* Amount */}
+                      <td className="px-5 py-3.5 text-right">
+                        <p className="text-sm font-semibold text-dark tabular-nums">
+                          {inv.totalAmount != null ? formatCurrency(inv.totalAmount, inv.currency ?? "NGN") : "—"}
+                        </p>
+                      </td>
+                      {/* Due date */}
+                      <td className="px-5 py-3.5 hidden sm:table-cell">
+                        <DueDateCell dueDate={inv.dueDate} />
+                      </td>
+                      {/* Status */}
+                      <td className="px-5 py-3.5">
+                        <StatusPillCell pill={pill} />
+                      </td>
+                      {/* Next action only */}
+                      <td className="px-3 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         {inv.status === "RECEIVED" && (
                           <button
                             disabled={actionLoading === inv.id + "validate"}
                             onClick={(e) => doAction(inv.id, "validate", e)}
-                            className="text-xs font-medium text-blue-600 hover:underline disabled:opacity-50"
+                            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
                           >
                             Validate
                           </button>
                         )}
                         {inv.status === "VALIDATED" && (
-                          <>
-                            <button
-                              disabled={actionLoading === inv.id + "approve"}
-                              onClick={(e) => doAction(inv.id, "approve", e)}
-                              className="text-xs font-medium text-green hover:underline disabled:opacity-50"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              disabled={actionLoading === inv.id + "reject"}
-                              onClick={(e) => doAction(inv.id, "reject", e)}
-                              className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
-                            >
-                              Reject
-                            </button>
-                          </>
+                          <button
+                            disabled={actionLoading === inv.id + "approve"}
+                            onClick={(e) => doAction(inv.id, "approve", e)}
+                            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
                         )}
                         {inv.status === "APPROVED" && (
                           <Link
                             href={`/incoming-invoices/${inv.id}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="text-xs font-medium text-green hover:underline"
+                            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
                           >
-                            Mark paid →
+                            Pay →
                           </Link>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -761,9 +792,9 @@ function ReceivedPanel() {
         <div className="flex items-center justify-between text-sm text-muted">
           <span>Showing {invoices.length} of {total}</span>
           <div className="flex gap-2">
-            <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+            <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
             <span className="px-3 py-1.5 text-dark">{page} / {totalPages}</span>
-            <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
           </div>
         </div>
       )}
@@ -777,50 +808,40 @@ export default function InvoicesPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const topTab = (searchParams.get("tab") ?? "sent") as "sent" | "received";
-  const [sentPending, setSentPending] = useState<number | null>(null);
-  const [receivedCount, setReceivedCount] = useState<number | null>(null);
+  const [sentTotal, setSentTotal] = useState<number | null>(null);
+  const [receivedTotal, setReceivedTotal] = useState<number | null>(null);
 
   useEffect(() => {
-    invoiceApi.stats().then((s: any) => setSentPending(s.firsAwaiting ?? s.pending ?? 0)).catch(() => {});
-    incomingInvoiceApi.stats().then((s: any) => setReceivedCount(s.received ?? 0)).catch(() => {});
+    invoiceApi.stats().then((s: any) => setSentTotal(s.total ?? 0)).catch(() => {});
+    incomingInvoiceApi.stats().then((s: any) => setReceivedTotal(s.total ?? 0)).catch(() => {});
   }, []);
 
   function setTopTab(t: "sent" | "received") {
     router.push(`/invoices?tab=${t}`);
   }
 
-  const headerTitle = topTab === "sent" ? "Sent Invoices" : "Received Invoices";
-  const headerSub   = topTab === "sent"
-    ? "Invoices you have sent to buyers"
-    : "Invoices received from suppliers";
-
   return (
     <>
       <div className="bg-white border-b border-border px-6 pt-5 pb-0 flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-dark">{headerTitle}</h1>
-          <p className="text-sm text-muted mt-0.5 mb-3">{headerSub}</p>
-          {/* Top-level Sent / Received tabs */}
+          <h1 className="text-xl font-bold text-dark">Invoices</h1>
+          <p className="text-sm text-muted mt-0.5 mb-3">
+            {topTab === "sent" ? "Invoices you have sent to buyers" : "Invoices received from suppliers"}
+          </p>
           <div className="flex gap-0 -mb-px">
             {(["sent", "received"] as const).map((t) => {
-              const badge = t === "sent" ? sentPending : receivedCount;
+              const count = t === "sent" ? sentTotal : receivedTotal;
               return (
                 <button
                   key={t}
                   onClick={() => setTopTab(t)}
-                  className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
-                    topTab === t
-                      ? "border-green text-green"
-                      : "border-transparent text-muted hover:text-dark"
+                  className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+                    topTab === t ? "border-green text-green" : "border-transparent text-muted hover:text-dark"
                   }`}
                 >
                   {t === "sent" ? "Sent" : "Received"}
-                  {badge !== null && badge > 0 && (
-                    <span className={`ml-1.5 inline-flex items-center justify-center text-xs font-bold rounded-full px-1.5 py-0.5 leading-none ${
-                      t === "received" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"
-                    }`}>
-                      {badge}
-                    </span>
+                  {count !== null && (
+                    <span className="text-xs font-medium text-muted">({count})</span>
                   )}
                 </button>
               );
@@ -830,12 +851,8 @@ export default function InvoicesPage() {
         <div className="flex gap-2 mt-1">
           {topTab === "sent" ? (
             <>
-              <Button size="sm" variant="secondary" onClick={() => {
-                const panel = document.getElementById("bulk-trigger");
-                panel?.click();
-              }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  strokeWidth="2" className="mr-1.5 inline">
+              <Button size="sm" variant="secondary" onClick={() => document.dispatchEvent(new CustomEvent("open-bulk"))}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 inline">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
