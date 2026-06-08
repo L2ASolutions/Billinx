@@ -36,7 +36,6 @@ import {
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import * as jwt from 'jsonwebtoken';
-import { checkRole } from '../../../shared/utils/role-checker';
 
 const BCRYPT_ROUNDS = 12;
 const ACCESS_TOKEN_TTL = 15 * 60;
@@ -335,9 +334,7 @@ export class UserService {
     tenantId: string,
     invitedBy: string,
     request: InviteUserRequest,
-    actorRoles: string[] = [],
   ): Promise<{ message: string; invitationToken: string }> {
-    checkRole(actorRoles, 'ADMIN');
     // Check if user already exists
     const existing = await this.userRepository.findByEmail(
       tenantId,
@@ -634,9 +631,7 @@ export class UserService {
     userId: string,
     tenantId: string,
     role: UserRoleType,
-    actorRoles: string[] = [],
   ): Promise<UserResponse> {
-    checkRole(actorRoles, 'OWNER');
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundException('User not found');
 
@@ -657,9 +652,7 @@ export class UserService {
   async removeRole(
     userId: string,
     role: UserRoleType,
-    actorRoles: string[] = [],
   ): Promise<UserResponse> {
-    checkRole(actorRoles, 'OWNER');
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundException('User not found');
 

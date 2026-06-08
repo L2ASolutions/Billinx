@@ -22,6 +22,8 @@ import { ApiKeyService } from './services/api-key.service';
 import { TokenService } from './services/token.service';
 import { ApiKeyGuard } from './guards/api-key.guard';
 import { JwtGuard } from './guards/jwt.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { Roles } from '../../shared/decorators/roles.decorator';
 import { AuthRateLimitGuard } from '../../shared/guards/auth-rate-limit.guard';
 import { getRequestContext } from '../../shared/context/request-context';
 import {
@@ -146,7 +148,8 @@ export class IdentityController {
 
   @Post('users/api-keys')
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new API key (dashboard / JWT auth)' })
   @ApiHeader({ name: 'Idempotency-Key', required: false })
@@ -178,7 +181,8 @@ export class IdentityController {
 
   @Delete('users/api-keys/:keyId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(JwtGuard)
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Revoke an API key (dashboard / JWT auth)' })
   async revokeApiKeyDashboard(@Param('keyId') keyId: string) {

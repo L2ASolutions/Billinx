@@ -19,6 +19,8 @@ import {
 } from '@nestjs/swagger';
 import { WebhookService } from './services/webhook.service';
 import { FlexAuthGuard } from '../identity/guards/flex-auth.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
+import { Roles } from '../../shared/decorators/roles.decorator';
 import { getRequestContext } from '../../shared/context/request-context';
 import {
   CreateSubscriptionRequest,
@@ -36,6 +38,8 @@ export class WebhookController {
   // ─── Subscriptions ────────────────────────────────────────────────────────
 
   @Post('subscriptions')
+  @UseGuards(RolesGuard)
+  @Roles('OWNER', 'ADMIN')
   @ApiOperation({ summary: 'Create a webhook subscription' })
   async createSubscription(@Body() body: CreateSubscriptionRequest) {
     const { tenantId } = getRequestContext();
@@ -68,6 +72,8 @@ export class WebhookController {
 
   @Delete('subscriptions/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(RolesGuard)
+  @Roles('OWNER', 'ADMIN')
   @ApiOperation({ summary: 'Delete a webhook subscription' })
   async deleteSubscription(@Param('id') id: string) {
     const { tenantId } = getRequestContext();
