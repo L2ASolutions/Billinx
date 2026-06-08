@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { invoiceApi, incomingInvoiceApi, invalidateCache } from "@/lib/api";
-import { formatCurrency, formatDate, formatInvoiceNumber } from "@/lib/utils";
+import { formatCurrency, formatCurrencyShort, formatDate, formatInvoiceNumber } from "@/lib/utils";
 import { getInvoiceStatusPill } from "@/lib/invoice-utils";
 import { SampleInvoiceModal } from "@/components/invoice/SampleInvoiceModal";
 
@@ -511,11 +511,11 @@ function SentPanel() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-surface/50">
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Recipient</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice #</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Amount</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Customer</th>
                   <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden sm:table-cell">Due date</th>
                   <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Status</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Amount</th>
                   <th className="px-5 py-3 w-16" />
                 </tr>
               </thead>
@@ -523,29 +523,26 @@ function SentPanel() {
                 {invoices.map((inv) => {
                   const pill = getInvoiceStatusPill(inv);
                   const dueDate = inv.paymentDueDate ?? inv.dueDate;
+                  const amountDue = inv.paymentStatus === "PARTIAL" && (inv.amountPaid ?? 0) > 0
+                    ? inv.totalAmount - (inv.amountPaid ?? 0)
+                    : null;
                   return (
                     <tr key={inv.id}
                       onClick={() => router.push(`/invoices/${inv.id}`)}
                       className="border-b border-border last:border-0 cursor-pointer hover:bg-gray-50 transition-colors"
                     >
-                      {/* Recipient */}
-                      <td className="px-5 py-3.5">
-                        <p className="text-sm font-medium text-dark truncate max-w-[180px]" title={inv.buyerName}>
-                          {inv.buyerName || "—"}
-                        </p>
-                      </td>
-                      {/* Invoice # */}
+                      {/* Invoice */}
                       <td className="px-5 py-3.5">
                         <p className="text-sm font-semibold text-dark leading-tight">{formatInvoiceNumber(inv)}</p>
                         <p className="text-xs text-muted mt-0.5">{formatDate(inv.createdAt)}</p>
                       </td>
-                      {/* Amount */}
-                      <td className="px-5 py-3.5 text-right">
-                        <p className="text-sm font-semibold text-dark tabular-nums">{formatCurrency(inv.totalAmount, inv.currency)}</p>
-                        {inv.paymentStatus === "PARTIAL" && (inv.amountPaid ?? 0) > 0 && (
-                          <p className="text-xs text-muted mt-0.5">
-                            {formatCurrency(inv.amountPaid!, inv.currency)} paid
-                          </p>
+                      {/* Customer */}
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-medium text-dark truncate max-w-[160px]" title={inv.buyerName}>
+                          {inv.buyerName || "—"}
+                        </p>
+                        {inv.buyer?.email && (
+                          <p className="text-xs text-muted mt-0.5 truncate max-w-[160px]">{inv.buyer.email}</p>
                         )}
                       </td>
                       {/* Due date */}
@@ -555,6 +552,15 @@ function SentPanel() {
                       {/* Status */}
                       <td className="px-5 py-3.5">
                         <StatusPillCell pill={pill} />
+                      </td>
+                      {/* Amount */}
+                      <td className="px-5 py-3.5 text-right">
+                        <p className="text-sm font-semibold text-dark tabular-nums">{formatCurrency(inv.totalAmount, inv.currency)}</p>
+                        {amountDue !== null && (
+                          <p className="text-xs text-muted mt-0.5 tabular-nums">
+                            {formatCurrencyShort(inv.amountPaid!, inv.currency)} paid · {formatCurrencyShort(amountDue, inv.currency)} due
+                          </p>
+                        )}
                       </td>
                       {/* Actions */}
                       <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
@@ -706,11 +712,11 @@ function ReceivedPanel() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-surface/50">
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Sender</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice #</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Amount</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Supplier</th>
                   <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden sm:table-cell">Due date</th>
                   <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Status</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Amount</th>
                   <th className="px-5 py-3 w-24" />
                 </tr>
               </thead>
@@ -722,24 +728,21 @@ function ReceivedPanel() {
                       onClick={() => router.push(`/incoming-invoices/${inv.id}`)}
                       className="border-b border-border last:border-0 cursor-pointer hover:bg-gray-50 transition-colors"
                     >
-                      {/* Sender */}
-                      <td className="px-5 py-3.5">
-                        <p className="text-sm font-medium text-dark truncate max-w-[180px]" title={inv.supplierName}>
-                          {inv.supplierName ?? "—"}
-                        </p>
-                      </td>
-                      {/* Invoice # */}
+                      {/* Invoice */}
                       <td className="px-5 py-3.5">
                         <p className="text-sm font-semibold text-dark leading-tight">
                           {formatInvoiceNumber({ platformIrn: inv.invoiceNumber ?? inv.platformIrn, id: inv.id })}
                         </p>
                         <p className="text-xs text-muted mt-0.5">{formatDate(inv.createdAt)}</p>
                       </td>
-                      {/* Amount */}
-                      <td className="px-5 py-3.5 text-right">
-                        <p className="text-sm font-semibold text-dark tabular-nums">
-                          {inv.totalAmount != null ? formatCurrency(inv.totalAmount, inv.currency ?? "NGN") : "—"}
+                      {/* Supplier */}
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-medium text-dark truncate max-w-[160px]" title={inv.supplierName}>
+                          {inv.supplierName ?? "—"}
                         </p>
+                        {inv.supplierEmail && (
+                          <p className="text-xs text-muted mt-0.5 truncate max-w-[160px]">{inv.supplierEmail}</p>
+                        )}
                       </td>
                       {/* Due date */}
                       <td className="px-5 py-3.5 hidden sm:table-cell">
@@ -748,6 +751,12 @@ function ReceivedPanel() {
                       {/* Status */}
                       <td className="px-5 py-3.5">
                         <StatusPillCell pill={pill} />
+                      </td>
+                      {/* Amount */}
+                      <td className="px-5 py-3.5 text-right">
+                        <p className="text-sm font-semibold text-dark tabular-nums">
+                          {inv.totalAmount != null ? formatCurrency(inv.totalAmount, inv.currency ?? "NGN") : "—"}
+                        </p>
                       </td>
                       {/* Next action only */}
                       <td className="px-3 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
