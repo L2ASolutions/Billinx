@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { invoiceApi, incomingInvoiceApi, invalidateCache } from "@/lib/api";
 import { formatCurrency, formatDate, formatInvoiceNumber } from "@/lib/utils";
+import { getInvoiceStatusPill } from "@/lib/invoice-utils";
 import { SampleInvoiceModal } from "@/components/invoice/SampleInvoiceModal";
 
 // ── Copy pay-link button ──────────────────────────────────────────────────────
@@ -127,56 +128,25 @@ interface BulkBatchStatus {
   status: string;
 }
 
-// ── Combined status pill logic ────────────────────────────────────────────────
-
-function sentStatusPill(inv: Invoice) {
-  if (inv.paymentStatus === "PAID") {
-    return { label: "Paid", cls: "bg-green-100 text-green-800" };
-  }
-  if (inv.paymentStatus === "PARTIAL") {
-    return { label: "Part paid", cls: "bg-teal-50 text-teal-700" };
-  }
-  if (inv.isOverdue) {
-    return { label: "Overdue", cls: "bg-red-100 text-red-800" };
-  }
-  if (inv.status === "ACCEPTED") {
-    return { label: "Accepted", cls: "bg-green-50 text-green-700" };
-  }
-  if (inv.status === "SUBMITTING") {
-    return { label: "Submitting", cls: "bg-blue-100 text-blue-800" };
-  }
-  if (inv.status === "QUEUED" || inv.status === "VALIDATING") {
-    return { label: "Pending", cls: "bg-amber-100 text-amber-800" };
-  }
-  if (["REJECTED", "SUBMISSION_FAILED", "DEAD_LETTERED", "VALIDATION_FAILED"].includes(inv.status)) {
-    return { label: "Rejected", cls: "bg-red-100 text-red-800" };
-  }
-  if (inv.status === "DRAFT") {
-    return { label: "Draft", cls: "bg-gray-100 text-gray-600" };
-  }
-  if (inv.status === "CANCELLED" || inv.status === "CANCELLATION_REQUESTED") {
-    return { label: "Cancelled", cls: "bg-gray-100 text-gray-500" };
-  }
-  return { label: inv.status.replace(/_/g, " "), cls: "bg-gray-100 text-gray-600" };
-}
+// ── Received status pill (incoming invoices) ──────────────────────────────────
 
 function receivedStatusPill(inv: IncomingInvoice) {
   if (inv.paymentStatus === "PAID" || inv.status === "PAID") {
-    return { label: "Paid", cls: "bg-emerald-100 text-emerald-800" };
+    return { label: "Paid", cls: "bg-green-100 text-green-800", strikethrough: false };
   }
   if (inv.status === "APPROVED") {
-    return { label: "Approved", cls: "bg-green-50 text-green-700" };
+    return { label: "Approved", cls: "bg-green-50 text-green-700 ring-1 ring-green-200", strikethrough: false };
   }
   if (inv.status === "VALIDATED") {
-    return { label: "Validated", cls: "bg-blue-100 text-blue-800" };
+    return { label: "Validated", cls: "bg-blue-50 text-blue-700", strikethrough: false };
   }
   if (inv.status === "RECEIVED") {
-    return { label: "To review", cls: "bg-amber-100 text-amber-800" };
+    return { label: "To review", cls: "bg-amber-100 text-amber-800", strikethrough: false };
   }
   if (inv.status === "REJECTED") {
-    return { label: "Rejected", cls: "bg-red-100 text-red-800" };
+    return { label: "Rejected", cls: "bg-red-100 text-red-800", strikethrough: false };
   }
-  return { label: inv.status, cls: "bg-gray-100 text-gray-600" };
+  return { label: inv.status, cls: "bg-gray-100 text-gray-600", strikethrough: false };
 }
 
 // ── Due date cell ─────────────────────────────────────────────────────────────
@@ -210,26 +180,13 @@ function DueDateCell({ dueDate, isOverdue }: { dueDate?: string; isOverdue?: boo
   return <span className="text-sm text-dark">{formatDate(dueDate)}</span>;
 }
 
-// ── Amount cell ───────────────────────────────────────────────────────────────
+// ── Status pill cell ──────────────────────────────────────────────────────────
 
-function AmountCell({ inv }: { inv: Invoice }) {
-  const paid = inv.amountPaid ?? 0;
-  const isPart = inv.paymentStatus === "PARTIAL" && paid > 0;
-  const outstanding = Math.max(0, inv.totalAmount - paid);
-
-  function shortK(n: number) {
-    if (n >= 1_000_000) return `₦${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `₦${(n / 1_000).toFixed(0)}K`;
-    return formatCurrency(n, inv.currency);
-  }
-
+function StatusPillCell({ pill }: { pill: { label: string; cls: string; strikethrough?: boolean } }) {
   return (
-    <div className="text-right">
-      <p className="text-sm font-semibold text-dark">{formatCurrency(inv.totalAmount, inv.currency)}</p>
-      {isPart && (
-        <p className="text-xs text-muted mt-0.5">{shortK(paid)} paid · {shortK(outstanding)} due</p>
-      )}
-    </div>
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${pill.cls}`}>
+      {pill.strikethrough ? <s>{pill.label}</s> : pill.label}
+    </span>
   );
 }
 
@@ -410,7 +367,6 @@ function SentPanel() {
     }
   }, [page, activeTab, search]);
 
-  // "Needs attention" — one call per status (backend only accepts a single status value)
   const loadAttention = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -473,7 +429,6 @@ function SentPanel() {
     <div className="p-6 space-y-4">
       {error && <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>}
 
-      {/* Attention banner */}
       {attentionCount > 0 && (
         <div
           className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-sm cursor-pointer hover:bg-amber-100 transition-colors"
@@ -556,51 +511,50 @@ function SentPanel() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-surface/50">
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Customer</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Recipient</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice #</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Amount</th>
                   <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden sm:table-cell">Due date</th>
                   <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Status</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Amount</th>
                   <th className="px-5 py-3 w-16" />
                 </tr>
               </thead>
               <tbody>
                 {invoices.map((inv) => {
-                  const pill = sentStatusPill(inv);
+                  const pill = getInvoiceStatusPill(inv);
                   const dueDate = inv.paymentDueDate ?? inv.dueDate;
-                  const buyerEmail = inv.buyer?.email;
                   return (
                     <tr key={inv.id}
                       onClick={() => router.push(`/invoices/${inv.id}`)}
                       className="border-b border-border last:border-0 cursor-pointer hover:bg-gray-50 transition-colors"
                     >
-                      {/* Invoice */}
+                      {/* Recipient */}
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-medium text-dark truncate max-w-[180px]" title={inv.buyerName}>
+                          {inv.buyerName || "—"}
+                        </p>
+                      </td>
+                      {/* Invoice # */}
                       <td className="px-5 py-3.5">
                         <p className="text-sm font-semibold text-dark leading-tight">{formatInvoiceNumber(inv)}</p>
                         <p className="text-xs text-muted mt-0.5">{formatDate(inv.createdAt)}</p>
                       </td>
-                      {/* Customer */}
-                      <td className="px-5 py-3.5">
-                        <p className="text-sm font-medium text-dark truncate max-w-[160px]" title={inv.buyerName}>
-                          {inv.buyerName || "—"}
-                        </p>
-                        {buyerEmail && (
-                          <p className="text-xs text-muted truncate max-w-[160px] mt-0.5">{buyerEmail}</p>
+                      {/* Amount */}
+                      <td className="px-5 py-3.5 text-right">
+                        <p className="text-sm font-semibold text-dark tabular-nums">{formatCurrency(inv.totalAmount, inv.currency)}</p>
+                        {inv.paymentStatus === "PARTIAL" && (inv.amountPaid ?? 0) > 0 && (
+                          <p className="text-xs text-muted mt-0.5">
+                            {formatCurrency(inv.amountPaid!, inv.currency)} paid
+                          </p>
                         )}
                       </td>
                       {/* Due date */}
                       <td className="px-5 py-3.5 hidden sm:table-cell">
                         <DueDateCell dueDate={dueDate} isOverdue={inv.isOverdue} />
                       </td>
-                      {/* Status pill */}
+                      {/* Status */}
                       <td className="px-5 py-3.5">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${pill.cls}`}>
-                          {pill.label}
-                        </span>
-                      </td>
-                      {/* Amount */}
-                      <td className="px-5 py-3.5">
-                        <AmountCell inv={inv} />
+                        <StatusPillCell pill={pill} />
                       </td>
                       {/* Actions */}
                       <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
@@ -618,7 +572,6 @@ function SentPanel() {
         )}
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm text-muted">
           <span>Showing {invoices.length} of {total}</span>
@@ -709,7 +662,7 @@ function ReceivedPanel() {
 
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         {/* Tab bar */}
-        <div className="flex items-center justify-between px-4 border-b border-border">
+        <div className="px-4 border-b border-border">
           <div className="flex">
             {RECEIVED_TABS.map(({ key, label }) => (
               <button key={key}
@@ -753,11 +706,11 @@ function ReceivedPanel() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-surface/50">
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Supplier</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Sender</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice #</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Amount</th>
                   <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden sm:table-cell">Due date</th>
                   <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Status</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Amount</th>
                   <th className="px-5 py-3 w-24" />
                 </tr>
               </thead>
@@ -769,21 +722,24 @@ function ReceivedPanel() {
                       onClick={() => router.push(`/incoming-invoices/${inv.id}`)}
                       className="border-b border-border last:border-0 cursor-pointer hover:bg-gray-50 transition-colors"
                     >
-                      {/* Invoice */}
+                      {/* Sender */}
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-medium text-dark truncate max-w-[180px]" title={inv.supplierName}>
+                          {inv.supplierName ?? "—"}
+                        </p>
+                      </td>
+                      {/* Invoice # */}
                       <td className="px-5 py-3.5">
                         <p className="text-sm font-semibold text-dark leading-tight">
                           {formatInvoiceNumber({ platformIrn: inv.invoiceNumber ?? inv.platformIrn, id: inv.id })}
                         </p>
                         <p className="text-xs text-muted mt-0.5">{formatDate(inv.createdAt)}</p>
                       </td>
-                      {/* Supplier */}
-                      <td className="px-5 py-3.5">
-                        <p className="text-sm font-medium text-dark truncate max-w-[160px]" title={inv.supplierName}>
-                          {inv.supplierName ?? "—"}
+                      {/* Amount */}
+                      <td className="px-5 py-3.5 text-right">
+                        <p className="text-sm font-semibold text-dark tabular-nums">
+                          {inv.totalAmount != null ? formatCurrency(inv.totalAmount, inv.currency ?? "NGN") : "—"}
                         </p>
-                        {inv.supplierEmail && (
-                          <p className="text-xs text-muted truncate max-w-[160px] mt-0.5">{inv.supplierEmail}</p>
-                        )}
                       </td>
                       {/* Due date */}
                       <td className="px-5 py-3.5 hidden sm:table-cell">
@@ -791,15 +747,7 @@ function ReceivedPanel() {
                       </td>
                       {/* Status */}
                       <td className="px-5 py-3.5">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${pill.cls}`}>
-                          {pill.label}
-                        </span>
-                      </td>
-                      {/* Amount */}
-                      <td className="px-5 py-3.5 text-right">
-                        <p className="text-sm font-semibold text-dark">
-                          {inv.totalAmount != null ? formatCurrency(inv.totalAmount, inv.currency ?? "NGN") : "—"}
-                        </p>
+                        <StatusPillCell pill={pill} />
                       </td>
                       {/* Next action only */}
                       <td className="px-3 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
