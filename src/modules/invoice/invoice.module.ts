@@ -14,6 +14,7 @@ import { ApiKeyService } from '../identity/services/api-key.service';
 import { TokenService } from '../identity/services/token.service';
 import { ApiKeyGuard } from '../identity/guards/api-key.guard';
 import { JwtGuard } from '../identity/guards/jwt.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
 import { SubmissionService } from '../submission/services/submission.service';
 import { MockAdapter } from '../submission/adapters/mock/mock.adapter';
 import { InterswitchAdapter } from '../submission/adapters/interswitch/interswitch.adapter';
@@ -39,6 +40,7 @@ import { InventoryModule } from '../inventory/inventory.module';
     TokenService,
     ApiKeyGuard,
     JwtGuard,
+    RolesGuard,
     SubmissionService,
     MockAdapter,
     InterswitchAdapter,
