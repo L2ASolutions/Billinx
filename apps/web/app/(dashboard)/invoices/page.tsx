@@ -105,7 +105,15 @@ function DuplicateButton({ invoiceId }: { invoiceId: string }) {
 
 // ── Due date cell ─────────────────────────────────────────────────────────────
 
-function DueDateCell({ dueDate, isOverdue }: { dueDate?: string; isOverdue?: boolean }) {
+function DueDateCell({
+  dueDate,
+  status = "",
+  paymentStatus = "",
+}: {
+  dueDate?: string;
+  status?: string;
+  paymentStatus?: string;
+}) {
   if (!dueDate) return <span className="text-sm text-muted">—</span>;
 
   const due = new Date(dueDate);
@@ -113,8 +121,16 @@ function DueDateCell({ dueDate, isOverdue }: { dueDate?: string; isOverdue?: boo
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
   const diffDays = Math.round((dueDay.getTime() - today.getTime()) / 86400000);
+  const isPast = diffDays < 0;
 
-  if (isOverdue || diffDays < 0) {
+  // Red only when: ACCEPTED + unpaid + past due
+  const showRed =
+    isPast &&
+    status === "ACCEPTED" &&
+    paymentStatus !== "PAID" &&
+    paymentStatus !== "RECEIVED";
+
+  if (showRed) {
     const days = Math.abs(diffDays);
     return (
       <div>
@@ -123,14 +139,17 @@ function DueDateCell({ dueDate, isOverdue }: { dueDate?: string; isOverdue?: boo
       </div>
     );
   }
-  if (diffDays === 0) {
+
+  if (isPast) {
+    const days = Math.abs(diffDays);
     return (
       <div>
-        <span className="text-sm text-amber-600 font-medium">{formatDate(dueDate)}</span>
-        <p className="text-xs text-amber-500 mt-0.5">Due today</p>
+        <span className="text-sm text-dark">{formatDate(dueDate)}</span>
+        <p className="text-xs text-muted mt-0.5">{days} day{days !== 1 ? "s" : ""} ago</p>
       </div>
     );
   }
+
   return <span className="text-sm text-dark">{formatDate(dueDate)}</span>;
 }
 
@@ -510,7 +529,7 @@ function SentPanel() {
                       </td>
                       {/* Due Date */}
                       <td className="px-5 py-3.5 hidden sm:table-cell">
-                        <DueDateCell dueDate={dueDate} isOverdue={inv.isOverdue} />
+                        <DueDateCell dueDate={dueDate} status={inv.status} paymentStatus={inv.paymentStatus} />
                       </td>
                       {/* Status */}
                       <td className="px-5 py-3.5">
