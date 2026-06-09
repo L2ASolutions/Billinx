@@ -842,19 +842,22 @@ export class UserService {
     return this.consentService.requestErasure({ userId, tenantId, email });
   }
 
-  async getPreferences(userId: string): Promise<{ dashboardWidgets: Record<string, boolean> }> {
+  async getPreferences(userId: string): Promise<{ dashboardWidgets: Record<string, boolean>; hidden: string[] }> {
     const row = await this.prisma.asAdmin((tx) =>
       tx.userPreference.findUnique({ where: { userId } }),
     );
     const prefs = (row?.preferences as Record<string, unknown>) ?? {};
-    return { dashboardWidgets: (prefs.dashboardWidgets as Record<string, boolean>) ?? {} };
+    return {
+      dashboardWidgets: (prefs.dashboardWidgets as Record<string, boolean>) ?? {},
+      hidden: (prefs.hidden as string[]) ?? [],
+    };
   }
 
   async upsertPreferences(
     userId: string,
     tenantId: string,
-    body: { dashboardWidgets?: Record<string, boolean> },
-  ): Promise<{ dashboardWidgets: Record<string, boolean> }> {
+    body: { dashboardWidgets?: Record<string, boolean>; hidden?: string[] },
+  ): Promise<{ dashboardWidgets: Record<string, boolean>; hidden: string[] }> {
     const existing = await this.prisma.asAdmin((tx) =>
       tx.userPreference.findUnique({ where: { userId } }),
     );
@@ -869,6 +872,9 @@ export class UserService {
       }),
     );
 
-    return { dashboardWidgets: (merged.dashboardWidgets as Record<string, boolean>) ?? {} };
+    return {
+      dashboardWidgets: (merged.dashboardWidgets as Record<string, boolean>) ?? {},
+      hidden: (merged.hidden as string[]) ?? [],
+    };
   }
 }
