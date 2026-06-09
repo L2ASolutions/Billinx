@@ -21,12 +21,6 @@ const PAYMENT_TABS = [
 
 type PaymentTab = typeof PAYMENT_TABS[number]["key"];
 
-const PAYMENT_STATUS_COLORS: Record<string, string> = {
-  PAID:    "bg-green-50 text-green-700",
-  PARTIAL: "bg-blue-50 text-blue-600",
-  UNPAID:  "bg-amber-50 text-amber-700",
-  OVERDUE: "bg-red-50 text-red-600",
-};
 
 const PROVIDERS = ["MANUAL", "PAYSTACK", "FLUTTERWAVE", "BANK_TRANSFER"] as const;
 
@@ -49,6 +43,7 @@ interface InvoiceRow {
   status: string;
   paymentStatus?: string;
   paymentDueDate?: string;
+  paidAt?: string;
   isOverdue?: boolean;
   createdAt: string;
 }
@@ -70,6 +65,43 @@ interface PaymentStats {
   unpaidNotDue: number;
   overdue: number;
   providerBreakdown: Array<{ provider: string; total: number }>;
+}
+
+// ── Payment status cell ───────────────────────────────────────────────────────
+
+function PaymentStatusCell({ inv }: { inv: InvoiceRow }) {
+  if (inv.paymentStatus === "PAID") {
+    return (
+      <div>
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+          Paid
+        </span>
+        {inv.paidAt && (
+          <p className="text-xs text-muted mt-0.5">{formatDate(inv.paidAt)}</p>
+        )}
+      </div>
+    );
+  }
+  if (inv.paymentStatus === "PARTIAL") {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
+        Partial
+      </span>
+    );
+  }
+  if (inv.paymentDueDate) {
+    const due = new Date(inv.paymentDueDate);
+    const today = new Date(new Date().toDateString());
+    if (inv.isOverdue || due < today) {
+      const days = Math.max(1, Math.round((today.getTime() - due.getTime()) / 86400000));
+      return <span className="text-sm text-red-600 font-medium">Overdue {days}d</span>;
+    }
+    return <span className="text-sm text-muted">Due {formatDate(inv.paymentDueDate)}</span>;
+  }
+  if (inv.isOverdue) {
+    return <span className="text-sm text-red-600 font-medium">Overdue</span>;
+  }
+  return <span className="text-sm text-muted">Unpaid</span>;
 }
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
@@ -263,7 +295,7 @@ export default function PaymentsPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border">
-                        {["Invoice", "Buyer", "Amount", "Outstanding", "Due date", "FIRS status", "Payment", ""].map((col, i) => (
+                        {["Invoice", "Buyer", "Amount", "Outstanding", "Status", ""].map((col, i) => (
                           <th key={col}
                             className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${[2, 3].includes(i) ? "text-right" : "text-left"}`}>
                             {col}
@@ -282,8 +314,8 @@ export default function PaymentsPage() {
                             inv.isOverdue ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-surface"
                           }`}>
                           <td className="px-6 py-3">
-                            <Link href={`/invoices/${inv.id}`} className="text-sm font-mono text-green hover:underline block">
-                              {inv.platformIrn ? inv.platformIrn.slice(0, 16) + "…" : inv.id.slice(0, 8) + "…"}
+                            <Link href={`/invoices/${inv.id}`} className="text-sm font-mono text-green hover:underline block break-all">
+                              {inv.platformIrn ?? inv.id.slice(0, 8) + "…"}
                             </Link>
                             {inv.isOverdue && (
                               <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-600">
@@ -291,7 +323,7 @@ export default function PaymentsPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-6 py-3 text-sm text-dark">{inv.buyerName}</td>
+                          <td className="px-6 py-3 text-sm text-dark max-w-[120px] truncate" title={inv.buyerName}>{inv.buyerName}</td>
                           <td className="px-6 py-3 text-sm font-medium text-dark text-right">
                             {formatCurrency(inv.totalAmount, inv.currency)}
                           </td>
@@ -300,22 +332,8 @@ export default function PaymentsPage() {
                               {formatCurrency(outstanding, inv.currency)}
                             </span>
                           </td>
-                          <td className="px-6 py-3 text-sm text-muted">
-                            {inv.paymentDueDate ? formatDate(inv.paymentDueDate) : "—"}
-                          </td>
                           <td className="px-6 py-3">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                              {(inv.status ?? '').replace(/_/g, " ")}
-                            </span>
-                          </td>
-                          <td className="px-6 py-3">
-                            {inv.paymentStatus ? (
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${PAYMENT_STATUS_COLORS[inv.paymentStatus] ?? "bg-gray-100 text-gray-600"}`}>
-                                {inv.paymentStatus}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted">—</span>
-                            )}
+                            <PaymentStatusCell inv={inv} />
                           </td>
                           <td className="px-6 py-3 text-right">
                             {inv.status === "ACCEPTED" && inv.paymentStatus !== "PAID" && (
