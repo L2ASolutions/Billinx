@@ -11,6 +11,7 @@ import {
   UseGuards,
   Req,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
@@ -316,6 +317,76 @@ export class UserController {
     return this.prisma.asAdmin((tx) =>
       tx.tenant.update({ where: { id: ctx.tenantId }, data }),
     );
+  }
+
+  // ── Dashboard visibility (JWT auth) ─────────────────────────────────────
+
+  private static readonly VISIBILITY_SECTIONS = [
+    'receivables', 'vat_strip', 'revenue_chart', 'pipeline_chart', 'activity_chart', 'needs_attention',
+  ] as const;
+
+  private static readonly VISIBILITY_DEFAULTS: Record<string, Record<string, boolean>> = {
+    VIEWER: {
+      receivables: false, vat_strip: false, revenue_chart: false,
+      pipeline_chart: true, activity_chart: true, needs_attention: true,
+    },
+    ACCOUNTANT: {
+      receivables: true, vat_strip: true, revenue_chart: true,
+      pipeline_chart: true, activity_chart: true, needs_attention: true,
+    },
+  };
+
+  @Get('tenants/me/dashboard-visibility')
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'VIEWER')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get dashboard section visibility settings for all roles' })
+  async getDashboardVisibility() {
+    const ctx = getRequestContext();
+    const tenant = await this.prisma.asAdmin((tx) =>
+      tx.tenant.findUniqueOrThrow({ where: { id: ctx.tenantId }, select: { dashboardVisibility: true } }),
+    );
+    const stored = (tenant.dashboardVisibility ?? {}) as Record<string, Record<string, boolean>>;
+    const result: Record<string, Record<string, boolean>> = {};
+    for (const role of ['VIEWER', 'ACCOUNTANT']) {
+      const defaults = UserController.VISIBILITY_DEFAULTS[role];
+      const overrides = stored[role] ?? {};
+      result[role] = { ...defaults, ...overrides };
+    }
+    return result;
+  }
+
+  @Patch('tenants/me/dashboard-visibility')
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update a single dashboard section visibility for a role' })
+  async updateDashboardVisibility(@Body() body: Record<string, any>) {
+    const { role, section, visible } = body;
+    if (!['VIEWER', 'ACCOUNTANT'].includes(role)) {
+      throw new BadRequestException('role must be VIEWER or ACCOUNTANT');
+    }
+    if (!(UserController.VISIBILITY_SECTIONS as readonly string[]).includes(section)) {
+      throw new BadRequestException(`section must be one of: ${UserController.VISIBILITY_SECTIONS.join(', ')}`);
+    }
+    if (typeof visible !== 'boolean') {
+      throw new BadRequestException('visible must be a boolean');
+    }
+    const ctx = getRequestContext();
+    const tenant = await this.prisma.asAdmin((tx) =>
+      tx.tenant.findUniqueOrThrow({ where: { id: ctx.tenantId }, select: { dashboardVisibility: true } }),
+    );
+    const stored = (tenant.dashboardVisibility ?? {}) as Record<string, Record<string, boolean>>;
+    const updated = {
+      ...stored,
+      [role]: { ...(stored[role] ?? {}), [section]: visible },
+    };
+    await this.prisma.asAdmin((tx) =>
+      tx.tenant.update({ where: { id: ctx.tenantId }, data: { dashboardVisibility: updated } }),
+    );
+    const defaults = UserController.VISIBILITY_DEFAULTS[role] ?? {};
+    const roleOverrides = (updated as Record<string, Record<string, boolean>>)[role] ?? {};
+    return { role, section, visible, effective: { ...defaults, ...roleOverrides } };
   }
 
   @Get('users')
