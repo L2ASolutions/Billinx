@@ -16,6 +16,7 @@ import {
   Header,
   BadRequestException,
 } from '@nestjs/common';
+import * as ExcelJS from 'exceljs';
 import {
   ApiTags,
   ApiOperation,
@@ -500,6 +501,82 @@ export class InvoiceController {
   async getPaymentStats(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getPaymentStats(ctx.tenantId);
+  }
+
+  @Get('dashboard/export')
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'VIEWER')
+  @ApiBearerAuth()
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  @ApiOperation({ summary: 'Export sent invoices as Excel (dashboard / JWT auth)' })
+  async exportInvoicesDashboard(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Query('status') status?: InvoiceStatus,
+    @Query('search') search?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const ctx = this.getCtx(req);
+    const result = await this.invoiceService.listInvoices(ctx.tenantId, {
+      status,
+      search,
+      from,
+      to,
+      page: 1,
+      limit: 1000,
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Billinx';
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet('Invoices');
+    sheet.columns = [
+      { header: 'Invoice #',          key: 'irn',           width: 32 },
+      { header: 'Buyer',              key: 'buyer',         width: 28 },
+      { header: 'Issue Date',         key: 'issueDate',     width: 14 },
+      { header: 'Due Date',           key: 'dueDate',       width: 14 },
+      { header: 'Subtotal',           key: 'subtotal',      width: 16 },
+      { header: 'VAT',                key: 'vat',           width: 14 },
+      { header: 'Total',              key: 'total',         width: 16 },
+      { header: 'Currency',           key: 'currency',      width: 10 },
+      { header: 'FIRS Status',        key: 'status',        width: 18 },
+      { header: 'Payment Status',     key: 'paymentStatus', width: 16 },
+    ];
+
+    const fmtDate = (d?: string) =>
+      d ? new Date(d).toLocaleDateString('en-GB') : '';
+
+    for (const inv of result.data) {
+      sheet.addRow({
+        irn:           inv.firsConfirmedIrn ?? inv.platformIrn,
+        buyer:         inv.buyerName,
+        issueDate:     fmtDate(inv.issueDate),
+        dueDate:       fmtDate(inv.paymentDueDate ?? inv.dueDate),
+        subtotal:      inv.subtotal,
+        vat:           inv.vatAmount,
+        total:         inv.totalAmount,
+        currency:      inv.currency,
+        status:        inv.status,
+        paymentStatus: inv.paymentStatus ?? '',
+      });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="invoices-${today}.xlsx"`,
+    );
+    await workbook.xlsx.write(res);
+    res.end();
   }
 
   // ---------------------------------------------------------------------------
