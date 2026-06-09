@@ -397,6 +397,24 @@ export const userApi = {
     api.patch<{ dashboardWidgets: Record<string, boolean>; hidden: string[] }>('/v1/users/me/preferences', body),
 };
 
+export interface DashboardVisibility {
+  receivables: boolean;
+  vat_strip: boolean;
+  revenue_chart: boolean;
+  pipeline_chart: boolean;
+  activity_chart: boolean;
+  needs_attention: boolean;
+}
+
+export const tenantApi = {
+  getMe: () => api.get<unknown>('/v1/tenants/me'),
+  updateMe: (data: Record<string, unknown>) => api.patch<unknown>('/v1/tenants/me', data),
+  getDashboardVisibility: () =>
+    api.get<{ VIEWER: DashboardVisibility; ACCOUNTANT: DashboardVisibility }>('/v1/tenants/me/dashboard-visibility'),
+  updateDashboardVisibility: (role: 'VIEWER' | 'ACCOUNTANT', section: string, visible: boolean) =>
+    api.patch<unknown>('/v1/tenants/me/dashboard-visibility', { role, section, visible }),
+};
+
 // API Keys — use JWT-guarded /users/api-keys routes (BUG-004)
 // BUG-016: backend stores as `name`, not `label` — translate at the API boundary
 export const apiKeyApi = {

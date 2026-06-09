@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 import { useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
-import { invoiceApi, incomingInvoiceApi, userApi } from '@/lib/api';
+import { invoiceApi, incomingInvoiceApi, userApi, type DashboardVisibility } from '@/lib/api';
 import { formatCurrency, formatDate, formatPaymentMethod } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { useUserProfile } from '@/lib/userProfile';
@@ -55,6 +55,7 @@ interface Stats {
   recentRejections?: RecentRejection[];
   incomingStats?: { total: number; toReview: number; approved: number; paid: number };
   recentPayments?: RecentPayment[];
+  myVisibility?: DashboardVisibility;
 }
 
 interface IncomingStats {
@@ -95,6 +96,18 @@ function canSeeFinancials(role: string): boolean {
 
 function canCustomize(role: string): boolean {
   return ['OWNER', 'ADMIN', 'ACCOUNTANT'].includes(role);
+}
+
+function isSectionVisible(
+  sectionKey: string,
+  role: string,
+  tenantVisibility: Record<string, boolean> | undefined,
+  userHidden: string[],
+): boolean {
+  if (['OWNER', 'ADMIN'].includes(role)) return true;
+  if (tenantVisibility && tenantVisibility[sectionKey] === false) return false;
+  if (userHidden.includes(sectionKey)) return false;
+  return true;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -309,6 +322,7 @@ function CustomizeSheet({
   onSave,
   saving,
   role,
+  tenantVisibility,
 }: {
   open: boolean;
   onClose: () => void;
@@ -317,6 +331,7 @@ function CustomizeSheet({
   onSave: () => void;
   saving: boolean;
   role: string;
+  tenantVisibility: Record<string, boolean> | undefined;
 }) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -330,7 +345,9 @@ function CustomizeSheet({
   }, [open, onClose]);
 
   const sections = Object.entries(SECTION_LABELS).filter(([key]) => {
-    if (FINANCIAL_SECTIONS.has(key)) return canSeeFinancials(role);
+    if (FINANCIAL_SECTIONS.has(key) && !canSeeFinancials(role)) return false;
+    // Don't show toggles for sections the tenant admin has disabled
+    if (!['OWNER', 'ADMIN'].includes(role) && tenantVisibility && tenantVisibility[key] === false) return false;
     return true;
   });
 
@@ -431,6 +448,10 @@ export default function DashboardPage() {
   const [rejectionsData, setRejectionsData] = useState<RejectionsData | null>(null);
   const [rejectionsLoading, setRejectionsLoading] = useState(true);
 
+  // ── Tenant visibility (from stats response) ──────────────────────────────────
+
+  const [tenantVisibility, setTenantVisibility] = useState<Record<string, boolean> | undefined>(undefined);
+
   // ── Preferences state ────────────────────────────────────────────────────────
 
   const [savedHidden, setSavedHidden] = useState<string[]>([]);
@@ -453,7 +474,11 @@ export default function DashboardPage() {
       invoiceApi.stats().catch(() => null),
       incomingInvoiceApi.stats().catch(() => null),
     ]);
-    setStats(statsResult as Stats | null);
+    const typedStats = statsResult as Stats | null;
+    setStats(typedStats);
+    if (typedStats?.myVisibility) {
+      setTenantVisibility(typedStats.myVisibility as unknown as Record<string, boolean>);
+    }
     setStatsLoading(false);
     setIncomingStats(incomingResult as IncomingStats | null);
     setIncomingLoading(false);
@@ -531,8 +556,7 @@ export default function DashboardPage() {
 
   function sectionVisible(key: string): boolean {
     if (FINANCIAL_SECTIONS.has(key) && !financials) return false;
-    if (!canCustomize(role)) return true;
-    return !localHidden.includes(key);
+    return isSectionVisible(key, role, tenantVisibility, canCustomize(role) ? localHidden : []);
   }
 
   // ── Panel handlers ────────────────────────────────────────────────────────────
@@ -1079,6 +1103,7 @@ export default function DashboardPage() {
           onSave={savePreferences}
           saving={saving}
           role={role}
+          tenantVisibility={tenantVisibility}
         />
       )}
     </div>
