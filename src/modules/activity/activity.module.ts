@@ -9,6 +9,7 @@ import { AdminJwtGuard } from '../admin/guards/admin-jwt.guard';
 import { AdminKeyGuard } from '../identity/guards/admin-key.guard';
 import { ApiKeyGuard } from '../identity/guards/api-key.guard';
 import { FlexAuthGuard } from '../identity/guards/flex-auth.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
 import { EmailModule } from '../../shared/email/email.module';
 
 @Global()
@@ -25,6 +26,7 @@ import { EmailModule } from '../../shared/email/email.module';
     AdminKeyGuard,
     ApiKeyGuard,
     FlexAuthGuard,
+    RolesGuard,
   ],
   exports: [ActivityService],
 })
