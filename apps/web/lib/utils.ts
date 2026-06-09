@@ -35,6 +35,23 @@ export function formatCurrencyShort(amount: number, currency = 'NGN'): string {
   return formatCurrency(amount, currency);
 }
 
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  BANK_TRANSFER: 'Bank Transfer',
+  CARD:          'Card',
+  PAYSTACK:      'Paystack',
+  FLUTTERWAVE:   'Flutterwave',
+  MANUAL:        'Manual',
+};
+
+export function formatPaymentMethod(method: string): string {
+  if (!method) return '—';
+  return PAYMENT_METHOD_LABELS[method.toUpperCase()]
+    ?? method
+        .toLowerCase()
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function formatInvoiceNumber(inv: {
   invoiceNumber?: string;
   platformIrn?: string;
