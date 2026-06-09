@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { invoiceApi } from "@/lib/api";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, formatPaymentMethod } from "@/lib/utils";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -427,7 +427,7 @@ export default function PaymentsPage() {
                     <div key={provider} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full shrink-0 ${PROVIDER_DOTS[provider] ?? "bg-gray-400"}`} />
-                        <span className="text-dark">{provider.replace(/_/g, " ")}</span>
+                        <span className="text-dark">{formatPaymentMethod(provider)}</span>
                       </div>
                       <span className="font-medium text-dark">{formatCurrency(total)}</span>
                     </div>
@@ -473,7 +473,7 @@ export default function PaymentsPage() {
                 <select
                   className="w-full px-3 py-2.5 rounded-lg border border-border bg-white text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green"
                   value={form.provider} onChange={(e) => setForm((f) => ({ ...f, provider: e.target.value }))}>
-                  {PROVIDERS.map((p) => <option key={p} value={p}>{p.replace(/_/g, " ")}</option>)}
+                  {PROVIDERS.map((p) => <option key={p} value={p}>{formatPaymentMethod(p)}</option>)}
                 </select>
               </div>
               <div>
