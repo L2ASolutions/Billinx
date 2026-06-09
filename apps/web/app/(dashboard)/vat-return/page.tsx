@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { vatReturnApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -248,7 +247,10 @@ export default function VatReturnPage() {
 
   return (
     <>
-      <Topbar title="VAT Return Assistant" />
+      <header className="bg-white border-b border-border px-6 py-5 sticky top-0 z-10">
+        <h1 className="text-xl font-bold text-dark">VAT Return</h1>
+        <p className="text-sm text-muted mt-0.5">Generate and download your VAT 002 return for NRS filing</p>
+      </header>
 
       <div className="p-6 space-y-6 pb-24 max-w-5xl">
 
