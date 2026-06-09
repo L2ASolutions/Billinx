@@ -14,9 +14,10 @@ import { JwtGuard } from '../identity/guards/jwt.guard';
 import { RolesGuard } from '../../shared/guards/roles.guard';
 import { ClientModule } from '../client/client.module';
 import { InventoryModule } from '../inventory/inventory.module';
+import { EmailModule } from '../../shared/email/email.module';
 
 @Module({
-  imports: [EventEmitterModule, ClientModule, InventoryModule],
+  imports: [EventEmitterModule, ClientModule, InventoryModule, EmailModule],
   controllers: [SubmissionController],
   providers: [
     SubmissionService,
