@@ -504,6 +504,16 @@ export class InvoiceController {
     return this.invoiceService.getDashboardCharts(ctx.tenantId);
   }
 
+  @Get('dashboard/rejections')
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'VIEWER')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get FIRS rejection summary for dashboard (JWT auth)' })
+  async getDashboardRejections(@Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.getDashboardRejections(ctx.tenantId);
+  }
+
   @Get('dashboard/payment-stats')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
