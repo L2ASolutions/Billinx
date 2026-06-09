@@ -1636,4 +1636,100 @@ export class InvoiceService {
 
     return { sent: true, to: buyerEmail };
   }
+
+  async getDashboardCharts(tenantId: string) {
+    const now = new Date();
+    const months = 6;
+
+    const revenueTrend: Array<{ month: string; monthKey: string; amount: number }> = [];
+    const sentVsReceived: Array<{ month: string; sent: number; received: number }> = [];
+
+    for (let i = months - 1; i >= 0; i--) {
+      const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+      const label = start.toLocaleString('en-NG', { month: 'short', year: 'numeric' });
+      const monthKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
+
+      const [revenueAgg, sentCount, receivedCount] = await this.prisma.asAdmin(
+        async (tx) => {
+          const ra = await (tx as any).invoice.aggregate({
+            where: {
+              tenantId,
+              issueDate: { gte: start, lt: end },
+              OR: [{ status: 'ACCEPTED' }, { paymentStatus: 'PAID' }],
+              NOT: { status: { in: ['DRAFT', 'CANCELLED'] as any } },
+            },
+            _sum: { totalAmount: true },
+          });
+          const sc = await (tx as any).invoice.count({
+            where: {
+              tenantId,
+              issueDate: { gte: start, lt: end },
+              NOT: { status: 'CANCELLED' as any },
+            },
+          });
+          const rc = await (tx as any).incomingInvoice.count({
+            where: {
+              tenantId,
+              createdAt: { gte: start, lt: end },
+            },
+          });
+          return [ra, sc, rc];
+        },
+      );
+
+      revenueTrend.push({
+        month: label,
+        monthKey,
+        amount: Number(revenueAgg._sum.totalAmount ?? 0),
+      });
+      sentVsReceived.push({ month: label, sent: sentCount, received: receivedCount });
+    }
+
+    const allInvoices: { status: string; paymentStatus: string | null; isOverdue: boolean }[] =
+      await this.prisma.asAdmin((tx) =>
+        (tx as any).invoice.findMany({
+          where: { tenantId },
+          select: { status: true, paymentStatus: true, isOverdue: true },
+        }),
+      );
+
+    const breakdown = {
+      Paid: 0,
+      Overdue: 0,
+      Accepted: 0,
+      'Needs attention': 0,
+      Draft: 0,
+      Cancelled: 0,
+    };
+
+    const NEEDS_ATTENTION = new Set([
+      'REJECTED',
+      'SUBMISSION_FAILED',
+      'DEAD_LETTERED',
+      'VALIDATION_FAILED',
+    ]);
+
+    for (const inv of allInvoices) {
+      if (inv.paymentStatus === 'PAID') {
+        breakdown['Paid']++;
+      } else if (inv.status === 'ACCEPTED' && inv.isOverdue) {
+        breakdown['Overdue']++;
+      } else if (inv.status === 'ACCEPTED') {
+        breakdown['Accepted']++;
+      } else if (NEEDS_ATTENTION.has(inv.status)) {
+        breakdown['Needs attention']++;
+      } else if (inv.status === 'DRAFT') {
+        breakdown['Draft']++;
+      } else if (inv.status === 'CANCELLED') {
+        breakdown['Cancelled']++;
+      }
+    }
+
+    const invoiceStatusBreakdown = Object.entries(breakdown).map(
+      ([status, count]) => ({ status, count }),
+    );
+
+    return { revenueTrend, invoiceStatusBreakdown, sentVsReceived };
+  }
 }
