@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useState, useCallback, FormEvent } from "react";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { userApi } from "@/lib/api";
+import { userApi, tenantApi, type DashboardVisibility } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
+import { useRequireAuth } from "@/lib/auth";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,17 @@ const ROLE_DESC: Record<string, string> = {
   API_MANAGER: "Manage API keys and webhook integrations only",
   VIEWER:      "Read-only access to invoices and reports",
 };
+
+// ── Dashboard visibility ──────────────────────────────────────────────────────
+
+const VISIBILITY_SECTIONS: Array<{ key: keyof DashboardVisibility; label: string }> = [
+  { key: "receivables",     label: "Financial Cards (Receivables, Payables, Net Cash)" },
+  { key: "vat_strip",       label: "VAT Summary" },
+  { key: "revenue_chart",   label: "Monthly Revenue Chart" },
+  { key: "pipeline_chart",  label: "Invoice Pipeline Chart" },
+  { key: "activity_chart",  label: "Invoice Activity Chart" },
+  { key: "needs_attention", label: "Needs Attention" },
+];
 
 // ── Permission matrix ─────────────────────────────────────────────────────────
 
@@ -194,6 +206,10 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TeamPage() {
+  const { user } = useRequireAuth();
+  const currentRole = user?.role ?? "VIEWER";
+  const canManageVisibility = ["OWNER", "ADMIN"].includes(currentRole);
+
   const [tab, setTab] = useState<Tab>("members");
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -201,6 +217,47 @@ export default function TeamPage() {
   const [loadError, setLoadError] = useState("");
   const [showInvite, setShowInvite] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+
+  // ── Dashboard visibility state ────────────────────────────────────────────
+  const [visibility, setVisibility] = useState<{ VIEWER: DashboardVisibility; ACCOUNTANT: DashboardVisibility } | null>(null);
+  const [visibilityLoading, setVisibilityLoading] = useState(false);
+  const [visToast, setVisToast] = useState("");
+
+  const loadVisibility = useCallback(async () => {
+    if (!canManageVisibility) return;
+    setVisibilityLoading(true);
+    try {
+      const data = await tenantApi.getDashboardVisibility();
+      setVisibility(data);
+    } finally {
+      setVisibilityLoading(false);
+    }
+  }, [canManageVisibility]);
+
+  useEffect(() => {
+    if (tab === "permissions" && canManageVisibility && !visibility) {
+      void loadVisibility();
+    }
+  }, [tab, canManageVisibility, visibility, loadVisibility]);
+
+  async function handleVisibilityToggle(role: "VIEWER" | "ACCOUNTANT", section: keyof DashboardVisibility, newValue: boolean) {
+    if (!visibility) return;
+    const prev = visibility;
+    // Optimistic update
+    setVisibility({
+      ...visibility,
+      [role]: { ...visibility[role], [section]: newValue },
+    });
+    try {
+      await tenantApi.updateDashboardVisibility(role, section, newValue);
+      setVisToast("Visibility updated");
+      setTimeout(() => setVisToast(""), 3000);
+    } catch {
+      setVisibility(prev);
+      setVisToast("Failed to update — please try again");
+      setTimeout(() => setVisToast(""), 4000);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -263,6 +320,14 @@ export default function TeamPage() {
           </Button>
         }
       />
+
+      {visToast && (
+        <div className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-50 text-sm px-5 py-2.5 rounded-xl shadow-lg ${
+          visToast.startsWith("Failed") ? "bg-red-600 text-white" : "bg-dark text-white"
+        }`}>
+          {visToast}
+        </div>
+      )}
 
       <div className="p-6 space-y-6">
         {loadError && (
@@ -439,6 +504,7 @@ export default function TeamPage() {
 
         {/* ── Role permissions tab ───────────────────────────────────────── */}
         {tab === "permissions" && (
+          <>
           <div className="bg-white rounded-xl border border-border overflow-hidden">
             <div className="px-6 py-5 border-b border-border">
               <h2 className="font-semibold text-dark">Role permissions</h2>
@@ -490,6 +556,118 @@ export default function TeamPage() {
               </p>
             </div>
           </div>
+
+          {/* ── Dashboard Visibility (OWNER/ADMIN only) ────────────────────── */}
+          {canManageVisibility && (
+            <div className="bg-white rounded-xl border border-border overflow-hidden mt-6">
+              <div className="px-6 py-5 border-b border-border">
+                <h2 className="font-semibold text-dark">Dashboard Visibility</h2>
+                <p className="mt-0.5 text-sm text-muted">
+                  Control which dashboard sections each role can see by default. These settings apply to all team members with that role. Changes take effect immediately.
+                </p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border bg-gray-50">
+                      <th className="px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide text-left w-72">
+                        Dashboard section
+                      </th>
+                      {[
+                        { label: "Owner",           color: "bg-emerald-100 text-emerald-700" },
+                        { label: "Admin",            color: "bg-blue-100 text-blue-700"      },
+                        { label: "Invoice Creator",  color: "bg-amber-100 text-amber-700"    },
+                        { label: "Viewer",           color: "bg-gray-100 text-gray-600"      },
+                      ].map(({ label, color }) => (
+                        <th key={label} className="px-4 py-3 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${color}`}>
+                            {label}
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {VISIBILITY_SECTIONS.map(({ key, label }, idx) => (
+                      <tr key={key} className={`border-b border-border last:border-0 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}`}>
+                        <td className="px-6 py-3 text-sm text-dark font-medium">{label}</td>
+
+                        {/* Owner — always on, locked */}
+                        <td className="px-4 py-3 text-center">
+                          <div className="relative group inline-flex items-center justify-center">
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-50">
+                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                <path d="M2 6l3 3 5-5" stroke="#059669" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </span>
+                            <span className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-dark text-white text-xs rounded px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                              Always visible — cannot be restricted
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Admin — always on, locked */}
+                        <td className="px-4 py-3 text-center">
+                          <div className="relative group inline-flex items-center justify-center">
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-50">
+                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                <path d="M2 6l3 3 5-5" stroke="#059669" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </span>
+                            <span className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-dark text-white text-xs rounded px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                              Always visible — cannot be restricted
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Accountant — toggleable */}
+                        <td className="px-4 py-3 text-center">
+                          {visibilityLoading || !visibility ? (
+                            <div className="inline-block w-9 h-5 rounded-full bg-gray-100 animate-pulse" />
+                          ) : (
+                            <button
+                              onClick={() => handleVisibilityToggle("ACCOUNTANT", key, !visibility.ACCOUNTANT[key])}
+                              className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 focus:outline-none mx-auto ${visibility.ACCOUNTANT[key] ? "bg-green" : "bg-gray-200"}`}
+                              role="switch"
+                              aria-checked={visibility.ACCOUNTANT[key]}
+                              aria-label={`${label} for Invoice Creator`}
+                            >
+                              <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm mt-0.5 transition-transform duration-200 ${visibility.ACCOUNTANT[key] ? "translate-x-4" : "translate-x-0.5"}`} />
+                            </button>
+                          )}
+                        </td>
+
+                        {/* Viewer — toggleable */}
+                        <td className="px-4 py-3 text-center">
+                          {visibilityLoading || !visibility ? (
+                            <div className="inline-block w-9 h-5 rounded-full bg-gray-100 animate-pulse" />
+                          ) : (
+                            <button
+                              onClick={() => handleVisibilityToggle("VIEWER", key, !visibility.VIEWER[key])}
+                              className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 focus:outline-none mx-auto ${visibility.VIEWER[key] ? "bg-green" : "bg-gray-200"}`}
+                              role="switch"
+                              aria-checked={visibility.VIEWER[key]}
+                              aria-label={`${label} for Viewer`}
+                            >
+                              <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm mt-0.5 transition-transform duration-200 ${visibility.VIEWER[key] ? "translate-x-4" : "translate-x-0.5"}`} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="px-6 py-4 bg-gray-50 border-t border-border">
+                <p className="text-xs text-muted">
+                  Changes take effect immediately for all team members with that role. Individual members can further customise their own view within the sections you allow.
+                </p>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </div>
 
