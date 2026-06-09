@@ -324,6 +324,21 @@ describe('XmlInvoiceBuilder', () => {
       expect(xml).toContain('<InvoiceDeliveryPeriod>');
       expect(xml).toContain('<StartDate>2024-06-14</StartDate>');
     });
+
+    it('emits ClassifiedTaxCategory on InvoiceLine when taxCode is present', () => {
+      const inv = makeInvoice({
+        lineItems: [{ ...LINE_ITEM, taxCode: 'S' }],
+      });
+      const xml = builder.build(inv);
+      expect(xml).toContain('<ClassifiedTaxCategory>');
+      expect(xml).toContain('<ID>S</ID>');
+      expect(xml).toContain('<TaxScheme>');
+    });
+
+    it('omits ClassifiedTaxCategory on InvoiceLine when taxCode is absent', () => {
+      const xml = builder.build(makeInvoice());
+      expect(xml).not.toContain('<ClassifiedTaxCategory>');
+    });
   });
 
   // ---- Round-trip: build then parse ---------------------------------------
@@ -387,6 +402,15 @@ describe('XmlInvoiceBuilder', () => {
       );
       expect(result.seller.postalAddress.countryCode).toBe('NG');
       expect(result.seller.postalAddress.lga).toBe('NG-FC-AWU');
+    });
+
+    it('round-trips taxCode through build and parse', () => {
+      const inv = makeInvoice({
+        lineItems: [{ ...LINE_ITEM, taxCode: 'E' }],
+      });
+      const xml = builder.build(inv);
+      const result = builder.parse(xml);
+      expect(result.lineItems[0].taxCode).toBe('E');
     });
   });
 });
