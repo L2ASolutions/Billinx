@@ -593,7 +593,18 @@ export class InvoiceService {
     return { total, accepted, rejected, draft };
   }
 
-  async getDashboardStats(tenantId: string) {
+  private static readonly VISIBILITY_DEFAULTS: Record<string, Record<string, boolean>> = {
+    VIEWER: {
+      receivables: false, vat_strip: false, revenue_chart: false,
+      pipeline_chart: true, activity_chart: true, needs_attention: true,
+    },
+    ACCOUNTANT: {
+      receivables: true, vat_strip: true, revenue_chart: true,
+      pipeline_chart: true, activity_chart: true, needs_attention: true,
+    },
+  };
+
+  async getDashboardStats(tenantId: string, userId?: string) {
     const PENDING_STATUSES = [
       'QUEUED',
       'SUBMITTING',
@@ -637,6 +648,8 @@ export class InvoiceService {
       incomingToReview,
       incomingApproved,
       incomingPaid,
+      tenantRow,
+      userRoles,
     ] = await this.prisma.asAdmin(async (tx) => {
       const total = await tx.invoice.count({ where: { tenantId } });
       const accepted = await tx.invoice.count({
@@ -763,6 +776,13 @@ export class InvoiceService {
       const incomingToReview = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'RECEIVED' } });
       const incomingApproved = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'APPROVED' } });
       const incomingPaid = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'PAID' } });
+      const tenantRow = await tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { dashboardVisibility: true },
+      });
+      const userRoles = userId
+        ? await tx.userRole.findMany({ where: { userId, tenantId }, select: { role: true } })
+        : [];
       return [
         total, accepted, rejected, rejectedAll, pending, firsAwaiting, draft, overdue,
         amountAgg, recentInvoices,
@@ -773,6 +793,7 @@ export class InvoiceService {
         recentPayments,
         stuckCount, recentRejectedInvoices,
         incomingTotal, incomingToReview, incomingApproved, incomingPaid,
+        tenantRow, userRoles,
       ] as const;
     });
 
@@ -785,6 +806,16 @@ export class InvoiceService {
     const lowStockCount = this.inventoryService
       ? await this.inventoryService.getLowStockCount(tenantId)
       : 0;
+
+    const actorRole = (userRoles[0]?.role as string | undefined) ?? 'VIEWER';
+    const myVisibility = (() => {
+      if (['OWNER', 'ADMIN'].includes(actorRole)) {
+        return { receivables: true, vat_strip: true, revenue_chart: true, pipeline_chart: true, activity_chart: true, needs_attention: true };
+      }
+      const stored = ((tenantRow?.dashboardVisibility ?? {}) as Record<string, Record<string, boolean>>)[actorRole] ?? {};
+      const defaults = InvoiceService.VISIBILITY_DEFAULTS[actorRole] ?? InvoiceService.VISIBILITY_DEFAULTS['VIEWER'];
+      return { ...defaults, ...stored };
+    })();
 
     return {
       total,
@@ -844,6 +875,7 @@ export class InvoiceService {
         provider: p.provider,
         paidAt: p.paidAt.toISOString(),
       })),
+      myVisibility,
     };
   }
 
