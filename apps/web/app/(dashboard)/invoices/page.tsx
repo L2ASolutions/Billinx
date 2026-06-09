@@ -361,6 +361,8 @@ function SentPanel() {
   const [showBulk, setShowBulk] = useState(false);
   const [showSample, setShowSample] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportToast, setExportToast] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -385,6 +387,32 @@ function SentPanel() {
   useEffect(() => {
     invoiceApi.stats().then((s: any) => setStats(s)).catch(() => {});
   }, []);
+
+  async function handleExport() {
+    setExporting(true);
+    setExportToast("");
+    try {
+      const params: Record<string, string> = {};
+      if (search) params.search = search;
+      const { blob, filename } = await invoiceApi.export(params);
+      if (blob.size < 200) {
+        setExportToast("No invoices to export.");
+        setTimeout(() => setExportToast(""), 4000);
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "invoices.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportToast("Export failed. Please try again.");
+      setTimeout(() => setExportToast(""), 4000);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const invoices = useMemo(() => {
     switch (activeTab) {
@@ -411,6 +439,7 @@ function SentPanel() {
   return (
     <div className="p-6 space-y-4">
       {error && <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>}
+      {exportToast && <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">{exportToast}</div>}
 
       {attentionCount > 0 && (
         <div
@@ -451,9 +480,30 @@ function SentPanel() {
               );
             })}
           </div>
-          <div className="py-2 w-52">
+          <div className="flex items-center gap-2 py-2">
             <Input placeholder="Search customer, IRN…" value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="w-52" />
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              title="Export to Excel"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-border bg-white text-muted hover:text-dark hover:border-gray-400 transition-colors disabled:opacity-50"
+            >
+              {exporting ? (
+                <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
+                </svg>
+              ) : (
+                // Download icon
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+              )}
+              Export
+            </button>
           </div>
         </div>
 
