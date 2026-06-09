@@ -201,6 +201,7 @@ model IdempotencyRecord {
   submissionAttempts    SubmissionAttempt[]
   paymentRecords        PaymentRecord[]
   reminderLogs          ReminderLog[]
+  creditNotes           CreditNote[]
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
@@ -1145,4 +1146,23 @@ model Client {
   @@index([tenantId, totalInvoices])
   @@unique([tenantId, tin])
   @@map("clients")
+}
+model CreditNote {
+  id                String   @id @default(uuid())
+  tenantId          String
+  originalInvoiceId String
+  originalInvoice   Invoice  @relation(fields: [originalInvoiceId], references: [id])
+  adjustmentReason  String
+  originalAmount    Decimal  @db.Decimal(18, 2)
+  adjustedAmount    Decimal  @db.Decimal(18, 2)
+  customerTin       String?
+  customerName      String
+  transactionDate   DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String
+
+  @@index([tenantId])
+  @@index([originalInvoiceId])
+  @@map("credit_notes")
 }
