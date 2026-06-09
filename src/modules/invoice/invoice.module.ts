@@ -4,6 +4,8 @@ import { InvoiceController } from './invoice.controller';
 import { BulkInvoiceController } from './bulk/bulk-invoice.controller';
 import { CreditNoteController } from './credit-note.controller';
 import { VatReturnController } from './vat-return.controller';
+import { VatReminderProcessor } from './vat-reminder.processor';
+import { VatReminderScheduler } from './vat-reminder.scheduler';
 import { BulkInvoiceService } from './bulk/bulk-invoice.service';
 import { CreditNoteService } from './credit-note.service';
 import { VatReturnService } from './vat-return.service';
@@ -27,9 +29,10 @@ import { RedisService } from '../../shared/redis/redis.service';
 import { EmailModule } from '../../shared/email/email.module';
 import { TenantModule } from '../tenant/tenant.module';
 import { InventoryModule } from '../inventory/inventory.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
-  imports: [EventEmitterModule, EmailModule, TenantModule, InventoryModule],
+  imports: [EventEmitterModule, EmailModule, TenantModule, InventoryModule, NotificationModule],
   controllers: [CreditNoteController, VatReturnController, InvoiceController, BulkInvoiceController],
   providers: [
     InvoiceService,
@@ -52,6 +55,8 @@ import { InventoryModule } from '../inventory/inventory.module';
     InterswitchAdapter,
     ExportService,
     RedisService,
+    VatReminderProcessor,
+    VatReminderScheduler,
   ],
   exports: [InvoiceService, InvoiceRepository, PaymentService],
 })
