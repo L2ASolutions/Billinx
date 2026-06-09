@@ -169,6 +169,8 @@ interface Invoice {
   isOverdue?: boolean;
   dueDate?: string;
   paymentDueDate?: string;
+  hasCreditNote?: boolean;
+  netAmount?: number;
   createdAt: string;
 }
 
@@ -583,7 +585,28 @@ function SentPanel({ initialTab = "ALL" }: { initialTab?: SentTab }) {
                       </td>
                       {/* Amount */}
                       <td className="px-5 py-3.5 text-right">
-                        <p className="text-sm font-semibold text-dark tabular-nums">{formatCurrency(inv.totalAmount, inv.currency)}</p>
+                        {inv.hasCreditNote ? (
+                          <div>
+                            <p className="text-sm font-semibold text-dark tabular-nums">
+                              {formatCurrency(inv.netAmount ?? inv.totalAmount, inv.currency)}
+                            </p>
+                            <div className="flex items-center justify-end gap-1 mt-0.5">
+                              <span
+                                className="px-1 py-0 rounded text-xs font-medium bg-gray-100 text-gray-500"
+                                title="Credit note issued"
+                              >
+                                CN
+                              </span>
+                              <s className="text-xs text-muted tabular-nums">
+                                {formatCurrency(inv.totalAmount, inv.currency)}
+                              </s>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm font-semibold text-dark tabular-nums">
+                            {formatCurrency(inv.totalAmount, inv.currency)}
+                          </p>
+                        )}
                       </td>
                       {/* Due Date */}
                       <td className="px-5 py-3.5 hidden sm:table-cell">

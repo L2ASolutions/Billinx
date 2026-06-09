@@ -21,6 +21,7 @@ export class InvoiceRepository {
         include: {
           stateHistory: { orderBy: { createdAt: 'asc' } },
           submissionAttempts: { orderBy: { createdAt: 'asc' } },
+          creditNotes: { orderBy: { transactionDate: 'asc' } },
         },
       });
     });
@@ -85,8 +86,9 @@ export class InvoiceRepository {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        // stateHistory excluded from list queries — full history is only
-        // needed on the single-invoice detail view (findById).
+        include: {
+          creditNotes: { select: { id: true, originalAmount: true, adjustedAmount: true } },
+        },
       });
       const total = await tx.invoice.count({ where });
       return [data, total] as const;
