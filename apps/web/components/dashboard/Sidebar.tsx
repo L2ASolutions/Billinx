@@ -101,6 +101,15 @@ const VatIcon = () => (
   </svg>
 );
 
+const VatReturnIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <line x1="3" y1="9" x2="21" y2="9" />
+    <line x1="3" y1="15" x2="21" y2="15" />
+    <line x1="9" y1="9" x2="9" y2="21" />
+  </svg>
+);
+
 const CustomersIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
@@ -155,6 +164,7 @@ function buildNavGroups(inventoryEnabled: boolean): NavGroup[] {
         ...(inventoryEnabled ? [{ label: "Inventory", href: "/inventory", icon: <InventoryIcon /> }] : []),
         { label: "Incoming invoices", href: "/incoming-invoices", icon: <IncomingInvoiceIcon /> },
         { label: "VAT", href: "/vat", icon: <VatIcon /> },
+        { label: "VAT Return", href: "/vat-return", icon: <VatReturnIcon /> },
         { label: "Reports", href: "/reports", icon: <ReportsIcon /> },
         { label: "Audit log", href: "/audit-log", icon: <AuditIcon /> },
       ],
