@@ -208,6 +208,12 @@ export const invoiceApi = {
   // BUG-003 fix: PATCH, not POST; BUG-002 fix: dashboard path with JWT guard
   cancel: (id: string, reason: string) =>
     api.patch(`/v1/invoices/dashboard/${id}/cancel`, { reason }),
+  export: (params?: Record<string, string>) => {
+    const qs = params
+      ? '?' + new URLSearchParams(params).toString()
+      : '';
+    return requestBlob(`/v1/invoices/dashboard/export${qs}`);
+  },
   stats: () => cachedGet<unknown>('/v1/invoices/dashboard/stats'),
   paymentStats: () => api.get<unknown>('/v1/invoices/dashboard/payment-stats'),
   getXml: (id: string) => requestBlob(`/v1/invoices/dashboard/${id}/xml`),
