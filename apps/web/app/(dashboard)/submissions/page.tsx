@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { invoiceApi } from "@/lib/api";
+import { invoiceApi, submissionApi } from "@/lib/api";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { formatDateTime } from "@/lib/utils";
 
@@ -70,6 +70,8 @@ export default function SubmissionsPage() {
   const [activeTab, setActiveTab] = useState<StatusTab>("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportToast, setExportToast] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,6 +91,30 @@ export default function SubmissionsPage() {
   }, [activeTab]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function handleExport() {
+    setExporting(true);
+    setExportToast("");
+    try {
+      const { blob, filename } = await submissionApi.export();
+      if (blob.size < 200) {
+        setExportToast("No submissions found for this period.");
+        setTimeout(() => setExportToast(""), 4000);
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "Billinx_Submissions.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportToast("Export failed. Please try again.");
+      setTimeout(() => setExportToast(""), 4000);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const accepted  = invoices.filter((i) => i.status === "ACCEPTED").length;
   const inQueue   = invoices.filter((i) => ["QUEUED", "SUBMITTING", "VALIDATING"].includes(i.status)).length;
@@ -110,12 +136,33 @@ export default function SubmissionsPage() {
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
             Connected · Interswitch NRS
           </span>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-border bg-white text-muted hover:text-dark hover:border-gray-400 transition-colors disabled:opacity-50"
+          >
+            {exporting ? (
+              <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            )}
+            Export
+          </button>
         </div>
       </header>
 
       <div className="p-6 space-y-6">
         {error && (
           <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>
+        )}
+        {exportToast && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">{exportToast}</div>
         )}
 
         {/* 4 stat cards */}
