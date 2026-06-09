@@ -288,6 +288,15 @@ export const exportApi = {
     request<unknown>(`/v1/invoices/export/monthly?year=${year}&month=${month}`),
 };
 
+export const submissionApi = {
+  export: (params?: { startDate?: string; endDate?: string }) => {
+    const qs = params
+      ? '?' + new URLSearchParams(params as Record<string, string>).toString()
+      : '';
+    return requestBlob(`/v1/submissions/export${qs}`);
+  },
+};
+
 // Reminder Rules — backend field is `reminderMessage` (BUG-011)
 export const reminderApi = {
   list: () => cachedGet<{ data: unknown[]; total: number }>('/v1/reminder-rules'),
