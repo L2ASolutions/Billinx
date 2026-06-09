@@ -328,6 +328,7 @@ export default function VatReturnPage() {
                   { key: "invoiceNumber", label: "Invoice No." },
                   { key: "customerName", label: "Customer" },
                   { key: "customerTin", label: "TIN" },
+                  { key: "description", label: "Reason" },
                   { key: "transactionDate", label: "Date", fmt: (v) => fmtDate(String(v)) },
                   { key: "invoiceAmount", label: "Invoice Amount", fmt: (v) => fmtCurrency(Number(v)) },
                   { key: "adjustedAmount", label: "Adjusted Amount", fmt: (v) => fmtCurrency(Number(v)) },
