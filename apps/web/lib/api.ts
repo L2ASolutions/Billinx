@@ -360,6 +360,12 @@ export const activityApi = {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return cachedGet<{ data: ActivityEvent[]; total: number }>(`/v1/activity${qs}`);
   },
+  exportExcel: (params?: { startDate?: string; endDate?: string; eventType?: string }) => {
+    const qs = params
+      ? '?' + new URLSearchParams(params as Record<string, string>).toString()
+      : '';
+    return requestBlob(`/v1/activity/export-excel${qs}`);
+  },
 };
 
 // Team / Users
