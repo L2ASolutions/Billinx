@@ -264,6 +264,12 @@ export const invoiceApi = {
       invoiceStatusBreakdown: { status: string; count: number }[];
       sentVsReceived: { month: string; sent: number; received: number }[];
     }>('/v1/invoices/dashboard/charts'),
+  dashboardRejections: () =>
+    api.get<{
+      totalRejected: number;
+      allResolved: boolean;
+      reasons: { errorCode: string; errorMessage: string; count: number; invoiceIds: string[] }[];
+    }>('/v1/invoices/dashboard/rejections'),
   createCreditNote: (id: string, data: unknown) =>
     api.post<unknown>(`/v1/invoices/${id}/credit-notes`, data),
   listCreditNotes: (startDate: string, endDate: string) =>
@@ -386,9 +392,9 @@ export const userApi = {
   // BUG-009: DELETE /v1/users/:id now exists (soft-delete)
   remove: (userId: string) => api.delete(`/v1/users/${userId}`),
   getPreferences: () =>
-    api.get<{ dashboardWidgets: Record<string, boolean> }>('/v1/users/me/preferences'),
-  savePreferences: (body: { dashboardWidgets: Record<string, boolean> }) =>
-    api.patch<{ dashboardWidgets: Record<string, boolean> }>('/v1/users/me/preferences', body),
+    api.get<{ dashboardWidgets: Record<string, boolean>; hidden: string[] }>('/v1/users/me/preferences'),
+  savePreferences: (body: { dashboardWidgets?: Record<string, boolean>; hidden?: string[] }) =>
+    api.patch<{ dashboardWidgets: Record<string, boolean>; hidden: string[] }>('/v1/users/me/preferences', body),
 };
 
 // API Keys — use JWT-guarded /users/api-keys routes (BUG-004)
