@@ -486,6 +486,15 @@ export default function InvoiceDetailPage() {
   const [sendingToBuyer, setSendingToBuyer] = useState(false);
   const [sendToBuyerError, setSendToBuyerError] = useState("");
   const [sentToBuyer, setSentToBuyer] = useState(false);
+  const [showCreditNoteModal, setShowCreditNoteModal] = useState(false);
+  const [creditNoteForm, setCreditNoteForm] = useState({
+    adjustmentReason: "",
+    adjustedAmount: "",
+    transactionDate: new Date().toISOString().split("T")[0],
+  });
+  const [creditNoteSubmitting, setCreditNoteSubmitting] = useState(false);
+  const [creditNoteError, setCreditNoteError] = useState("");
+  const [creditNoteSuccess, setCreditNoteSuccess] = useState(false);
   const [showingProgress, setShowingProgress] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -640,16 +649,34 @@ export default function InvoiceDetailPage() {
     }
   }
 
-  async function handleCreateCreditNote() {
+  function handleCreateCreditNote() {
     if (!invoice) return;
-    setDuplicating(true);
+    setCreditNoteForm({
+      adjustmentReason: "",
+      adjustedAmount: String(invoice.totalAmount),
+      transactionDate: new Date().toISOString().split("T")[0],
+    });
+    setCreditNoteError("");
+    setCreditNoteSuccess(false);
+    setShowCreditNoteModal(true);
+  }
+
+  async function handleSubmitCreditNote() {
+    if (!invoice) return;
+    setCreditNoteSubmitting(true);
+    setCreditNoteError("");
     try {
-      const res = await invoiceApi.duplicate(invoice.id) as { id: string; platformIrn: string };
-      router.push(`/invoices/${res.id}?duplicated=true&creditNote=true&originalIrn=${encodeURIComponent(invoice.platformIrn)}`);
+      await invoiceApi.createCreditNote(invoice.id, {
+        adjustmentReason: creditNoteForm.adjustmentReason,
+        adjustedAmount: Number(creditNoteForm.adjustedAmount),
+        transactionDate: creditNoteForm.transactionDate,
+      });
+      setCreditNoteSuccess(true);
+      setTimeout(() => setShowCreditNoteModal(false), 1800);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to create credit note.");
+      setCreditNoteError(err instanceof Error ? err.message : "Failed to issue credit note.");
     } finally {
-      setDuplicating(false);
+      setCreditNoteSubmitting(false);
     }
   }
 
@@ -820,17 +847,17 @@ export default function InvoiceDetailPage() {
         {/* Accepted banner */}
         {isAccepted && <AcceptedBanner invoice={invoice} />}
 
-        {/* Create credit note — accepted invoices */}
-        {isAccepted && (
+        {/* Create credit note — accepted standard / credit-note invoices */}
+        {isAccepted && ["STANDARD", "CREDIT_NOTE"].includes(invoice.invoiceType) && (
           <div className="bg-white rounded-xl border border-border px-5 py-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-dark">Need to issue a credit note?</p>
               <p className="text-sm text-muted mt-0.5">
-                Creates a new credit note pre-filled from this invoice.
+                Records a sales adjustment for VAT Schedule B reporting.
               </p>
             </div>
-            <Button variant="secondary" size="sm" loading={duplicating} onClick={handleCreateCreditNote}>
-              Create credit note
+            <Button variant="secondary" size="sm" onClick={handleCreateCreditNote}>
+              Issue credit note
             </Button>
           </div>
         )}
@@ -1281,6 +1308,98 @@ export default function InvoiceDetailPage() {
           Payment link copied!
         </div>
       </div>
+
+      {/* ── Issue credit note modal ─────────────────────────────────────────── */}
+      {showCreditNoteModal && invoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="font-semibold text-dark">Issue credit note</h2>
+              <button onClick={() => setShowCreditNoteModal(false)} className="text-muted hover:text-dark">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {creditNoteSuccess ? (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-green-600">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-dark">Credit note recorded successfully</p>
+                  <p className="text-xs text-muted text-center">This adjustment will appear in your VAT Schedule B report.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="p-4 bg-surface rounded-lg border border-border space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted">Original invoice</span>
+                      <span className="font-mono text-dark text-xs">{invoice.platformIrn}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted">Customer</span>
+                      <span className="text-dark font-medium">{invoice.buyerName}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted">Original amount</span>
+                      <span className="text-dark font-medium">{formatCurrency(invoice.totalAmount, invoice.currency)}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-dark mb-1">Adjustment reason *</label>
+                    <input
+                      className="w-full px-3 py-2.5 rounded-lg border border-border text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green"
+                      value={creditNoteForm.adjustmentReason}
+                      onChange={(e) => setCreditNoteForm((f) => ({ ...f, adjustmentReason: e.target.value }))}
+                      placeholder="e.g. Returned goods, pricing error…"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-dark mb-1">Adjusted amount ({invoice.currency}) *</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={invoice.totalAmount}
+                      className="w-full px-3 py-2.5 rounded-lg border border-border text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green"
+                      value={creditNoteForm.adjustedAmount}
+                      onChange={(e) => setCreditNoteForm((f) => ({ ...f, adjustedAmount: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-dark mb-1">Transaction date *</label>
+                    <input
+                      type="date"
+                      className="w-full px-3 py-2.5 rounded-lg border border-border text-dark text-sm focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green"
+                      value={creditNoteForm.transactionDate}
+                      onChange={(e) => setCreditNoteForm((f) => ({ ...f, transactionDate: e.target.value }))}
+                    />
+                  </div>
+                  {creditNoteError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                      {creditNoteError}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            {!creditNoteSuccess && (
+              <div className="px-6 py-4 border-t border-border flex gap-3 justify-end">
+                <Button variant="secondary" onClick={() => setShowCreditNoteModal(false)}>Cancel</Button>
+                <Button
+                  loading={creditNoteSubmitting}
+                  disabled={!creditNoteForm.adjustmentReason.trim() || !creditNoteForm.adjustedAmount || !creditNoteForm.transactionDate}
+                  onClick={handleSubmitCreditNote}
+                >
+                  Issue credit note
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

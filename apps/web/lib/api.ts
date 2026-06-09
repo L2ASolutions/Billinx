@@ -252,6 +252,10 @@ export const invoiceApi = {
   duplicate: (id: string) =>
     api.post<unknown>(`/v1/invoices/dashboard/${id}/duplicate`, {}),
   getSample: () => api.get<unknown>('/v1/invoices/dashboard/sample'),
+  createCreditNote: (id: string, data: unknown) =>
+    api.post<unknown>(`/v1/invoices/${id}/credit-notes`, data),
+  listCreditNotes: (startDate: string, endDate: string) =>
+    api.get<unknown>(`/v1/invoices/credit-notes?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`),
 };
 
 // Payments list (tenant-wide)

@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { InvoiceController } from './invoice.controller';
 import { BulkInvoiceController } from './bulk/bulk-invoice.controller';
+import { CreditNoteController } from './credit-note.controller';
 import { BulkInvoiceService } from './bulk/bulk-invoice.service';
+import { CreditNoteService } from './credit-note.service';
 import { InvoiceService } from './services/invoice.service';
 import { PaymentService } from './services/payment.service';
 import { InvoiceRepository } from './repositories/invoice.repository';
@@ -26,9 +28,10 @@ import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
   imports: [EventEmitterModule, EmailModule, TenantModule, InventoryModule],
-  controllers: [InvoiceController, BulkInvoiceController],
+  controllers: [CreditNoteController, InvoiceController, BulkInvoiceController],
   providers: [
     InvoiceService,
+    CreditNoteService,
     PaymentService,
     BulkInvoiceService,
     InvoiceRepository,
