@@ -1078,6 +1078,35 @@ export class InvoiceService {
       whtRate: invoice.whtRate != null ? Number(invoice.whtRate) : undefined,
       whtAmount: invoice.whtAmount != null ? Number(invoice.whtAmount) : undefined,
       expectedCash: invoice.expectedCash != null ? Number(invoice.expectedCash) : undefined,
+      creditNotes: invoice.creditNotes
+        ? (invoice.creditNotes as any[]).map((cn) => ({
+            id: cn.id,
+            originalAmount: Number(cn.originalAmount),
+            adjustedAmount: Number(cn.adjustedAmount),
+            adjustmentReason: cn.adjustmentReason,
+            customerName: cn.customerName,
+            customerTin: cn.customerTin ?? undefined,
+            transactionDate:
+              cn.transactionDate instanceof Date
+                ? cn.transactionDate.toISOString()
+                : cn.transactionDate,
+            createdBy: cn.createdBy,
+          }))
+        : undefined,
+      hasCreditNote: invoice.creditNotes
+        ? (invoice.creditNotes as any[]).length > 0
+        : false,
+      netAmount: invoice.creditNotes
+        ? Math.max(
+            0,
+            Number(invoice.totalAmount) -
+              (invoice.creditNotes as any[]).reduce(
+                (sum: number, cn: any) =>
+                  sum + (Number(cn.originalAmount) - Number(cn.adjustedAmount)),
+                0,
+              ),
+          )
+        : Number(invoice.totalAmount),
       createdAt: invoice.createdAt.toISOString(),
       updatedAt: invoice.updatedAt.toISOString(),
     };
