@@ -712,3 +712,21 @@ export const analyticsApi = {
       `/v1/analytics/revenue-vs-expenses?months=${months}`,
     ),
 };
+
+export interface AppNotification {
+  id: string;
+  tenantId: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  link?: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export const notificationApi = {
+  list: () => api.get<AppNotification[]>('/v1/notifications'),
+  markRead: (id: string) => api.patch<{ ok: boolean }>(`/v1/notifications/${id}/read`, {}),
+  markAllRead: () => api.patch<{ ok: boolean }>('/v1/notifications/read-all', {}),
+};

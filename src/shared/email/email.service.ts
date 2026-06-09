@@ -787,6 +787,42 @@ export class EmailService {
     this.send(opts.to, `Payment Receipt — ${opts.invoiceNumber}`, html);
   }
 
+  sendVatReminder(opts: {
+    to: string;
+    firstName: string;
+    tenantName: string;
+    filingPeriod: string;
+    dueDate: string;
+  }): void {
+    const link = `${APP_BASE_URL}/vat-return`;
+    const html = baseLayout(
+      'VAT Return Filing Reminder',
+      `<div style="display:inline-block;background:#fff3cd;border:1px solid #ffc107;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
+        <span style="font-size:12px;font-weight:600;color:#856404;text-transform:uppercase;letter-spacing:0.5px;">&#128197; Filing Reminder</span>
+      </div>` +
+        h1('Your VAT Return is due soon') +
+        p(`Hi ${opts.firstName},`) +
+        p(
+          `This is a reminder that your VAT return for <strong>${opts.filingPeriod}</strong> is due by <strong>${opts.dueDate}</strong>.`,
+        ) +
+        p(
+          `Billinx has pre-filled your VAT 002 schedules with data from your accepted invoices for this period. Download the Excel file and submit it to FIRS before the deadline.`,
+        ) +
+        ctaButton(link, 'Open VAT Return Assistant') +
+        divider() +
+        p(
+          `You are receiving this because you are an Owner or Admin of <strong>${opts.tenantName}</strong> on Billinx. ` +
+            `Contact <a href="mailto:support@billinx.ng" style="color:${BRAND_GREEN};">support@billinx.ng</a> if you need help.`,
+        ),
+    );
+
+    this.send(
+      opts.to,
+      `VAT Return due ${opts.dueDate} — ${opts.filingPeriod}`,
+      html,
+    );
+  }
+
   sendReorderRequest(opts: {
     to: string;
     supplierName: string;
