@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+
+import { useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
-import { invoiceApi, incomingInvoiceApi, analyticsApi } from '@/lib/api';
+import { invoiceApi, incomingInvoiceApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { useUserProfile } from '@/lib/userProfile';
@@ -11,14 +13,17 @@ import { NotificationBell } from '@/components/dashboard/NotificationBell';
 import {
   BarChart,
   Bar,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  ComposedChart,
+  PieChart,
+  Pie,
+  Cell,
   Legend,
+  Sector,
+  type PieSectorDataItem,
 } from 'recharts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -57,11 +62,10 @@ interface IncomingStats {
   outstandingCount?: number;
 }
 
-interface RevenueMonth {
-  month: string;
-  revenue: number;
-  expenses: number;
-  net: number;
+interface ChartData {
+  revenueTrend: { month: string; monthKey: string; amount: number }[];
+  invoiceStatusBreakdown: { status: string; count: number }[];
+  sentVsReceived: { month: string; sent: number; received: number }[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -96,6 +100,15 @@ function formatYAxis(value: number): string {
   return `₦${value}`;
 }
 
+const STATUS_COLORS: Record<string, string> = {
+  Paid: '#1D9E75',
+  Accepted: '#86EFAC',
+  Overdue: '#EF4444',
+  'Needs attention': '#F59E0B',
+  Draft: '#9CA3AF',
+  Cancelled: '#E5E7EB',
+};
+
 function providerColor(provider: string): string {
   const p = provider.toLowerCase();
   if (p.includes('paystack')) return 'bg-green-50 text-green-700';
@@ -110,9 +123,23 @@ function Sk({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse bg-gray-100 rounded ${className}`} />;
 }
 
-// ── Custom tooltip for recharts ───────────────────────────────────────────────
+// ── Custom tooltips ───────────────────────────────────────────────────────────
 
-function ChartTooltip({ active, payload, label }: any) {
+function RevenueTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-border rounded-xl shadow-lg px-4 py-3 text-xs space-y-1">
+      <p className="font-semibold text-dark mb-1">{label}</p>
+      <p className="text-muted">
+        Revenue:{' '}
+        <span className="font-semibold text-dark">{formatCurrency(payload[0].value, 'NGN')}</span>
+      </p>
+      <p className="text-[#1D9E75] text-[10px] mt-1">Click to view invoices →</p>
+    </div>
+  );
+}
+
+function ActivityTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border border-border rounded-xl shadow-lg px-4 py-3 text-xs space-y-1">
@@ -121,10 +148,25 @@ function ChartTooltip({ active, payload, label }: any) {
         <div key={entry.name} className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: entry.color }} />
           <span className="text-muted capitalize">{entry.name}:</span>
-          <span className="font-medium text-dark">{formatCurrency(entry.value, 'NGN')}</span>
+          <span className="font-medium text-dark">{entry.value}</span>
         </div>
       ))}
     </div>
+  );
+}
+
+function activeDonutShape(props: PieSectorDataItem) {
+  const { cx = 0, cy = 0, innerRadius = 0, outerRadius = 0, startAngle = 0, endAngle = 0, fill } = props;
+  return (
+    <Sector
+      cx={cx as number}
+      cy={cy as number}
+      innerRadius={innerRadius as number}
+      outerRadius={(outerRadius as number) + 6}
+      startAngle={startAngle as number}
+      endAngle={endAngle as number}
+      fill={fill}
+    />
   );
 }
 
@@ -133,6 +175,7 @@ function ChartTooltip({ active, payload, label }: any) {
 export default function DashboardPage() {
   const { user, isLoading: authLoading } = useRequireAuth();
   const profile = useUserProfile();
+  const router = useRouter();
 
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -140,40 +183,34 @@ export default function DashboardPage() {
   const [incomingStats, setIncomingStats] = useState<IncomingStats | null>(null);
   const [incomingLoading, setIncomingLoading] = useState(true);
 
-  const [revenueData, setRevenueData] = useState<RevenueMonth[]>([]);
-  const [revenueLoading, setRevenueLoading] = useState(true);
+  const [chartData, setChartData] = useState<ChartData | null>(null);
+  const [chartsLoading, setChartsLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     setStatsLoading(true);
     setIncomingLoading(true);
-    setRevenueLoading(true);
 
     const statsResult = await invoiceApi.stats().catch(() => null);
     setStats(statsResult as Stats | null);
     setStatsLoading(false);
 
-    const [incomingResult, revenueResult] = await Promise.allSettled([
-      incomingInvoiceApi.stats(),
-      analyticsApi.revenueVsExpenses(6),
-    ]);
-
-    setIncomingStats(
-      incomingResult.status === 'fulfilled' ? (incomingResult.value as IncomingStats) : null,
-    );
+    const incomingResult = await incomingInvoiceApi.stats().catch(() => null);
+    setIncomingStats(incomingResult as IncomingStats | null);
     setIncomingLoading(false);
+  }, []);
 
-    setRevenueData(
-      revenueResult.status === 'fulfilled'
-        ? (revenueResult.value as RevenueMonth[])
-        : [],
-    );
-    setRevenueLoading(false);
+  const loadCharts = useCallback(async () => {
+    setChartsLoading(true);
+    const result = await invoiceApi.dashboardCharts().catch(() => null);
+    setChartData(result);
+    setChartsLoading(false);
   }, []);
 
   useEffect(() => {
     if (authLoading) return;
     void loadData();
-  }, [authLoading, loadData]);
+    void loadCharts();
+  }, [authLoading, loadData, loadCharts]);
 
   const firstName = profile?.firstName ?? user?.name?.split(' ')[0] ?? 'there';
   const tenantName = user?.tenantName ?? '';
@@ -389,64 +426,185 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ── Revenue vs Expenses chart ────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-border p-5">
-          <div className="flex items-center justify-between mb-4">
+        {/* ── Dashboard charts ─────────────────────────────────────────────── */}
+        {chartsLoading ? (
+          <div className="grid grid-cols-3 gap-4">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="bg-white rounded-xl border border-border p-5">
+                <Sk className="h-4 w-36 mb-1" />
+                <Sk className="h-3 w-48 mb-4" />
+                <Sk className="h-[220px] w-full" />
+              </div>
+            ))}
+          </div>
+        ) : !chartData ||
+          (chartData.revenueTrend.every((d) => d.amount === 0) &&
+            chartData.invoiceStatusBreakdown.every((d) => d.count === 0) &&
+            chartData.sentVsReceived.every((d) => d.sent === 0 && d.received === 0)) ? (
+          <div className="bg-white rounded-xl border border-border p-10 flex flex-col items-center gap-3 text-center">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="1.5" className="text-gray-300">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="9" y1="15" x2="15" y2="15" />
+            </svg>
             <div>
-              <h2 className="font-semibold text-dark">Revenue vs expenses</h2>
-              <p className="text-xs text-muted mt-0.5">Last 6 months</p>
+              <p className="font-semibold text-dark">No invoice data yet</p>
+              <p className="text-sm text-muted mt-0.5">Create your first invoice to start seeing trends</p>
+            </div>
+            <Link href="/invoices/new">
+              <Button size="sm" className="mt-1">+ Create invoice</Button>
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-4">
+            {/* Chart 1 — Monthly Revenue */}
+            <div className="bg-white rounded-xl border border-border p-5">
+              <h2 className="font-semibold text-dark">Monthly Revenue</h2>
+              <p className="text-xs text-muted mt-0.5 mb-4">
+                Accepted invoices — last 6 months. Click a bar to view that month&apos;s invoices.
+              </p>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={chartData.revenueTrend}
+                  margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 11, fill: '#9ca3af' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tickFormatter={formatYAxis}
+                    tick={{ fontSize: 11, fill: '#9ca3af' }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={60}
+                  />
+                  <Tooltip content={<RevenueTooltip />} cursor={{ fill: 'rgba(29,158,117,0.06)' }} />
+                  <Bar
+                    dataKey="amount"
+                    name="Revenue"
+                    fill="#1D9E75"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={48}
+                    cursor="pointer"
+                    onClick={(data: any) => {
+                      router.push(`/invoices?direction=sent&month=${data.monthKey}`);
+                    }}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Chart 2 — Invoice Pipeline */}
+            <div className="bg-white rounded-xl border border-border p-5 min-w-0">
+              <h2 className="font-semibold text-dark">Invoice Pipeline</h2>
+              <p className="text-xs text-muted mt-0.5 mb-4">
+                Current status of all sent invoices. Click a segment to view those invoices.
+              </p>
+              {(() => {
+                const nonZero = chartData.invoiceStatusBreakdown.filter((d) => d.count > 0);
+                const total = chartData.invoiceStatusBreakdown.reduce((s, d) => s + d.count, 0);
+                const filterMap: Record<string, string> = {
+                  Paid: 'paid',
+                  Accepted: 'accepted',
+                  Overdue: 'overdue',
+                  'Needs attention': 'needs-attention',
+                  Draft: 'draft',
+                  Cancelled: 'cancelled',
+                };
+                return (
+                  <div className="flex flex-col items-center gap-3">
+                    <div style={{ width: '100%', height: 180 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={nonZero}
+                            dataKey="count"
+                            nameKey="status"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={68}
+                            outerRadius={90}
+                            paddingAngle={2}
+                            activeShape={activeDonutShape}
+                            cursor="pointer"
+                            onClick={(_: any, index: number) => {
+                              const seg = nonZero[index];
+                              if (seg) router.push(`/invoices?direction=sent&filter=${filterMap[seg.status] ?? ''}`);
+                            }}
+                          >
+                            {nonZero.map((entry) => (
+                              <Cell key={entry.status} fill={STATUS_COLORS[entry.status] ?? '#9CA3AF'} />
+                            ))}
+                          </Pie>
+                          <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle">
+                            <tspan x="50%" dy="-6" fontSize="22" fontWeight="700" fill="#111827">{total}</tspan>
+                            <tspan x="50%" dy="18" fontSize="10" fill="#9ca3af">invoices</tspan>
+                          </text>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex flex-col gap-1.5 w-full">
+                      {chartData.invoiceStatusBreakdown.map((d) => (
+                        <button
+                          key={d.status}
+                          onClick={() => router.push(`/invoices?direction=sent&filter=${filterMap[d.status] ?? ''}`)}
+                          className="flex items-center gap-2 text-left hover:bg-gray-50 rounded px-1 py-0.5 transition-colors"
+                        >
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: STATUS_COLORS[d.status] ?? '#9CA3AF' }} />
+                          <span className="text-xs text-muted flex-1 truncate">{d.status}</span>
+                          <span className="text-xs font-semibold text-dark tabular-nums">{d.count}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Chart 3 — Invoice Activity */}
+            <div className="bg-white rounded-xl border border-border p-5">
+              <h2 className="font-semibold text-dark">Invoice Activity</h2>
+              <p className="text-xs text-muted mt-0.5 mb-4">
+                Invoices sent and received — last 6 months
+              </p>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={chartData.sentVsReceived}
+                  margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 11, fill: '#9ca3af' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 11, fill: '#9ca3af' }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={32}
+                  />
+                  <Tooltip content={<ActivityTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
+                  <Legend
+                    wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
+                    iconType="circle"
+                    iconSize={8}
+                  />
+                  <Bar dataKey="sent" name="Sent" fill="#1D9E75" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                  <Bar dataKey="received" name="Received" fill="#93C5FD" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
-          {revenueLoading ? (
-            <div className="space-y-2">
-              {[0, 1].map((i) => <Sk key={i} className="h-10 w-full" />)}
-              <Sk className="h-32 w-full" />
-            </div>
-          ) : revenueData.length === 0 || revenueData.every((d) => d.revenue === 0 && d.expenses === 0) ? (
-            <div className="h-[220px] flex flex-col items-center justify-center text-center gap-2">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="1.5" className="text-gray-300">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-              </svg>
-              <p className="text-sm text-muted">No invoice data yet — create your first invoice to see trends</p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={revenueData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 11, fill: '#9ca3af' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tickFormatter={formatYAxis}
-                  tick={{ fontSize: 11, fill: '#9ca3af' }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={60}
-                />
-                <Tooltip content={<ChartTooltip />} />
-                <Legend
-                  wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
-                  iconType="circle"
-                  iconSize={8}
-                />
-                <Bar dataKey="revenue" name="Revenue" fill="#1D9E75" radius={[3, 3, 0, 0]} maxBarSize={40} />
-                <Bar dataKey="expenses" name="Expenses" fill="#f87171" radius={[3, 3, 0, 0]} maxBarSize={40} />
-                <Line
-                  type="monotone"
-                  dataKey="net"
-                  name="Net"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={{ r: 3, fill: '#3b82f6' }}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+        )}
 
         {/* ── Bottom two panels ────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-4">

@@ -258,6 +258,12 @@ export const invoiceApi = {
   duplicate: (id: string) =>
     api.post<unknown>(`/v1/invoices/dashboard/${id}/duplicate`, {}),
   getSample: () => api.get<unknown>('/v1/invoices/dashboard/sample'),
+  dashboardCharts: () =>
+    api.get<{
+      revenueTrend: { month: string; monthKey: string; amount: number }[];
+      invoiceStatusBreakdown: { status: string; count: number }[];
+      sentVsReceived: { month: string; sent: number; received: number }[];
+    }>('/v1/invoices/dashboard/charts'),
   createCreditNote: (id: string, data: unknown) =>
     api.post<unknown>(`/v1/invoices/${id}/credit-notes`, data),
   listCreditNotes: (startDate: string, endDate: string) =>

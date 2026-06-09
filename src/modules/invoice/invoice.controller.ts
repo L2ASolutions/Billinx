@@ -494,6 +494,16 @@ export class InvoiceController {
     return this.invoiceService.getDashboardStats(ctx.tenantId);
   }
 
+  @Get('dashboard/charts')
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'VIEWER')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get chart data for dashboard (JWT auth)' })
+  async getDashboardCharts(@Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.getDashboardCharts(ctx.tenantId);
+  }
+
   @Get('dashboard/payment-stats')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()

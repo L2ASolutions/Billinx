@@ -329,6 +329,15 @@ const SENT_TABS: { key: SentTab; label: string }[] = [
   { key: "PAID",      label: "Paid" },
 ];
 
+const FILTER_PARAM_TO_TAB: Record<string, SentTab> = {
+  "needs-attention": "ATTENTION",
+  "overdue":         "ATTENTION",
+  "accepted":        "ACCEPTED",
+  "paid":            "PAID",
+  "draft":           "ALL",
+  "cancelled":       "ALL",
+};
+
 interface DashboardStats {
   total: number;
   accepted: number;
@@ -349,13 +358,13 @@ function isAttentionInvoice(inv: Invoice) {
   return ATTENTION_STATUSES.has(inv.status) || !!inv.isOverdue;
 }
 
-function SentPanel() {
+function SentPanel({ initialTab = "ALL" }: { initialTab?: SentTab }) {
   const router = useRouter();
   const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<SentTab>("ALL");
+  const [activeTab, setActiveTab] = useState<SentTab>(initialTab);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showBulk, setShowBulk] = useState(false);
@@ -841,7 +850,14 @@ function ReceivedPanel() {
 export default function InvoicesPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const topTab = (searchParams.get("tab") ?? "sent") as "sent" | "received";
+
+  const directionParam = searchParams.get("direction");
+  const filterParam = searchParams.get("filter");
+  const tabParam = searchParams.get("tab");
+
+  const topTab = (directionParam === "received" ? "received" : directionParam === "sent" ? "sent" : tabParam ?? "sent") as "sent" | "received";
+  const initialSentTab: SentTab = filterParam ? (FILTER_PARAM_TO_TAB[filterParam] ?? "ALL") : "ALL";
+
   const [sentTotal, setSentTotal] = useState<number | null>(null);
   const [receivedTotal, setReceivedTotal] = useState<number | null>(null);
 
@@ -904,7 +920,7 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      {topTab === "sent" ? <SentPanel /> : <ReceivedPanel />}
+      {topTab === "sent" ? <SentPanel initialTab={initialSentTab} /> : <ReceivedPanel />}
     </>
   );
 }
