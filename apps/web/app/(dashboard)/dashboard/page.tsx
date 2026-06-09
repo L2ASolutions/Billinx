@@ -385,7 +385,7 @@ export default function DashboardPage() {
               </span>
             </span>
             <span className="mx-1">·</span>
-            <Link href="/vat" className="text-[#1D9E75] font-medium hover:underline">View VAT details →</Link>
+            <Link href="/vat-return" className="text-[#1D9E75] font-medium hover:underline">View VAT return →</Link>
           </div>
         )}
 
