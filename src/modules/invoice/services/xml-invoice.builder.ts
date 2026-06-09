@@ -224,6 +224,13 @@ export class XmlInvoiceBuilder {
       line.Price.BaseQuantity = price.baseQuantity;
     if (price.priceUnit) line.Price.PriceUnit = price.priceUnit;
 
+    if (li.taxCode) {
+      line.ClassifiedTaxCategory = {
+        ID: li.taxCode,
+        TaxScheme: { ID: 'VAT' },
+      };
+    }
+
     return line;
   }
 
@@ -286,6 +293,7 @@ export class XmlInvoiceBuilder {
           baseQuantity: li.Price?.BaseQuantity,
           priceUnit: li.Price?.PriceUnit,
         },
+        taxCode: li.ClassifiedTaxCategory?.ID,
       })),
     };
 
