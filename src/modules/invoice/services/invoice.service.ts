@@ -1732,4 +1732,50 @@ export class InvoiceService {
 
     return { revenueTrend, invoiceStatusBreakdown, sentVsReceived };
   }
+
+  async getDashboardRejections(tenantId: string) {
+    const rejectedStatuses = ['REJECTED', 'SUBMISSION_FAILED', 'DEAD_LETTERED'];
+
+    const rejectedInvoices: { id: string; submissionAttempts: { errorCode: string | null; errorMessage: string | null }[] }[] =
+      await this.prisma.asAdmin((tx) =>
+        (tx as any).invoice.findMany({
+          where: {
+            tenantId,
+            status: { in: rejectedStatuses as any },
+          },
+          select: {
+            id: true,
+            submissionAttempts: {
+              where: { failedAt: { not: null } },
+              orderBy: { failedAt: 'desc' as const },
+              take: 1,
+              select: { errorCode: true, errorMessage: true },
+            },
+          },
+        }),
+      );
+
+    if (rejectedInvoices.length === 0) {
+      return { totalRejected: 0, allResolved: true, reasons: [] };
+    }
+
+    const reasonMap = new Map<string, { errorCode: string; errorMessage: string; count: number; invoiceIds: string[] }>();
+
+    for (const inv of rejectedInvoices) {
+      const attempt = inv.submissionAttempts[0];
+      const errorCode = attempt?.errorCode ?? 'UNKNOWN';
+      const errorMessage = attempt?.errorMessage ?? 'Submission failed';
+
+      if (!reasonMap.has(errorCode)) {
+        reasonMap.set(errorCode, { errorCode, errorMessage, count: 0, invoiceIds: [] });
+      }
+      const entry = reasonMap.get(errorCode)!;
+      entry.count++;
+      entry.invoiceIds.push(inv.id);
+    }
+
+    const reasons = Array.from(reasonMap.values()).sort((a, b) => b.count - a.count);
+
+    return { totalRejected: rejectedInvoices.length, allResolved: false, reasons };
+  }
 }
