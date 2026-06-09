@@ -1,15 +1,35 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { invoiceApi, incomingInvoiceApi, invalidateCache } from "@/lib/api";
-import { formatCurrency, formatCurrencyShort, formatDate, formatInvoiceNumber } from "@/lib/utils";
-import { getInvoiceStatusPill } from "@/lib/invoice-utils";
+import { formatCurrency, formatDate, formatInvoiceNumber } from "@/lib/utils";
+import { getInvoiceStatusPill, getReceivedInvoiceStatusPill, PillVariant } from "@/lib/invoice-status";
 import { SampleInvoiceModal } from "@/components/invoice/SampleInvoiceModal";
+
+// ── Status pill rendering ─────────────────────────────────────────────────────
+
+const PILL_CLASSES: Record<PillVariant, string> = {
+  "red":                "bg-red-100 text-red-800",
+  "amber":              "bg-amber-100 text-amber-800",
+  "green-outline":      "bg-green-50 text-green-700 ring-1 ring-green-200",
+  "green":              "bg-green-100 text-green-800",
+  "grey":               "bg-gray-100 text-gray-600",
+  "grey-strikethrough": "bg-gray-100 text-gray-400",
+};
+
+function StatusPillCell({ pill }: { pill: { label: string; variant: PillVariant } }) {
+  const cls = PILL_CLASSES[pill.variant] ?? "bg-gray-100 text-gray-600";
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${cls}`}>
+      {pill.variant === "grey-strikethrough" ? <s>{pill.label}</s> : pill.label}
+    </span>
+  );
+}
 
 // ── Copy pay-link button ──────────────────────────────────────────────────────
 
@@ -83,6 +103,37 @@ function DuplicateButton({ invoiceId }: { invoiceId: string }) {
   );
 }
 
+// ── Due date cell ─────────────────────────────────────────────────────────────
+
+function DueDateCell({ dueDate, isOverdue }: { dueDate?: string; isOverdue?: boolean }) {
+  if (!dueDate) return <span className="text-sm text-muted">—</span>;
+
+  const due = new Date(dueDate);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const diffDays = Math.round((dueDay.getTime() - today.getTime()) / 86400000);
+
+  if (isOverdue || diffDays < 0) {
+    const days = Math.abs(diffDays);
+    return (
+      <div>
+        <span className="text-sm text-red-600 font-medium">{formatDate(dueDate)}</span>
+        <p className="text-xs text-red-500 mt-0.5">{days} day{days !== 1 ? "s" : ""} ago</p>
+      </div>
+    );
+  }
+  if (diffDays === 0) {
+    return (
+      <div>
+        <span className="text-sm text-amber-600 font-medium">{formatDate(dueDate)}</span>
+        <p className="text-xs text-amber-500 mt-0.5">Due today</p>
+      </div>
+    );
+  }
+  return <span className="text-sm text-dark">{formatDate(dueDate)}</span>;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Invoice {
@@ -126,68 +177,6 @@ interface BulkBatchStatus {
   rejected: number;
   percentComplete: number;
   status: string;
-}
-
-// ── Received status pill (incoming invoices) ──────────────────────────────────
-
-function receivedStatusPill(inv: IncomingInvoice) {
-  if (inv.paymentStatus === "PAID" || inv.status === "PAID") {
-    return { label: "Paid", cls: "bg-green-100 text-green-800", strikethrough: false };
-  }
-  if (inv.status === "APPROVED") {
-    return { label: "Approved", cls: "bg-green-50 text-green-700 ring-1 ring-green-200", strikethrough: false };
-  }
-  if (inv.status === "VALIDATED") {
-    return { label: "Validated", cls: "bg-blue-50 text-blue-700", strikethrough: false };
-  }
-  if (inv.status === "RECEIVED") {
-    return { label: "To review", cls: "bg-amber-100 text-amber-800", strikethrough: false };
-  }
-  if (inv.status === "REJECTED") {
-    return { label: "Rejected", cls: "bg-red-100 text-red-800", strikethrough: false };
-  }
-  return { label: inv.status, cls: "bg-gray-100 text-gray-600", strikethrough: false };
-}
-
-// ── Due date cell ─────────────────────────────────────────────────────────────
-
-function DueDateCell({ dueDate, isOverdue }: { dueDate?: string; isOverdue?: boolean }) {
-  if (!dueDate) return <span className="text-sm text-muted">—</span>;
-
-  const due = new Date(dueDate);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-  const diffDays = Math.round((dueDay.getTime() - today.getTime()) / 86400000);
-
-  if (isOverdue || diffDays < 0) {
-    const days = Math.abs(diffDays);
-    return (
-      <div>
-        <span className="text-sm text-red-600 font-medium">{formatDate(dueDate)}</span>
-        <p className="text-xs text-red-500 mt-0.5">{days} day{days !== 1 ? "s" : ""} ago</p>
-      </div>
-    );
-  }
-  if (diffDays === 0) {
-    return (
-      <div>
-        <span className="text-sm text-amber-600 font-medium">{formatDate(dueDate)}</span>
-        <p className="text-xs text-amber-500 mt-0.5">Due today</p>
-      </div>
-    );
-  }
-  return <span className="text-sm text-dark">{formatDate(dueDate)}</span>;
-}
-
-// ── Status pill cell ──────────────────────────────────────────────────────────
-
-function StatusPillCell({ pill }: { pill: { label: string; cls: string; strikethrough?: boolean } }) {
-  return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${pill.cls}`}>
-      {pill.strikethrough ? <s>{pill.label}</s> : pill.label}
-    </span>
-  );
 }
 
 // ── Bulk Upload Modal ─────────────────────────────────────────────────────────
@@ -334,9 +323,17 @@ interface DashboardStats {
   overdueCount?: number;
 }
 
+const ATTENTION_STATUSES = new Set([
+  "REJECTED", "SUBMISSION_FAILED", "DEAD_LETTERED", "VALIDATION_FAILED", "PENDING_RESUBMISSION",
+]);
+
+function isAttentionInvoice(inv: Invoice) {
+  return ATTENTION_STATUSES.has(inv.status) || !!inv.isOverdue;
+}
+
 function SentPanel() {
   const router = useRouter();
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -351,66 +348,34 @@ function SentPanel() {
     setLoading(true);
     setError("");
     try {
-      const params: Record<string, string | number> = { page, limit: 20 };
-      if (activeTab === "ACCEPTED") params.status = "ACCEPTED";
-      else if (activeTab === "PAID") params.paymentStatus = "PAID";
+      const params: Record<string, string | number> = { page, limit: 50 };
       if (search) params.search = search;
       const res = await invoiceApi.list(params);
-      setInvoices(res.data as Invoice[]);
+      setAllInvoices(res.data as Invoice[]);
       setTotal(res.total);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load invoices");
-      setInvoices([]);
+      setAllInvoices([]);
       setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, activeTab, search]);
-
-  const loadAttention = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const base: Record<string, string | number> = { page, limit: 20 };
-      if (search) base.search = search;
-
-      const [rejRes, sfRes, dlRes, vfRes, overdueRes] = await Promise.all([
-        invoiceApi.list({ ...base, status: "REJECTED" }),
-        invoiceApi.list({ ...base, status: "SUBMISSION_FAILED" }),
-        invoiceApi.list({ ...base, status: "DEAD_LETTERED" }),
-        invoiceApi.list({ ...base, status: "VALIDATION_FAILED" }),
-        invoiceApi.list({ ...base, isOverdue: "true" }),
-      ]);
-
-      const seen = new Set<string>();
-      const merged: Invoice[] = [];
-      for (const inv of [
-        ...(rejRes.data as Invoice[]),
-        ...(sfRes.data as Invoice[]),
-        ...(dlRes.data as Invoice[]),
-        ...(vfRes.data as Invoice[]),
-        ...(overdueRes.data as Invoice[]),
-      ]) {
-        if (!seen.has(inv.id)) { seen.add(inv.id); merged.push(inv); }
-      }
-      setInvoices(merged);
-      setTotal(merged.length);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load invoices");
-      setInvoices([]);
     } finally {
       setLoading(false);
     }
   }, [page, search]);
 
-  useEffect(() => {
-    if (activeTab === "ATTENTION") loadAttention();
-    else load();
-  }, [activeTab, load, loadAttention]);
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     invoiceApi.stats().then((s: any) => setStats(s)).catch(() => {});
   }, []);
+
+  const invoices = useMemo(() => {
+    switch (activeTab) {
+      case "ATTENTION": return allInvoices.filter(isAttentionInvoice);
+      case "ACCEPTED":  return allInvoices.filter(inv => inv.status === "ACCEPTED" && inv.paymentStatus !== "PAID");
+      case "PAID":      return allInvoices.filter(inv => inv.paymentStatus === "PAID");
+      default:          return allInvoices;
+    }
+  }, [allInvoices, activeTab]);
 
   const attentionCount = stats
     ? (stats.rejectedAll ?? stats.rejected ?? 0) + (stats.overdue ?? stats.overdueCount ?? 0) + (stats.firsAwaiting ?? stats.pending ?? 0)
@@ -423,7 +388,7 @@ function SentPanel() {
     PAID:      null,
   };
 
-  const totalPages = Math.ceil(total / 20);
+  const totalPages = Math.ceil(total / 50);
 
   return (
     <div className="p-6 space-y-4">
@@ -444,14 +409,14 @@ function SentPanel() {
       )}
 
       <div className="bg-white rounded-xl border border-border overflow-hidden">
-        {/* Tab bar + search */}
+        {/* Filter tabs + search */}
         <div className="flex items-center justify-between px-4 border-b border-border">
           <div className="flex">
             {SENT_TABS.map(({ key, label }) => {
               const count = tabCounts[key];
               return (
                 <button key={key}
-                  onClick={() => { setActiveTab(key); setPage(1); }}
+                  onClick={() => setActiveTab(key)}
                   className={`px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
                     activeTab === key ? "border-green text-green" : "border-transparent text-muted hover:text-dark"
                   }`}
@@ -511,11 +476,11 @@ function SentPanel() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-surface/50">
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Customer</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden sm:table-cell">Due date</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Status</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Recipient</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice #</th>
                   <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Amount</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden sm:table-cell">Due Date</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Status</th>
                   <th className="px-5 py-3 w-16" />
                 </tr>
               </thead>
@@ -523,44 +488,33 @@ function SentPanel() {
                 {invoices.map((inv) => {
                   const pill = getInvoiceStatusPill(inv);
                   const dueDate = inv.paymentDueDate ?? inv.dueDate;
-                  const amountDue = inv.paymentStatus === "PARTIAL" && (inv.amountPaid ?? 0) > 0
-                    ? inv.totalAmount - (inv.amountPaid ?? 0)
-                    : null;
                   return (
                     <tr key={inv.id}
                       onClick={() => router.push(`/invoices/${inv.id}`)}
                       className="border-b border-border last:border-0 cursor-pointer hover:bg-gray-50 transition-colors"
                     >
-                      {/* Invoice */}
+                      {/* Recipient */}
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-medium text-dark truncate max-w-[180px]" title={inv.buyerName}>
+                          {inv.buyerName || "—"}
+                        </p>
+                      </td>
+                      {/* Invoice # */}
                       <td className="px-5 py-3.5">
                         <p className="text-sm font-semibold text-dark leading-tight">{formatInvoiceNumber(inv)}</p>
                         <p className="text-xs text-muted mt-0.5">{formatDate(inv.createdAt)}</p>
                       </td>
-                      {/* Customer */}
-                      <td className="px-5 py-3.5">
-                        <p className="text-sm font-medium text-dark truncate max-w-[160px]" title={inv.buyerName}>
-                          {inv.buyerName || "—"}
-                        </p>
-                        {inv.buyer?.email && (
-                          <p className="text-xs text-muted mt-0.5 truncate max-w-[160px]">{inv.buyer.email}</p>
-                        )}
+                      {/* Amount */}
+                      <td className="px-5 py-3.5 text-right">
+                        <p className="text-sm font-semibold text-dark tabular-nums">{formatCurrency(inv.totalAmount, inv.currency)}</p>
                       </td>
-                      {/* Due date */}
+                      {/* Due Date */}
                       <td className="px-5 py-3.5 hidden sm:table-cell">
                         <DueDateCell dueDate={dueDate} isOverdue={inv.isOverdue} />
                       </td>
                       {/* Status */}
                       <td className="px-5 py-3.5">
                         <StatusPillCell pill={pill} />
-                      </td>
-                      {/* Amount */}
-                      <td className="px-5 py-3.5 text-right">
-                        <p className="text-sm font-semibold text-dark tabular-nums">{formatCurrency(inv.totalAmount, inv.currency)}</p>
-                        {amountDue !== null && (
-                          <p className="text-xs text-muted mt-0.5 tabular-nums">
-                            {formatCurrencyShort(inv.amountPaid!, inv.currency)} paid · {formatCurrencyShort(amountDue, inv.currency)} due
-                          </p>
-                        )}
                       </td>
                       {/* Actions */}
                       <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
@@ -578,9 +532,9 @@ function SentPanel() {
         )}
       </div>
 
-      {totalPages > 1 && (
+      {totalPages > 1 && activeTab === "ALL" && (
         <div className="flex items-center justify-between text-sm text-muted">
-          <span>Showing {invoices.length} of {total}</span>
+          <span>Showing {allInvoices.length} of {total}</span>
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
             <span className="px-3 py-1.5 text-dark">{page} / {totalPages}</span>
@@ -608,7 +562,7 @@ const RECEIVED_TABS: { key: ReceivedTab; label: string }[] = [
 
 function ReceivedPanel() {
   const router = useRouter();
-  const [invoices, setInvoices] = useState<IncomingInvoice[]>([]);
+  const [allInvoices, setAllInvoices] = useState<IncomingInvoice[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState<ReceivedTab>("ALL");
@@ -621,27 +575,33 @@ function ReceivedPanel() {
     setLoading(true);
     setError("");
     try {
-      const params: Parameters<typeof incomingInvoiceApi.list>[0] = { page, limit: 20 };
-      if (activeTab === "TO_REVIEW") params.status = "RECEIVED";
-      else if (activeTab === "APPROVED") params.status = "APPROVED";
-      else if (activeTab === "PAID") params.status = "PAID";
+      const params: Parameters<typeof incomingInvoiceApi.list>[0] = { page, limit: 50 };
       const res = await incomingInvoiceApi.list(params);
-      setInvoices(res.data as IncomingInvoice[]);
+      setAllInvoices(res.data as IncomingInvoice[]);
       setTotal(res.total);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load received invoices");
-      setInvoices([]);
+      setAllInvoices([]);
       setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [page, activeTab]);
+  }, [page]);
 
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     incomingInvoiceApi.stats().then((s: any) => setToReviewCount(s.received ?? 0)).catch(() => {});
   }, []);
+
+  const invoices = useMemo(() => {
+    switch (activeTab) {
+      case "TO_REVIEW": return allInvoices.filter(inv => inv.status === "RECEIVED" || inv.status === "VALIDATED");
+      case "APPROVED":  return allInvoices.filter(inv => inv.status === "APPROVED");
+      case "PAID":      return allInvoices.filter(inv => inv.paymentStatus === "PAID" || inv.status === "PAID");
+      default:          return allInvoices;
+    }
+  }, [allInvoices, activeTab]);
 
   async function doAction(id: string, action: "validate" | "approve" | "reject", e: React.MouseEvent) {
     e.stopPropagation();
@@ -660,19 +620,19 @@ function ReceivedPanel() {
     }
   }
 
-  const totalPages = Math.ceil(total / 20);
+  const totalPages = Math.ceil(total / 50);
 
   return (
     <div className="p-6 space-y-4">
       {error && <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>}
 
       <div className="bg-white rounded-xl border border-border overflow-hidden">
-        {/* Tab bar */}
+        {/* Filter tabs */}
         <div className="px-4 border-b border-border">
           <div className="flex">
             {RECEIVED_TABS.map(({ key, label }) => (
               <button key={key}
-                onClick={() => { setActiveTab(key); setPage(1); }}
+                onClick={() => setActiveTab(key)}
                 className={`px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
                   activeTab === key ? "border-green text-green" : "border-transparent text-muted hover:text-dark"
                 }`}
@@ -712,45 +672,34 @@ function ReceivedPanel() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-surface/50">
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Supplier</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden sm:table-cell">Due date</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Status</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Sender</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice #</th>
                   <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Amount</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden sm:table-cell">Due Date</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Status</th>
                   <th className="px-5 py-3 w-24" />
                 </tr>
               </thead>
               <tbody>
                 {invoices.map((inv) => {
-                  const pill = receivedStatusPill(inv);
+                  const pill = getReceivedInvoiceStatusPill(inv);
                   return (
                     <tr key={inv.id}
                       onClick={() => router.push(`/incoming-invoices/${inv.id}`)}
                       className="border-b border-border last:border-0 cursor-pointer hover:bg-gray-50 transition-colors"
                     >
-                      {/* Invoice */}
+                      {/* Sender */}
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-medium text-dark truncate max-w-[180px]" title={inv.supplierName}>
+                          {inv.supplierName ?? "—"}
+                        </p>
+                      </td>
+                      {/* Invoice # */}
                       <td className="px-5 py-3.5">
                         <p className="text-sm font-semibold text-dark leading-tight">
                           {formatInvoiceNumber({ platformIrn: inv.invoiceNumber ?? inv.platformIrn, id: inv.id })}
                         </p>
                         <p className="text-xs text-muted mt-0.5">{formatDate(inv.createdAt)}</p>
-                      </td>
-                      {/* Supplier */}
-                      <td className="px-5 py-3.5">
-                        <p className="text-sm font-medium text-dark truncate max-w-[160px]" title={inv.supplierName}>
-                          {inv.supplierName ?? "—"}
-                        </p>
-                        {inv.supplierEmail && (
-                          <p className="text-xs text-muted mt-0.5 truncate max-w-[160px]">{inv.supplierEmail}</p>
-                        )}
-                      </td>
-                      {/* Due date */}
-                      <td className="px-5 py-3.5 hidden sm:table-cell">
-                        <DueDateCell dueDate={inv.dueDate} />
-                      </td>
-                      {/* Status */}
-                      <td className="px-5 py-3.5">
-                        <StatusPillCell pill={pill} />
                       </td>
                       {/* Amount */}
                       <td className="px-5 py-3.5 text-right">
@@ -758,7 +707,15 @@ function ReceivedPanel() {
                           {inv.totalAmount != null ? formatCurrency(inv.totalAmount, inv.currency ?? "NGN") : "—"}
                         </p>
                       </td>
-                      {/* Next action only */}
+                      {/* Due Date */}
+                      <td className="px-5 py-3.5 hidden sm:table-cell">
+                        <DueDateCell dueDate={inv.dueDate} />
+                      </td>
+                      {/* Status */}
+                      <td className="px-5 py-3.5">
+                        <StatusPillCell pill={pill} />
+                      </td>
+                      {/* Actions */}
                       <td className="px-3 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         {inv.status === "RECEIVED" && (
                           <button
@@ -797,9 +754,9 @@ function ReceivedPanel() {
         )}
       </div>
 
-      {totalPages > 1 && (
+      {totalPages > 1 && activeTab === "ALL" && (
         <div className="flex items-center justify-between text-sm text-muted">
-          <span>Showing {invoices.length} of {total}</span>
+          <span>Showing {allInvoices.length} of {total}</span>
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
             <span className="px-3 py-1.5 text-dark">{page} / {totalPages}</span>
