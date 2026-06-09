@@ -258,6 +258,14 @@ export const invoiceApi = {
     api.get<unknown>(`/v1/invoices/credit-notes?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`),
 };
 
+// VAT Return
+export const vatReturnApi = {
+  summary: (startDate: string, endDate: string) =>
+    api.get<unknown>(`/v1/vat-return/summary?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`),
+  export: (startDate: string, endDate: string) =>
+    requestBlob(`/v1/vat-return/export?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`),
+};
+
 // Payments list (tenant-wide)
 export const paymentApi = {
   list: (params?: Record<string, string>) => {
