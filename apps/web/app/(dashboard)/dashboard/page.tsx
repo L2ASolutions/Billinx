@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+
 import { useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
 import { invoiceApi, incomingInvoiceApi } from '@/lib/api';
@@ -427,11 +428,11 @@ export default function DashboardPage() {
 
         {/* ── Dashboard charts ─────────────────────────────────────────────── */}
         {chartsLoading ? (
-          <div className="space-y-6">
+          <div className="grid grid-cols-3 gap-4">
             {[0, 1, 2].map((i) => (
               <div key={i} className="bg-white rounded-xl border border-border p-5">
                 <Sk className="h-4 w-36 mb-1" />
-                <Sk className="h-3 w-64 mb-4" />
+                <Sk className="h-3 w-48 mb-4" />
                 <Sk className="h-[220px] w-full" />
               </div>
             ))}
@@ -456,7 +457,7 @@ export default function DashboardPage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="grid grid-cols-3 gap-4">
             {/* Chart 1 — Monthly Revenue */}
             <div className="bg-white rounded-xl border border-border p-5">
               <h2 className="font-semibold text-dark">Monthly Revenue</h2>
@@ -500,7 +501,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Chart 2 — Invoice Pipeline */}
-            <div className="bg-white rounded-xl border border-border p-5">
+            <div className="bg-white rounded-xl border border-border p-5 min-w-0">
               <h2 className="font-semibold text-dark">Invoice Pipeline</h2>
               <p className="text-xs text-muted mt-0.5 mb-4">
                 Current status of all sent invoices. Click a segment to view those invoices.
@@ -517,8 +518,8 @@ export default function DashboardPage() {
                   Cancelled: 'cancelled',
                 };
                 return (
-                  <div className="flex items-center gap-6">
-                    <div style={{ width: 220, height: 220, flexShrink: 0 }}>
+                  <div className="flex flex-col items-center gap-3">
+                    <div style={{ width: '100%', height: 180 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
@@ -548,15 +549,15 @@ export default function DashboardPage() {
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="flex flex-col gap-2 flex-1">
+                    <div className="flex flex-col gap-1.5 w-full">
                       {chartData.invoiceStatusBreakdown.map((d) => (
                         <button
                           key={d.status}
                           onClick={() => router.push(`/invoices?direction=sent&filter=${filterMap[d.status] ?? ''}`)}
                           className="flex items-center gap-2 text-left hover:bg-gray-50 rounded px-1 py-0.5 transition-colors"
                         >
-                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: STATUS_COLORS[d.status] ?? '#9CA3AF' }} />
-                          <span className="text-xs text-muted flex-1">{d.status}</span>
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: STATUS_COLORS[d.status] ?? '#9CA3AF' }} />
+                          <span className="text-xs text-muted flex-1 truncate">{d.status}</span>
                           <span className="text-xs font-semibold text-dark tabular-nums">{d.count}</span>
                         </button>
                       ))}
