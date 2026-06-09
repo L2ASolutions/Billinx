@@ -89,6 +89,18 @@ export interface InvoiceResponse {
   whtRate?: number;
   whtAmount?: number;
   expectedCash?: number;
+  creditNotes?: Array<{
+    id: string;
+    originalAmount: number;
+    adjustedAmount: number;
+    adjustmentReason: string;
+    customerName: string;
+    customerTin?: string;
+    transactionDate: string;
+    createdBy: string;
+  }>;
+  hasCreditNote?: boolean;
+  netAmount?: number;
   createdAt: string;
   updatedAt: string;
 }

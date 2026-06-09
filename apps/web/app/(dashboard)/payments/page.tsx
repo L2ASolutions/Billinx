@@ -45,6 +45,8 @@ interface InvoiceRow {
   paymentDueDate?: string;
   paidAt?: string;
   isOverdue?: boolean;
+  hasCreditNote?: boolean;
+  netAmount?: number;
   createdAt: string;
 }
 
@@ -164,16 +166,19 @@ export default function PaymentsPage() {
   }, []);
 
   // Derive metrics from loaded page (best-effort approximation for the top cards)
-  const totalBilled = invoices.reduce((s, i) => s + Number(i.totalAmount ?? 0), 0);
+  // Use netAmount (post-credit-note) when available, else fall back to totalAmount.
+  const effectiveAmount = (i: InvoiceRow) =>
+    i.hasCreditNote ? Math.max(0, i.netAmount ?? Number(i.totalAmount ?? 0)) : Number(i.totalAmount ?? 0);
+  const totalBilled = invoices.reduce((s, i) => s + effectiveAmount(i), 0);
   const totalCollected = invoices.reduce((s, i) => s + Number(i.amountPaid ?? 0), 0);
   const totalOutstanding = invoices.reduce((s, i) => {
     if (i.paymentStatus === "PAID") return s;
-    return s + Math.max(0, Number(i.totalAmount ?? 0) - Number(i.amountPaid ?? 0));
+    return s + Math.max(0, effectiveAmount(i) - Number(i.amountPaid ?? 0));
   }, 0);
   const overdueCount = invoices.filter((i) => i.isOverdue).length;
   const overdueAmount = invoices
     .filter((i) => i.isOverdue)
-    .reduce((s, i) => s + Math.max(0, Number(i.totalAmount ?? 0) - Number(i.amountPaid ?? 0)), 0);
+    .reduce((s, i) => s + Math.max(0, effectiveAmount(i) - Number(i.amountPaid ?? 0)), 0);
 
   async function handleRecordPayment() {
     if (!recordFor) return;
@@ -305,9 +310,12 @@ export default function PaymentsPage() {
                     </thead>
                     <tbody>
                       {invoices.map((inv) => {
+                        const net = inv.hasCreditNote
+                          ? Math.max(0, inv.netAmount ?? Number(inv.totalAmount ?? 0))
+                          : Number(inv.totalAmount ?? 0);
                         const outstanding = inv.paymentStatus === "PAID"
                           ? 0
-                          : Math.max(0, Number(inv.totalAmount ?? 0) - Number(inv.amountPaid ?? 0));
+                          : Math.max(0, net - Number(inv.amountPaid ?? 0));
                         return (
                         <tr key={inv.id}
                           className={`border-b border-border last:border-0 transition-colors ${
@@ -325,7 +333,24 @@ export default function PaymentsPage() {
                           </td>
                           <td className="px-6 py-3 text-sm text-dark max-w-[120px] truncate" title={inv.buyerName}>{inv.buyerName}</td>
                           <td className="px-6 py-3 text-sm font-medium text-dark text-right">
-                            {formatCurrency(inv.totalAmount, inv.currency)}
+                            {inv.hasCreditNote ? (
+                              <div>
+                                <span>{formatCurrency(net, inv.currency)}</span>
+                                <div className="flex items-center justify-end gap-1 mt-0.5">
+                                  <span
+                                    className="px-1 rounded text-xs font-medium bg-gray-100 text-gray-500"
+                                    title="Credit note issued"
+                                  >
+                                    CN
+                                  </span>
+                                  <s className="text-xs text-muted tabular-nums">
+                                    {formatCurrency(inv.totalAmount, inv.currency)}
+                                  </s>
+                                </div>
+                              </div>
+                            ) : (
+                              formatCurrency(inv.totalAmount, inv.currency)
+                            )}
                           </td>
                           <td className="px-6 py-3 text-sm text-right">
                             <span className={outstanding === 0 ? "text-green-700 font-medium" : "text-dark font-medium"}>
@@ -340,7 +365,7 @@ export default function PaymentsPage() {
                               <Button size="sm" variant="secondary" onClick={() => {
                                 setRecordFor(inv);
                                 setForm({
-                                  amount: String(outstanding > 0 ? outstanding : inv.totalAmount),
+                                  amount: String(outstanding > 0 ? outstanding : net),
                                   provider: "MANUAL", reference: "",
                                   paidAt: new Date().toISOString().slice(0, 10), notes: "",
                                 });
