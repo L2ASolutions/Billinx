@@ -244,6 +244,83 @@ export class ActivityService {
     return this.mapError(updated);
   }
 
+  async getActivityForExport(filters: {
+    tenantId?: string;
+    eventType?: string;
+    from?: string;
+    to?: string;
+  }): Promise<Array<{
+    id: string;
+    eventType: string;
+    actor: string;
+    actorEmail?: string;
+    actorName?: string;
+    entityType?: string;
+    entityId?: string;
+    ipAddress?: string;
+    payload: Record<string, unknown>;
+    occurredAt: string;
+  }>> {
+    const where: any = {};
+    if (filters.tenantId) where.tenantId = filters.tenantId;
+    if (filters.eventType) where.eventType = filters.eventType;
+    if (filters.from || filters.to) {
+      where.occurredAt = {};
+      if (filters.from) where.occurredAt.gte = new Date(filters.from);
+      if (filters.to) where.occurredAt.lte = new Date(filters.to);
+    }
+
+    const data = await this.prisma.asAdmin((tx) =>
+      (tx as any).activityEvent.findMany({
+        where,
+        take: 5000,
+        orderBy: { occurredAt: 'desc' },
+      }),
+    );
+
+    const userIds = [
+      ...new Set(
+        (data as any[])
+          .map((e: any) => e.actor as string)
+          .filter((a: string) => a.startsWith('user:'))
+          .map((a: string) => a.replace('user:', '')),
+      ),
+    ];
+    const actorNameMap = new Map<string, string>();
+    if (userIds.length > 0) {
+      const users = await this.prisma.asAdmin((tx) =>
+        (tx as any).user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, firstName: true, lastName: true, email: true },
+        }),
+      );
+      for (const u of users as any[]) {
+        const name = `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim();
+        actorNameMap.set(u.id, name || u.email);
+      }
+    }
+
+    return (data as any[]).map((e: any) => {
+      const actorId = (e.actor as string).startsWith('user:')
+        ? (e.actor as string).replace('user:', '')
+        : null;
+      return {
+        id: e.id,
+        eventType: e.eventType,
+        actor: e.actor,
+        actorEmail: e.actorEmail ?? undefined,
+        actorName: actorId ? actorNameMap.get(actorId) : undefined,
+        entityType: e.entityType ?? undefined,
+        entityId: e.entityId ?? undefined,
+        ipAddress: e.ipAddress ?? undefined,
+        payload: (e.payload as Record<string, unknown>) ?? {},
+        occurredAt: e.occurredAt instanceof Date
+          ? e.occurredAt.toISOString()
+          : e.occurredAt,
+      };
+    });
+  }
+
   async exportActivityCsv(filters: ActivityFilterParams): Promise<string> {
     const result = await this.getActivity({ ...filters, limit: 10000 });
     const headers = [

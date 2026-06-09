@@ -106,7 +106,8 @@ function Sk({ className = '' }: { className?: string }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AuditLogPage() {
-  useRequireAuth();
+  const { user } = useRequireAuth();
+  const canExport = user?.role === 'OWNER' || user?.role === 'ADMIN';
 
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [total, setTotal] = useState(0);
@@ -114,6 +115,8 @@ export default function AuditLogPage() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<FilterTab>('all');
   const [timeRange, setTimeRange] = useState<TimeRange>('30');
+  const [exporting, setExporting] = useState(false);
+  const [exportToast, setExportToast] = useState('');
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
@@ -142,26 +145,35 @@ export default function AuditLogPage() {
 
   const filtered = tab === 'all' ? events : events.filter((e) => eventTypeToTab(e.eventType) === tab);
 
-  const handleExport = () => {
-    const rows = [
-      ['Action', 'Actor', 'Actor Email', 'Entity', 'Time'],
-      ...filtered.map((e) => [
-        EVENT_LABELS[e.eventType] ?? e.eventType,
-        displayActor(e),
-        e.actorEmail ?? '',
-        e.entityType ? `${e.entityType}${e.entityId ? ':' + e.entityId.substring(0, 8) : ''}` : '',
-        new Date(e.occurredAt).toISOString(),
-      ]),
-    ];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  async function handleExport() {
+    setExporting(true);
+    setExportToast('');
+    try {
+      const params: { startDate?: string; endDate?: string } = {};
+      if (timeRange !== 'all') {
+        const since = new Date();
+        since.setDate(since.getDate() - parseInt(timeRange));
+        params.startDate = since.toISOString().split('T')[0];
+      }
+      const { blob, filename } = await activityApi.exportExcel(params);
+      if (blob.size < 200) {
+        setExportToast('No audit log entries found for this period.');
+        setTimeout(() => setExportToast(''), 4000);
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'Billinx_AuditLog.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportToast('Export failed. Please try again.');
+      setTimeout(() => setExportToast(''), 4000);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-surface">
@@ -173,19 +185,31 @@ export default function AuditLogPage() {
             {loading ? 'Loading…' : `${total.toLocaleString()} events total`}
           </p>
         </div>
-        <button
-          onClick={handleExport}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium text-dark hover:bg-surface transition-colors"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Export CSV
-        </button>
+        {canExport && (
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium text-dark hover:bg-surface transition-colors disabled:opacity-50"
+          >
+            {exporting ? (
+              <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            )}
+            Export
+          </button>
+        )}
       </header>
 
       <div className="p-6">
+        {exportToast && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">{exportToast}</div>
+        )}
         <div className="bg-white rounded-xl border border-border overflow-hidden">
           {/* Tab bar + time range */}
           <div className="flex items-center justify-between px-4 border-b border-border">
