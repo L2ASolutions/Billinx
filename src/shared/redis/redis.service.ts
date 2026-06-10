@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import Redis from 'ioredis';
+import { buildRedisConnectionOptions } from './redis-config.factory';
 
 const LOCKOUT_THRESHOLD = 5;
 const LOCKOUT_WINDOW_SECS = 15 * 60; // 15 minutes
@@ -16,9 +17,7 @@ export class RedisService implements OnModuleDestroy {
 
   constructor() {
     this.client = new Redis({
-      host: process.env.REDIS_HOST ?? 'localhost',
-      port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
-      password: process.env.REDIS_PASSWORD ?? undefined,
+      ...buildRedisConnectionOptions(),
       enableOfflineQueue: false,
       maxRetriesPerRequest: 1,
       retryStrategy: (times) => Math.min(times * 200, 2000),

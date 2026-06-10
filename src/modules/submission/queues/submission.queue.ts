@@ -1,14 +1,11 @@
 import { Queue } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { QueueJobData } from '../../../../packages/types/submission';
+import { buildRedisConnectionOptions } from '../../../shared/redis/redis-config.factory';
 
 const QUEUE_NAME = 'invoice-submission';
 
-const redisConnection = {
-  host: process.env.REDIS_HOST ?? 'localhost',
-  port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
-  password: process.env.REDIS_PASSWORD ?? undefined,
-};
+const redisConnection = buildRedisConnectionOptions();
 
 export const submissionQueue = new Queue<QueueJobData>(QUEUE_NAME, {
   connection: redisConnection,
