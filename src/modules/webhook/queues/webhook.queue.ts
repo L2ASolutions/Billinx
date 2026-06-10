@@ -1,14 +1,11 @@
 import { Queue } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { WebhookDeliveryJobData } from '../../../../packages/types/webhook';
+import { buildRedisConnectionOptions } from '../../../shared/redis/redis-config.factory';
 
 export const WEBHOOK_QUEUE_NAME = 'webhook-delivery';
 
-export const webhookRedisConnection = {
-  host: process.env.REDIS_HOST ?? 'localhost',
-  port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
-  password: process.env.REDIS_PASSWORD ?? undefined,
-};
+export const webhookRedisConnection = buildRedisConnectionOptions();
 
 export const webhookQueue = new Queue<WebhookDeliveryJobData>(
   WEBHOOK_QUEUE_NAME,
