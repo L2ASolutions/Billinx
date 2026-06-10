@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
@@ -20,7 +20,6 @@ const PAYMENT_TABS = [
 ] as const;
 
 type PaymentTab = typeof PAYMENT_TABS[number]["key"];
-
 
 const PROVIDERS = ["MANUAL", "PAYSTACK", "FLUTTERWAVE", "BANK_TRANSFER"] as const;
 
@@ -69,10 +68,56 @@ interface PaymentStats {
   providerBreakdown: Array<{ provider: string; total: number }>;
 }
 
-// ── Payment status cell ───────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function effectiveAmount(inv: InvoiceRow) {
+  return inv.hasCreditNote
+    ? Math.max(0, inv.netAmount ?? Number(inv.totalAmount ?? 0))
+    : Number(inv.totalAmount ?? 0);
+}
+
+function calcRemaining(inv: InvoiceRow) {
+  if (inv.paymentStatus === "PAID") return 0;
+  return Math.max(0, effectiveAmount(inv) - Number(inv.amountPaid ?? 0));
+}
+
+function isRowOverdue(inv: InvoiceRow) {
+  if (inv.paymentStatus === "PAID" || calcRemaining(inv) === 0) return false;
+  if (inv.isOverdue) return true;
+  if (!inv.paymentDueDate) return false;
+  return new Date(inv.paymentDueDate) < new Date(new Date().toDateString());
+}
+
+// ── FIRS status pill ──────────────────────────────────────────────────────────
+
+function FirsStatusPill({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    ACCEPTED:               { label: "Accepted",   cls: "bg-green-50 text-green-700" },
+    DRAFT:                  { label: "Draft",      cls: "bg-gray-100 text-gray-500" },
+    REJECTED:               { label: "Rejected",   cls: "bg-red-50 text-red-600" },
+    VALIDATION_FAILED:      { label: "Rejected",   cls: "bg-red-50 text-red-600" },
+    SUBMISSION_FAILED:      { label: "Rejected",   cls: "bg-red-50 text-red-600" },
+    VALIDATING:             { label: "Pending",    cls: "bg-amber-50 text-amber-700" },
+    QUEUED:                 { label: "Pending",    cls: "bg-amber-50 text-amber-700" },
+    SUBMITTING:             { label: "Pending",    cls: "bg-amber-50 text-amber-700" },
+    DEAD_LETTERED:          { label: "Failed",     cls: "bg-gray-100 text-gray-500" },
+    CANCELLED:              { label: "Cancelled",  cls: "bg-gray-100 text-gray-500" },
+    CANCELLATION_REQUESTED: { label: "Cancelling", cls: "bg-gray-100 text-gray-500" },
+  };
+  const { label, cls } = map[status] ?? { label: status, cls: "bg-gray-100 text-gray-500" };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+// ── Smart payment status cell ─────────────────────────────────────────────────
 
 function PaymentStatusCell({ inv }: { inv: InvoiceRow }) {
-  if (inv.paymentStatus === "PAID") {
+  const remaining = calcRemaining(inv);
+
+  if (inv.paymentStatus === "PAID" || remaining === 0) {
     return (
       <div>
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
@@ -84,26 +129,156 @@ function PaymentStatusCell({ inv }: { inv: InvoiceRow }) {
       </div>
     );
   }
-  if (inv.paymentStatus === "PARTIAL") {
+
+  if (inv.paymentStatus === "PARTIAL" || Number(inv.amountPaid ?? 0) > 0) {
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
-        Partial
-      </span>
+      <div>
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
+          Partial
+        </span>
+        <p className="text-xs text-muted mt-0.5">{formatCurrency(remaining, inv.currency)} remaining</p>
+      </div>
     );
   }
-  if (inv.paymentDueDate) {
+
+  if (inv.status === "ACCEPTED") {
+    if (inv.paymentDueDate) {
+      const due = new Date(inv.paymentDueDate);
+      const today = new Date(new Date().toDateString());
+      if (inv.isOverdue || due < today) {
+        const days = Math.max(1, Math.round((today.getTime() - due.getTime()) / 86400000));
+        return <span className="text-sm text-red-600 font-medium">{days} day{days !== 1 ? "s" : ""} overdue</span>;
+      }
+      return <span className="text-sm text-muted">Due {formatDate(inv.paymentDueDate)}</span>;
+    }
+    if (inv.isOverdue) {
+      return <span className="text-sm text-red-600 font-medium">Overdue</span>;
+    }
+  } else if (inv.paymentDueDate) {
     const due = new Date(inv.paymentDueDate);
     const today = new Date(new Date().toDateString());
-    if (inv.isOverdue || due < today) {
-      const days = Math.max(1, Math.round((today.getTime() - due.getTime()) / 86400000));
-      return <span className="text-sm text-red-600 font-medium">Overdue {days}d</span>;
+    if (due >= today) {
+      return <span className="text-sm text-muted">Due {formatDate(inv.paymentDueDate)}</span>;
     }
-    return <span className="text-sm text-muted">Due {formatDate(inv.paymentDueDate)}</span>;
   }
-  if (inv.isOverdue) {
-    return <span className="text-sm text-red-600 font-medium">Overdue</span>;
+
+  return null;
+}
+
+// ── Actions cell ──────────────────────────────────────────────────────────────
+
+function ActionsCell({
+  inv,
+  remainingAmount,
+  onRecord,
+}: {
+  inv: InvoiceRow;
+  remainingAmount: number;
+  onRecord: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const canRecord =
+    inv.status === "ACCEPTED" &&
+    inv.paymentStatus !== "PAID" &&
+    remainingAmount > 0;
+
+  function copyPaymentLink() {
+    navigator.clipboard.writeText(`${window.location.origin}/pay/${inv.id}`).catch(() => {});
+    setOpen(false);
   }
-  return <span className="text-sm text-muted">Unpaid</span>;
+
+  return (
+    <div className="flex items-center justify-end gap-2">
+      {canRecord && (
+        <button
+          onClick={onRecord}
+          className="text-xs font-medium text-dark border border-border rounded-md px-2.5 py-1.5 hover:bg-surface transition-colors whitespace-nowrap"
+        >
+          Record payment
+        </button>
+      )}
+      <div ref={ref} className="relative">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="p-1.5 rounded-md text-muted hover:text-dark hover:bg-surface transition-colors"
+          aria-label="More actions"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="5" r="1.5" />
+            <circle cx="12" cy="12" r="1.5" />
+            <circle cx="12" cy="19" r="1.5" />
+          </svg>
+        </button>
+        {open && (
+          <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg border border-border shadow-lg z-20 py-1">
+            <Link
+              href={`/invoices/${inv.id}`}
+              className="flex items-center gap-2.5 px-3.5 py-2 text-sm text-dark hover:bg-surface transition-colors"
+              onClick={() => setOpen(false)}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              View invoice
+            </Link>
+            <button
+              onClick={copyPaymentLink}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-dark hover:bg-surface transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+              Copy payment link
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Per-tab empty state ───────────────────────────────────────────────────────
+
+function EmptyState({ tab }: { tab: PaymentTab }) {
+  const states: Record<PaymentTab, { check: boolean; title: string; body: string }> = {
+    ALL:     { check: false, title: "No invoices found",    body: "No invoices match your search." },
+    UNPAID:  { check: true,  title: "All invoices paid",    body: "No unpaid invoices at the moment." },
+    OVERDUE: { check: true,  title: "Nothing overdue",      body: "All accepted invoices are within their payment terms." },
+    PAID:    { check: false, title: "No paid invoices yet", body: "Payments you record will appear here." },
+    PARTIAL: { check: false, title: "No partial payments",  body: "Invoices with partial payments will appear here." },
+  };
+  const { check, title, body } = states[tab];
+  return (
+    <div className="p-12 text-center">
+      <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 ${check ? "bg-green-50" : "bg-surface"}`}>
+        {check ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-green-600">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        ) : (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-muted">
+            <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+            <line x1="1" y1="10" x2="23" y2="10" />
+          </svg>
+        )}
+      </div>
+      <p className="font-medium text-dark text-sm mb-1">{title}</p>
+      <p className="text-muted text-sm">{body}</p>
+    </div>
+  );
 }
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
@@ -165,20 +340,16 @@ export default function PaymentsPage() {
       .finally(() => setStatsLoading(false));
   }, []);
 
-  // Derive metrics from loaded page (best-effort approximation for the top cards)
-  // Use netAmount (post-credit-note) when available, else fall back to totalAmount.
-  const effectiveAmount = (i: InvoiceRow) =>
-    i.hasCreditNote ? Math.max(0, i.netAmount ?? Number(i.totalAmount ?? 0)) : Number(i.totalAmount ?? 0);
   const totalBilled = invoices.reduce((s, i) => s + effectiveAmount(i), 0);
   const totalCollected = invoices.reduce((s, i) => s + Number(i.amountPaid ?? 0), 0);
   const totalOutstanding = invoices.reduce((s, i) => {
     if (i.paymentStatus === "PAID") return s;
     return s + Math.max(0, effectiveAmount(i) - Number(i.amountPaid ?? 0));
   }, 0);
-  const overdueCount = invoices.filter((i) => i.isOverdue).length;
+  const overdueCount = invoices.filter(isRowOverdue).length;
   const overdueAmount = invoices
-    .filter((i) => i.isOverdue)
-    .reduce((s, i) => s + Math.max(0, effectiveAmount(i) - Number(i.amountPaid ?? 0)), 0);
+    .filter(isRowOverdue)
+    .reduce((s, i) => s + calcRemaining(i), 0);
 
   async function handleRecordPayment() {
     if (!recordFor) return;
@@ -202,8 +373,6 @@ export default function PaymentsPage() {
   }
 
   const totalPages = Math.ceil(total / 20);
-
-  // Collection rate progress bar width
   const collectionRate = paymentStats?.collectionRate ?? 0;
 
   return (
@@ -218,7 +387,8 @@ export default function PaymentsPage() {
         <div className="flex gap-6 items-start">
           {/* ── Left column (70%) ─────────────────────────────────────────── */}
           <div className="flex-1 min-w-0 space-y-6">
-            {/* 4 metric cards */}
+
+            {/* 4 metric cards — unchanged */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
                 { label: "Total billed",    value: formatCurrency(totalBilled),     cls: "text-dark" },
@@ -253,7 +423,7 @@ export default function PaymentsPage() {
               </div>
             )}
 
-            {/* Filter tabs + search */}
+            {/* Filter tabs + search — unchanged */}
             <div className="bg-white rounded-xl border border-border overflow-hidden">
               <div className="flex items-center justify-between px-4 border-b border-border">
                 <div className="flex">
@@ -285,97 +455,98 @@ export default function PaymentsPage() {
                   {[0,1,2,3,4].map(i => <SkeletonTableRow key={i} />)}
                 </div>
               ) : invoices.length === 0 ? (
-                <div className="p-12 text-center">
-                  <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center mx-auto mb-3">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                      strokeWidth="1.8" className="text-muted">
-                      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-                      <line x1="1" y1="10" x2="23" y2="10" />
-                    </svg>
-                  </div>
-                  <p className="text-muted text-sm">No invoices found for this filter.</p>
-                </div>
+                <EmptyState tab={activeTab} />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border">
-                        {["Invoice", "Buyer", "Amount", "Outstanding", "Status", ""].map((col, i) => (
-                          <th key={col}
-                            className={`px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide ${[2, 3].includes(i) ? "text-right" : "text-left"}`}>
-                            {col}
-                          </th>
-                        ))}
+                        <th className="px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide text-left w-[35%]">Client &amp; Invoice</th>
+                        <th className="px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide text-right">Amount</th>
+                        <th className="px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide text-left">Payment Status</th>
+                        <th className="px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide text-left">FIRS</th>
+                        <th className="px-4 py-3 text-xs font-medium text-muted uppercase tracking-wide text-right"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {invoices.map((inv) => {
-                        const net = inv.hasCreditNote
-                          ? Math.max(0, inv.netAmount ?? Number(inv.totalAmount ?? 0))
-                          : Number(inv.totalAmount ?? 0);
-                        const outstanding = inv.paymentStatus === "PAID"
-                          ? 0
-                          : Math.max(0, net - Number(inv.amountPaid ?? 0));
+                        const net = effectiveAmount(inv);
+                        const remaining = calcRemaining(inv);
+                        const isPaid = inv.paymentStatus === "PAID" || remaining === 0;
+                        const overdue = isRowOverdue(inv);
+
                         return (
-                        <tr key={inv.id}
-                          className={`border-b border-border last:border-0 transition-colors ${
-                            inv.isOverdue ? "bg-red-50/40 hover:bg-red-50/60" : "hover:bg-surface"
-                          }`}>
-                          <td className="px-6 py-3">
-                            <Link href={`/invoices/${inv.id}`} className="text-sm font-mono text-green hover:underline block break-all">
-                              {inv.platformIrn ?? inv.id.slice(0, 8) + "…"}
-                            </Link>
-                            {inv.isOverdue && (
-                              <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-600">
-                                OVERDUE
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-3 text-sm text-dark max-w-[120px] truncate" title={inv.buyerName}>{inv.buyerName}</td>
-                          <td className="px-6 py-3 text-sm font-medium text-dark text-right">
-                            {inv.hasCreditNote ? (
-                              <div>
-                                <span>{formatCurrency(net, inv.currency)}</span>
-                                <div className="flex items-center justify-end gap-1 mt-0.5">
-                                  <span
-                                    className="px-1 rounded text-xs font-medium bg-gray-100 text-gray-500"
-                                    title="Credit note issued"
-                                  >
-                                    CN
-                                  </span>
-                                  <s className="text-xs text-muted tabular-nums">
-                                    {formatCurrency(inv.totalAmount, inv.currency)}
-                                  </s>
+                          <tr
+                            key={inv.id}
+                            className={`border-b border-border last:border-0 transition-colors ${
+                              isPaid
+                                ? "opacity-75 hover:opacity-100 hover:bg-surface"
+                                : overdue
+                                ? "border-l-2 border-l-red-200 hover:bg-surface"
+                                : "hover:bg-surface"
+                            }`}
+                          >
+                            {/* Col 1: Client & Invoice */}
+                            <td className="px-6 py-3.5">
+                              {inv.buyerName ? (
+                                <p className="text-sm text-dark">{inv.buyerName}</p>
+                              ) : (
+                                <p className="text-sm text-muted italic">No buyer</p>
+                              )}
+                              <p className="text-xs text-muted mt-0.5">
+                                {inv.platformIrn ?? inv.id} · {formatDate(inv.createdAt)}
+                              </p>
+                            </td>
+
+                            {/* Col 2: Amount — credit note display preserved exactly */}
+                            <td className="px-6 py-3.5 text-sm font-medium text-dark text-right">
+                              {inv.hasCreditNote ? (
+                                <div>
+                                  <span>{formatCurrency(net, inv.currency)}</span>
+                                  <div className="flex items-center justify-end gap-1 mt-0.5">
+                                    <span
+                                      className="px-1 rounded text-xs font-medium bg-gray-100 text-gray-500"
+                                      title="Credit note issued"
+                                    >
+                                      CN
+                                    </span>
+                                    <s className="text-xs text-muted tabular-nums">
+                                      {formatCurrency(inv.totalAmount, inv.currency)}
+                                    </s>
+                                  </div>
                                 </div>
-                              </div>
-                            ) : (
-                              formatCurrency(inv.totalAmount, inv.currency)
-                            )}
-                          </td>
-                          <td className="px-6 py-3 text-sm text-right">
-                            <span className={outstanding === 0 ? "text-green-700 font-medium" : "text-dark font-medium"}>
-                              {formatCurrency(outstanding, inv.currency)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-3">
-                            <PaymentStatusCell inv={inv} />
-                          </td>
-                          <td className="px-6 py-3 text-right">
-                            {inv.status === "ACCEPTED" && inv.paymentStatus !== "PAID" && (
-                              <Button size="sm" variant="secondary" onClick={() => {
-                                setRecordFor(inv);
-                                setForm({
-                                  amount: String(outstanding > 0 ? outstanding : net),
-                                  provider: "MANUAL", reference: "",
-                                  paidAt: new Date().toISOString().slice(0, 10), notes: "",
-                                });
-                                setSubmitError("");
-                              }}>
-                                Record payment
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
+                              ) : (
+                                formatCurrency(inv.totalAmount, inv.currency)
+                              )}
+                            </td>
+
+                            {/* Col 3: Payment Status */}
+                            <td className="px-6 py-3.5">
+                              <PaymentStatusCell inv={inv} />
+                            </td>
+
+                            {/* Col 4: FIRS Status */}
+                            <td className="px-6 py-3.5">
+                              <FirsStatusPill status={inv.status} />
+                            </td>
+
+                            {/* Col 5: Actions */}
+                            <td className="px-4 py-3.5">
+                              <ActionsCell
+                                inv={inv}
+                                remainingAmount={remaining}
+                                onRecord={() => {
+                                  setRecordFor(inv);
+                                  setForm({
+                                    amount: String(remaining > 0 ? remaining : net),
+                                    provider: "MANUAL", reference: "",
+                                    paidAt: new Date().toISOString().slice(0, 10), notes: "",
+                                  });
+                                  setSubmitError("");
+                                }}
+                              />
+                            </td>
+                          </tr>
                         );
                       })}
                     </tbody>
@@ -397,9 +568,8 @@ export default function PaymentsPage() {
             )}
           </div>
 
-          {/* ── Right column (30%) ────────────────────────────────────────── */}
+          {/* ── Right column — Collection Summary sidebar, unchanged ───────── */}
           <div className="w-72 shrink-0 space-y-4">
-            {/* Collection Summary */}
             <div className="bg-white rounded-xl border border-border p-5">
               <h3 className="text-sm font-semibold text-dark mb-4">Collection summary</h3>
               {statsLoading ? (
@@ -424,10 +594,10 @@ export default function PaymentsPage() {
                   </div>
                   <div className="space-y-2 mt-4">
                     {[
-                      { label: "Paid in full",       value: paymentStats?.paidInFull ?? 0,    cls: "text-green-700" },
-                      { label: "Partially paid",     value: paymentStats?.partiallyPaid ?? 0, cls: "text-blue-600" },
-                      { label: "Unpaid (not due)",   value: paymentStats?.unpaidNotDue ?? 0,  cls: "text-muted" },
-                      { label: "Overdue",            value: paymentStats?.overdue ?? 0,       cls: "text-red-600" },
+                      { label: "Paid in full",     value: paymentStats?.paidInFull ?? 0,    cls: "text-green-700" },
+                      { label: "Partially paid",   value: paymentStats?.partiallyPaid ?? 0, cls: "text-blue-600" },
+                      { label: "Unpaid (not due)", value: paymentStats?.unpaidNotDue ?? 0,  cls: "text-muted" },
+                      { label: "Overdue",          value: paymentStats?.overdue ?? 0,       cls: "text-red-600" },
                     ].map(({ label, value, cls }) => (
                       <div key={label} className="flex items-center justify-between text-sm">
                         <span className="text-muted">{label}</span>
@@ -439,7 +609,6 @@ export default function PaymentsPage() {
               )}
             </div>
 
-            {/* Payment Providers */}
             <div className="bg-white rounded-xl border border-border p-5">
               <h3 className="text-sm font-semibold text-dark mb-4">Payment providers</h3>
               {statsLoading ? (
@@ -460,7 +629,6 @@ export default function PaymentsPage() {
                 </div>
               )}
             </div>
-
           </div>
         </div>
       </div>
