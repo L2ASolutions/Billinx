@@ -223,9 +223,21 @@ export default function ClientsPage() {
               )}
               {!loading && clients.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center py-12">
-                    <p className="text-muted font-medium">No clients yet.</p>
-                    <p className="text-muted text-xs mt-1">Clients are auto-created when you create invoices.</p>
+                  <td colSpan={6}>
+                    <div className="py-14 flex flex-col items-center text-center">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted mb-3">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+                        <line x1="23" y1="11" x2="17" y2="11" /><line x1="20" y1="8" x2="20" y2="14" />
+                      </svg>
+                      <p className="text-sm font-semibold text-dark mb-1">No clients yet</p>
+                      <p className="text-sm text-muted mb-4">Clients are auto-created when you send your first invoice.</p>
+                      <button
+                        onClick={openAdd}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-green text-white text-sm font-medium rounded-lg hover:bg-green/90 transition-colors"
+                      >
+                        + Add client
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )}

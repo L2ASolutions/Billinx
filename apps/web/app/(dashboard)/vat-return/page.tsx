@@ -105,10 +105,10 @@ function SummaryCard({ label, value, highlight }: { label: string; value: number
       isOwed   ? "bg-amber-50 border-amber-200" :
                  "bg-white border-border"
     }`}>
-      <p className={`text-xs font-medium mb-2 ${isCredit ? "text-green-700" : isOwed ? "text-amber-700" : "text-muted"}`}>
+      <p className={`text-xs font-medium uppercase tracking-wide mb-2 ${isCredit ? "text-green-700" : isOwed ? "text-amber-700" : "text-muted"}`}>
         {label}
       </p>
-      <p className={`text-xl font-bold ${isCredit ? "text-green-800" : isOwed ? "text-amber-800" : "text-dark"}`}>
+      <p className={`text-2xl font-bold ${isCredit ? "text-green-800" : isOwed ? "text-amber-800" : "text-dark"}`}>
         {fmtCurrency(value)}
       </p>
       {highlight && (
@@ -156,7 +156,17 @@ function SchedulePreview<T>({
       {open && (
         <div className="border-t border-border">
           {rows.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-muted">No data for this period.</p>
+            <div className="py-10 px-6 flex flex-col items-center text-center">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted mb-3">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+                <line x1="9" y1="15" x2="15" y2="15" />
+              </svg>
+              <p className="text-sm font-semibold text-dark mb-1">No data for this period</p>
+              <p className="text-sm text-muted">There are no transactions matching your selected date range.</p>
+            </div>
           ) : (
             <>
               <div className="overflow-x-auto">
