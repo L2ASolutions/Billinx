@@ -205,7 +205,14 @@ function HistoryModal({ product, onClose }: { product: StockProduct; onClose: ()
           {loading ? (
             <div className="p-6 space-y-2">{[0,1,2,3].map(i => <SkeletonTableRow key={i} />)}</div>
           ) : movements.length === 0 ? (
-            <div className="p-12 text-center text-sm text-muted">No movements recorded yet.</div>
+            <div className="py-12 flex flex-col items-center text-center px-6">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted mb-3">
+                <polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                <polyline points="7 23 3 19 7 15" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+              </svg>
+              <p className="text-sm font-semibold text-dark mb-1">No movements recorded yet</p>
+              <p className="text-sm text-muted">Stock adjustments will appear here once you update inventory levels.</p>
+            </div>
           ) : (
             <table className="w-full">
               <thead>
@@ -407,8 +414,13 @@ export default function InventoryPage() {
           {loading ? (
             <div className="px-6 py-4 space-y-2">{[0,1,2,3,4].map(i => <SkeletonTableRow key={i} />)}</div>
           ) : products.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="text-muted text-sm">No products found.</p>
+            <div className="py-14 flex flex-col items-center text-center px-6">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted mb-3">
+                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
+              </svg>
+              <p className="text-sm font-semibold text-dark mb-1">No products found</p>
+              <p className="text-sm text-muted">Products with inventory tracking enabled will appear here.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">

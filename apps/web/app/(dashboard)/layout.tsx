@@ -14,6 +14,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sentPendingBadge, setSentPendingBadge] = useState(0);
   const [receivedBadge, setReceivedBadge] = useState(0);
   const [inventoryEnabled, setInventoryEnabled] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -63,8 +64,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           role={role}
           invoiceBadge={sentPendingBadge}
           receivedBadge={receivedBadge}
+          mobileOpen={mobileSidebarOpen}
+          onMobileClose={() => setMobileSidebarOpen(false)}
         />
-        <main className="flex-1 ml-64 min-h-screen">
+        {/* Mobile hamburger button */}
+        <button
+          className="md:hidden fixed top-0 left-0 h-16 w-16 flex items-center justify-center z-30 text-dark"
+          onClick={() => setMobileSidebarOpen(true)}
+          aria-label="Open menu"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <main className="flex-1 md:ml-64 min-h-screen">
           {children}
         </main>
       </div>
