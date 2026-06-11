@@ -377,7 +377,14 @@ export default function TeamPage() {
                 {[0, 1, 2].map((i) => <Sk key={i} className="h-14 w-full" />)}
               </div>
             ) : activeMembers.length === 0 ? (
-              <div className="py-12 text-center text-muted text-sm">No active members.</div>
+              <div className="py-14 flex flex-col items-center text-center px-6">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted mb-3">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                <p className="text-sm font-semibold text-dark mb-1">No active members</p>
+                <p className="text-sm text-muted">Invite your team to collaborate on invoicing and compliance.</p>
+              </div>
             ) : (
               <table className="w-full">
                 <thead>
@@ -463,11 +470,18 @@ export default function TeamPage() {
                 {[0, 1].map((i) => <Sk key={i} className="h-12 w-full" />)}
               </div>
             ) : invitations.length === 0 ? (
-              <div className="py-12 text-center">
-                <p className="text-sm text-muted">No pending invitations</p>
-                <button onClick={() => setShowInvite(true)}
-                  className="mt-2 text-sm text-green hover:underline font-medium">
-                  Invite someone →
+              <div className="py-14 flex flex-col items-center text-center px-6">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted mb-3">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                  <polyline points="22,6 12,13 2,6" />
+                </svg>
+                <p className="text-sm font-semibold text-dark mb-1">No pending invitations</p>
+                <p className="text-sm text-muted mb-4">Invited team members will appear here until they accept.</p>
+                <button
+                  onClick={() => setShowInvite(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-green text-white text-sm font-medium rounded-lg hover:bg-green/90 transition-colors"
+                >
+                  + Invite someone
                 </button>
               </div>
             ) : (

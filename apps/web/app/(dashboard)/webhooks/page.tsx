@@ -147,8 +147,18 @@ export default function WebhooksPage() {
               {[0,1,2].map(i => <SkeletonTableRow key={i} />)}
             </div>
           ) : webhooks.length === 0 ? (
-            <div className="p-12 text-center text-muted text-sm">
-              No webhooks configured yet.
+            <div className="py-14 flex flex-col items-center text-center px-6">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted mb-3">
+                <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" />
+              </svg>
+              <p className="text-sm font-semibold text-dark mb-1">No webhooks configured</p>
+              <p className="text-sm text-muted mb-4">Receive real-time FIRS events at your own endpoint.</p>
+              <button
+                onClick={() => setShowCreate(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-green text-white text-sm font-medium rounded-lg hover:bg-green/90 transition-colors"
+              >
+                + Add webhook
+              </button>
             </div>
           ) : (
             <div className="divide-y divide-border">

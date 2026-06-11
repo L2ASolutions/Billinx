@@ -236,7 +236,13 @@ export default function SubmissionsPage() {
               {[0,1,2,3,4].map(i => <SkeletonTableRow key={i} />)}
             </div>
           ) : invoices.length === 0 ? (
-            <div className="p-12 text-center text-muted text-sm">No submissions found.</div>
+            <div className="py-14 flex flex-col items-center text-center px-6">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted mb-3">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+              <p className="text-sm font-semibold text-dark mb-1">No submissions yet</p>
+              <p className="text-sm text-muted">Submitted invoices will appear here once queued for FIRS.</p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
