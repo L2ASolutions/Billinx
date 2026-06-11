@@ -427,3 +427,55 @@ Deployment pipeline: test → build-and-push → migrate → deploy (needs both 
 - `VersionHeaderInterceptor` — appends `X-API-Version: 1.0.0` to all responses
 - Applied globally in `main.ts`
 - See `docs/api-versioning.md` for deprecation policy
+
+---
+
+## Product & Workflow Context
+
+### About Billinx
+- Product owner: Kay (non-technical founder)
+- GitHub repo: L2ASolutions/Billinx
+- Dev environment: GitHub Codespace (`fuzzy-lamp-g5r9qw7g4vhjw6`)
+- Access Point Provider: Interswitch (InterswitchAdapter) — chosen over direct FIRS integration
+- NDPR compliance required; Data Processing Agreements with Nigerian tech lawyer pending
+- Hosting regions (planned): AWS eu-west-1 and af-south-1
+
+### Current State (as of 2026-06-11)
+- 144+ PRs merged to main
+- 83 tests passing, 5 test suites, 36 DB models, 20 enums
+- Last merged PRs: #144 fix/payments-ui-cleanup, #143 feat/dashboard-role-visibility, #142 fix/credit-note-visibility
+
+### Open Issues (Medium Severity)
+1. **Ghost endpoints** — frontend calls these but neither exists in any controller (both return 404):
+   - `POST /v1/invoices/dashboard/:id/reminder`
+   - `POST /v1/auth/mfa/resend`
+2. **Thin test coverage** — tests exist only for: auth, invoice flow, XML builder, incoming invoice, VAT service. No tests for: webhooks, payments, admin, submission adapters, or frontend.
+
+### Engineer To-Dos (do not run through Claude Code without engineering review)
+**Backend refactors:**
+- `invoice.service.ts` — 1,842 lines (god service: create, validate, XML, draft, duplicate, stats, charts, sample)
+- `invoice.controller.ts` — 761 lines (two auth surfaces in one file)
+
+**Frontend refactors:**
+- `invoices/new/page.tsx` — ~1,557 lines → extract into sub-components
+- `invoices/[id]/page.tsx` — ~1,486 lines → extract into sub-components
+- `settings/page.tsx` — ~1,138 lines → extract into sub-components
+
+### Completed Frontend Features
+- VAT Return Assistant: VAT category per line item, credit note model, VAT return summary endpoint + Excel export + dashboard page, BullMQ cron for monthly filing deadline reminders
+- RBAC enforcement: roles (OWNER, ADMIN, INVOICE_CREATOR, VIEWER) enforced at API level via `@Roles()` decorators; static Role Permissions tab in Team settings
+- Dashboard: interactive Revenue Trend and Invoice Pipeline charts with click-through to filtered invoice list; FIRS Rejections card; role-based visibility; per-user Customize panel; three-layer precedence (tenant admin rules → user preferences → role defaults)
+- Invoice list: 5-column layout, combined FIRS/payment status pill, due date colour logic, distinct action icons
+- Excel exports: invoice list, submissions history, audit log
+- Credit note visibility fix applied
+
+### How Kay Works With Claude
+- Development driven by Claude Code prompts generated in Claude chat sessions, executed in the Codespace
+- Multi-terminal workflow: Terminal 1 (backend), Terminal 2 (frontend), Terminal 3 (Claude Code)
+- Engineers review, deploy, and maintain the codebase — Claude accelerates engineers, not replaces them
+- Solo deployment of a regulated financial product without engineering oversight is unacceptable risk
+- Kay shares screenshots and database outputs to verify feature behaviour before moving to the next task
+- Features built in phases with clear scope per branch, then merged
+- Backend-to-frontend audits (scanning controllers against page directories) used to confirm coverage before adding new layers
+- Push back when suggestions add unnecessary complexity
+- Brand colour: #1D9E75 (green); UI icons: Tabler Icons
