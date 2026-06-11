@@ -498,6 +498,12 @@ function NewInvoiceForm() {
   const [draftSaving, setDraftSaving] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
 
+  // Submit-time validation state
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [tenantHasTin, setTenantHasTin] = useState<boolean | null>(null);
+  const formTopRef = useRef<HTMLDivElement>(null);
+
   const draftId = params.get("id");
   const [activeDraftId, setActiveDraftId] = useState<string | null>(draftId);
 
@@ -585,6 +591,7 @@ function NewInvoiceForm() {
     api.get<{ name?: string; tin?: string; telephone?: string; businessDescription?: string; registeredAddress?: { street?: string; streetName?: string; state?: string; lga?: string }; taxRepresentative?: any }>("/v1/tenants/me")
       .then((t) => {
         const addr = t?.registeredAddress ?? {};
+        setTenantHasTin(!!t?.tin);
         setForm((f) => ({
           ...f,
           sellerName: t?.name ?? f.sellerName,
@@ -686,13 +693,26 @@ function NewInvoiceForm() {
   const [whtRate, setWhtRate] = useState<number>(5);
 
   const uf = (field: string) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       setForm((f) => ({ ...f, [field]: e.target.value }));
+      // Clear the specific error when user changes the field
+      if (fieldErrors[field]) {
+        setFieldErrors((errs) => { const next = { ...errs }; delete next[field]; return next; });
+      }
+    };
 
   function updateLine(index: number, field: keyof LineItem, value: string | number) {
     setLineItems((items) =>
       items.map((item, i) => (i === index ? { ...item, [field]: value } : item))
     );
+    // Clear the relevant error for this line
+    const errorKey = field === "description" ? `line_${index}_desc`
+      : field === "quantity" ? `line_${index}_qty`
+      : field === "unitPrice" ? `line_${index}_price`
+      : null;
+    if (errorKey) {
+      setFieldErrors((errs) => { const next = { ...errs }; delete next[errorKey]; return next; });
+    }
   }
 
   function updateLineTaxCategory(index: number, code: string) {
@@ -879,10 +899,74 @@ function NewInvoiceForm() {
     }
   }
 
+  // ── Submit-time FIRS validation ──────────────────────────────────────────────
+
+  function validateForSubmit(): Record<string, string> {
+    const errors: Record<string, string> = {};
+    const isB2B = form.invoiceKind === "B2B" || form.invoiceKind === "B2G";
+
+    // Header
+    if (!form.issueDate) errors.issueDate = "Issue date is required";
+    if (isB2B && !form.paymentDueDate) errors.paymentDueDate = "Payment due date is required for B2B / B2G invoices";
+
+    // Supplier
+    if (!form.sellerName) errors.sellerName = "Company name is required";
+    if (!form.sellerTin) errors.sellerTin = "TIN is required";
+    if (!form.sellerAddress) errors.sellerAddress = "Street address is required";
+    if (!form.sellerState) errors.sellerState = "State is required";
+    if (!form.sellerLga) errors.sellerLga = "LGA is required";
+
+    // Buyer
+    if (!form.buyerName) errors.buyerName = "Name / company is required";
+    if (isB2B && !form.buyerTin) errors.buyerTin = "Buyer TIN is required for B2B / B2G invoices";
+    if (!form.buyerEmail) errors.buyerEmail = "Email is required for invoice delivery";
+    if (!form.buyerAddress) errors.buyerAddress = "Street address is required";
+    if (!form.buyerState) errors.buyerState = "State is required";
+
+    // Line items
+    const filledLines = lineItems.filter((li) => li.description.trim() || li.unitPrice > 0);
+    if (filledLines.length === 0) {
+      errors.lineItems = "At least one line item with a description and price is required";
+    } else {
+      lineItems.forEach((li, i) => {
+        if (!li.description.trim()) errors[`line_${i}_desc`] = "Description is required";
+        if (li.quantity <= 0) errors[`line_${i}_qty`] = "Must be > 0";
+        if (li.unitPrice <= 0) errors[`line_${i}_price`] = "Must be > 0";
+      });
+    }
+
+    // Total > 0
+    if (totals.total <= 0) errors.total = "Invoice total must be greater than zero";
+
+    return errors;
+  }
+
   function handleFormSubmit(e: FormEvent) {
     e.preventDefault();
+    setSubmitAttempted(true);
+    const errors = validateForSubmit();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      formTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     setShowPreview(true);
   }
+
+  // Error helper
+  const errMsg = (key: string) => fieldErrors[key] ?? "";
+  const errSel = (key: string) =>
+    fieldErrors[key]
+      ? "w-full px-3 py-2.5 rounded-lg border border-red-400 bg-white text-dark text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400"
+      : sel();
+
+  // Asterisk shown after first submit attempt
+  const Req = ({ show }: { show?: boolean }) =>
+    submitAttempted && show !== false ? <span className="text-red-500 ml-0.5">*</span> : null;
+
+  const hasErrors = Object.keys(fieldErrors).length > 0;
+  const hasStandardVat = lineItems.some((li) => li.taxCategory === "S");
+  const vatWarning = hasStandardVat && totals.tax === 0;
 
   return (
     <>
@@ -906,7 +990,22 @@ function NewInvoiceForm() {
             Resuming a saved draft — review the details and submit when ready.
           </div>
         )}
+        {tenantHasTin === false && (
+          <div className="max-w-4xl mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-amber-600">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <span>Your company TIN is missing. Invoices cannot be submitted to FIRS without it.</span>
+            </div>
+            <a href="/settings?tab=company" className="text-amber-900 font-semibold hover:underline shrink-0 whitespace-nowrap">
+              Add TIN in Settings →
+            </a>
+          </div>
+        )}
         <form onSubmit={handleFormSubmit} className="max-w-4xl space-y-6">
+          <div ref={formTopRef} />
 
           {/* ── Invoice details ─────────────────────────────────────────────── */}
           <SectionCard title="Invoice details">
@@ -953,7 +1052,15 @@ function NewInvoiceForm() {
               <Input label="Issue date" type="date" value={form.issueDate} onChange={uf("issueDate")} required />
             </div>
             <div className="grid grid-cols-2 gap-4 mt-4">
-              <Input label="Payment due date (optional)" type="date" value={form.paymentDueDate} onChange={uf("paymentDueDate")} />
+              <Input
+                label={form.invoiceKind === "B2C"
+                  ? "Payment due date (optional)"
+                  : <>Payment due date<Req /></>}
+                type="date"
+                value={form.paymentDueDate}
+                onChange={uf("paymentDueDate")}
+                error={errMsg("paymentDueDate")}
+              />
               <Input label="Buyer PO / Reference (optional)" placeholder="e.g. PO-2026-00123" value={form.buyerReference} onChange={uf("buyerReference")} />
             </div>
             <div className="grid grid-cols-2 gap-4 mt-3">
@@ -1003,22 +1110,23 @@ function NewInvoiceForm() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <SectionCard title="Supplier">
               <div className="space-y-3">
-                <Input label="Company name" placeholder="Your company name" value={form.sellerName} onChange={uf("sellerName")} required />
-                <Input label="TIN" placeholder="12345678-0001" value={form.sellerTin} onChange={uf("sellerTin")} required />
-                <Input label="Street address" placeholder="1 Broad Street" value={form.sellerAddress} onChange={uf("sellerAddress")} required />
+                <Input label={<>Company name<Req /></>} placeholder="Your company name" value={form.sellerName} onChange={uf("sellerName")} required error={errMsg("sellerName")} />
+                <Input label={<>TIN<Req /></>} placeholder="12345678-0001" value={form.sellerTin} onChange={uf("sellerTin")} required error={errMsg("sellerTin")} />
+                <Input label={<>Street address<Req /></>} placeholder="1 Broad Street" value={form.sellerAddress} onChange={uf("sellerAddress")} required error={errMsg("sellerAddress")} />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-dark mb-1">State</label>
-                    <select className={sel()} value={form.sellerState} onChange={uf("sellerState")}>
+                    <label className="block text-sm font-medium text-dark mb-1">State<Req /></label>
+                    <select className={errSel("sellerState")} value={form.sellerState} onChange={uf("sellerState")}>
                       <option value="">Select state…</option>
                       {states.map((s) => (
                         <option key={s.code} value={s.code}>{s.name}</option>
                       ))}
                     </select>
+                    {errMsg("sellerState") && <p className="mt-1 text-xs text-red-500">{errMsg("sellerState")}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-dark mb-1">LGA</label>
-                    <select className={sel()} value={form.sellerLga}
+                    <label className="block text-sm font-medium text-dark mb-1">LGA<Req /></label>
+                    <select className={errSel("sellerLga")} value={form.sellerLga}
                       onChange={(e) => setForm((f) => ({ ...f, sellerLga: e.target.value }))}
                       disabled={!form.sellerState}>
                       <option value="">{form.sellerState ? "Select LGA…" : "Select state first"}</option>
@@ -1026,6 +1134,7 @@ function NewInvoiceForm() {
                         <option key={l.code} value={l.code}>{l.name}</option>
                       ))}
                     </select>
+                    {errMsg("sellerLga") && <p className="mt-1 text-xs text-red-500">{errMsg("sellerLga")}</p>}
                   </div>
                 </div>
                 <Input label="Telephone (optional)" type="tel" placeholder="+2348012345678" value={form.sellerTelephone} onChange={uf("sellerTelephone")} />
@@ -1120,27 +1229,57 @@ function NewInvoiceForm() {
                     <button type="button" className="text-xs text-green hover:underline" onClick={() => { setManualBuyer(false); setSelectedClient(null); setClientSearch(""); }}>Use client picker</button>
                   </div>
                 )}
-                <Input label="Name / company" placeholder="Buyer name or company" value={form.buyerName} onChange={uf("buyerName")} required />
+                <Input
+                  label={<>Name / company<Req /></>}
+                  placeholder="Buyer name or company"
+                  value={form.buyerName}
+                  onChange={uf("buyerName")}
+                  required
+                  error={errMsg("buyerName")}
+                />
                 <div>
-                  <Input label="TIN (optional)" placeholder="12345678-0001" value={form.buyerTin} onChange={uf("buyerTin")} />
+                  <Input
+                    label={form.invoiceKind === "B2C"
+                      ? "TIN (optional for B2C)"
+                      : <>TIN<Req /> <span className="text-xs text-muted font-normal">(required for B2B/B2G)</span></>}
+                    placeholder="12345678-0001"
+                    value={form.buyerTin}
+                    onChange={uf("buyerTin")}
+                    error={errMsg("buyerTin")}
+                  />
                   <p className="mt-1 text-[11px] text-muted leading-snug">
                     No TIN? Use RC-XXXXXXX format (e.g. RC-847789). For foreign buyers, use their country tax ID.
                   </p>
                 </div>
-                <Input label="Email" type="email" placeholder="buyer@company.com" value={form.buyerEmail} onChange={uf("buyerEmail")} />
-                <Input label="Street address" placeholder="1 Marina Street" value={form.buyerAddress} onChange={uf("buyerAddress")} required />
+                <Input
+                  label={<>Email<Req /></>}
+                  type="email"
+                  placeholder="buyer@company.com"
+                  value={form.buyerEmail}
+                  onChange={uf("buyerEmail")}
+                  error={errMsg("buyerEmail")}
+                />
+                <Input
+                  label={<>Street address<Req /></>}
+                  placeholder="1 Marina Street"
+                  value={form.buyerAddress}
+                  onChange={uf("buyerAddress")}
+                  required
+                  error={errMsg("buyerAddress")}
+                />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-dark mb-1">State</label>
-                    <select className={sel()} value={form.buyerState} onChange={uf("buyerState")}>
+                    <label className="block text-sm font-medium text-dark mb-1">State<Req /></label>
+                    <select className={errSel("buyerState")} value={form.buyerState} onChange={uf("buyerState")}>
                       <option value="">Select state…</option>
                       {states.map((s) => (
                         <option key={s.code} value={s.code}>{s.name}</option>
                       ))}
                     </select>
+                    {errMsg("buyerState") && <p className="mt-1 text-xs text-red-500">{errMsg("buyerState")}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-dark mb-1">LGA</label>
+                    <label className="block text-sm font-medium text-dark mb-1">LGA (optional)</label>
                     <select className={sel()} value={form.buyerLga}
                       onChange={(e) => setForm((f) => ({ ...f, buyerLga: e.target.value }))}
                       disabled={!form.buyerState}>
@@ -1182,40 +1321,58 @@ function NewInvoiceForm() {
 
           {/* ── Line items ───────────────────────────────────────────────────── */}
           <SectionCard title="Line items">
+            {errMsg("lineItems") && (
+              <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                {errMsg("lineItems")}
+              </div>
+            )}
             <div className="space-y-3">
               {lineItems.map((item, i) => (
-                <div key={i} className="border border-border rounded-lg p-3 space-y-2 bg-surface/30">
+                <div key={i} className={`border rounded-lg p-3 space-y-2 bg-surface/30 ${
+                  (errMsg(`line_${i}_desc`) || errMsg(`line_${i}_qty`) || errMsg(`line_${i}_price`))
+                    ? "border-red-300"
+                    : "border-border"
+                }`}>
                   {/* Row 1: description, qty, unit, unit price, subtotal, remove */}
-                  <div className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-4 flex gap-1">
-                      <input
-                        className={inp("flex-1")}
-                        placeholder="Description"
-                        value={item.description}
-                        onChange={(e) => updateLine(i, "description", e.target.value)}
-                        required
-                      />
-                      <button
-                        type="button"
-                        title="Pick from catalog"
-                        onClick={() => setShowCatalog(i)}
-                        className="px-2 rounded-lg border border-border text-muted hover:text-green hover:border-green transition-colors shrink-0"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                        </svg>
-                      </button>
+                  <div className="grid grid-cols-12 gap-2 items-start">
+                    <div className="col-span-4 flex flex-col gap-1">
+                      <div className="flex gap-1">
+                        <input
+                          className={inp(`flex-1 ${errMsg(`line_${i}_desc`) ? "border-red-400 focus:ring-red-200 focus:border-red-400" : ""}`)}
+                          placeholder="Description"
+                          value={item.description}
+                          onChange={(e) => updateLine(i, "description", e.target.value)}
+                          required
+                        />
+                        <button
+                          type="button"
+                          title="Pick from catalog"
+                          onClick={() => setShowCatalog(i)}
+                          className="px-2 rounded-lg border border-border text-muted hover:text-green hover:border-green transition-colors shrink-0"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                          </svg>
+                        </button>
+                      </div>
+                      {errMsg(`line_${i}_desc`) && <p className="text-xs text-red-500">{errMsg(`line_${i}_desc`)}</p>}
                     </div>
-                    <div className="col-span-1">
-                      <input type="number" min="1" className={inp()} value={item.quantity}
+                    <div className="col-span-1 flex flex-col gap-1">
+                      <input type="number" min="1"
+                        className={inp(errMsg(`line_${i}_qty`) ? "border-red-400 focus:ring-red-200 focus:border-red-400" : "")}
+                        value={item.quantity}
                         onChange={(e) => updateLine(i, "quantity", Number(e.target.value))} required />
+                      {errMsg(`line_${i}_qty`) && <p className="text-xs text-red-500">{errMsg(`line_${i}_qty`)}</p>}
                     </div>
                     <div className="col-span-2">
                       <QuantityCodeSelect value={item.priceUnit} onChange={(v) => updateLine(i, "priceUnit", v)} />
                     </div>
-                    <div className="col-span-2">
-                      <input type="number" min="0" step="0.01" className={inp()} placeholder="Unit price" value={item.unitPrice}
+                    <div className="col-span-2 flex flex-col gap-1">
+                      <input type="number" min="0" step="0.01"
+                        className={inp(errMsg(`line_${i}_price`) ? "border-red-400 focus:ring-red-200 focus:border-red-400" : "")}
+                        placeholder="Unit price" value={item.unitPrice}
                         onChange={(e) => updateLine(i, "unitPrice", Number(e.target.value))} required />
+                      {errMsg(`line_${i}_price`) && <p className="text-xs text-red-500">{errMsg(`line_${i}_price`)}</p>}
                     </div>
                     <div className="col-span-2 text-right text-sm font-medium text-dark">
                       {(item.quantity * item.unitPrice * (1 + item.vatRate / 100)).toLocaleString("en-NG", { minimumFractionDigits: 2 })}
@@ -1505,6 +1662,26 @@ function NewInvoiceForm() {
               </div>
             )}
           </div>
+
+          {vatWarning && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex items-center gap-2">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-amber-600">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              VAT amount appears to be zero for standard-rated items. Please verify your unit prices and quantities.
+            </div>
+          )}
+
+          {submitAttempted && hasErrors && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 flex items-start gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 mt-0.5">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>Please fill in all required fields before submitting. Scroll up to review highlighted fields.</span>
+            </div>
+          )}
 
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>
