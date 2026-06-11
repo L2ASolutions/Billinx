@@ -829,14 +829,14 @@ model ReminderLog {
   id               String   @id @default(uuid())
   invoiceId        String
   tenantId         String
-  ruleId           String
+  ruleId           String?
   sentAt           DateTime @default(now())
   emailSentTo      String
   webhookDelivered Boolean  @default(false)
 
-  invoice          Invoice      @relation(fields: [invoiceId], references: [id])
-  tenant           Tenant       @relation(fields: [tenantId], references: [id])
-  rule             ReminderRule @relation(fields: [ruleId], references: [id])
+  invoice          Invoice       @relation(fields: [invoiceId], references: [id])
+  tenant           Tenant        @relation(fields: [tenantId], references: [id])
+  rule             ReminderRule? @relation(fields: [ruleId], references: [id])
 
   @@unique([invoiceId, ruleId])
   @@index([tenantId])

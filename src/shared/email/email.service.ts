@@ -823,6 +823,80 @@ export class EmailService {
     );
   }
 
+  sendBuyerPaymentReminder(opts: {
+    to: string;
+    buyerName: string;
+    invoiceNumber: string;
+    invoiceId: string;
+    totalAmount: number;
+    amountOutstanding: number;
+    currency: string;
+    dueDate?: Date;
+    paymentLink?: string;
+    tenantName: string;
+  }): void {
+    const isOverdue = opts.dueDate ? opts.dueDate < new Date() : false;
+    const formattedAmount = `${opts.currency} ${opts.totalAmount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+    const formattedOutstanding = `${opts.currency} ${opts.amountOutstanding.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+    const formattedDue = opts.dueDate
+      ? opts.dueDate.toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' })
+      : null;
+
+    const subject = `Payment reminder: Invoice ${opts.invoiceNumber} from ${opts.tenantName}`;
+
+    const statusBadge = isOverdue
+      ? `<div style="display:inline-block;background:#fdf0ef;border:1px solid #e74c3c;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
+          <span style="font-size:12px;font-weight:600;color:#c0392b;text-transform:uppercase;letter-spacing:0.5px;">&#9888; Overdue</span>
+        </div>`
+      : `<div style="display:inline-block;background:#fff3cd;border:1px solid #ffc107;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
+          <span style="font-size:12px;font-weight:600;color:#856404;text-transform:uppercase;letter-spacing:0.5px;">&#128197; Payment Due</span>
+        </div>`;
+
+    const invoiceLink = opts.paymentLink ?? `${APP_BASE_URL}/pay/${opts.invoiceId}`;
+
+    const html = baseLayout(
+      subject,
+      statusBadge +
+        h1('Payment Reminder') +
+        p(`Dear ${opts.buyerName},`) +
+        p(
+          `This is a friendly reminder that invoice <strong>${opts.invoiceNumber}</strong> from <strong>${opts.tenantName}</strong> is outstanding.`,
+        ) +
+        `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+              style="background:#f8faf9;border:1px solid #dde3ec;border-radius:6px;margin:0 0 20px;">
+          <tr><td style="padding:20px;">
+            <div style="margin-bottom:12px;">
+              <span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Invoice Number</span><br />
+              <code style="font-size:13px;color:${BRAND_DARK};font-weight:600;">${opts.invoiceNumber}</code>
+            </div>
+            <div style="margin-bottom:12px;">
+              <span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Invoice Amount</span><br />
+              <strong style="font-size:16px;color:${BRAND_DARK};">${formattedAmount}</strong>
+            </div>
+            <div style="margin-bottom:12px;">
+              <span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Amount Outstanding</span><br />
+              <strong style="font-size:16px;color:${isOverdue ? '#c0392b' : BRAND_GREEN};">${formattedOutstanding}</strong>
+            </div>
+            ${formattedDue ? `<div>
+              <span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Due Date</span><br />
+              <strong style="color:${isOverdue ? '#c0392b' : BRAND_DARK};">${formattedDue}</strong>
+            </div>` : ''}
+          </td></tr>
+        </table>` +
+        ctaButton(invoiceLink, 'View and Pay Invoice') +
+        divider() +
+        p(
+          'If you have already made payment, please disregard this message.' +
+            ' Contact <a href="mailto:support@billinx.ng" style="color:' +
+            BRAND_GREEN +
+            ';">support@billinx.ng</a> if you need assistance.',
+        ) +
+        p(`Regards,<br /><strong>${opts.tenantName}</strong>`),
+    );
+
+    this.send(opts.to, subject, html);
+  }
+
   sendReorderRequest(opts: {
     to: string;
     supplierName: string;
