@@ -558,6 +558,8 @@ export default function InvoiceDetailPage() {
   const [sendingToBuyer, setSendingToBuyer] = useState(false);
   const [sendToBuyerError, setSendToBuyerError] = useState("");
   const [sentToBuyer, setSentToBuyer] = useState(false);
+  const [sendingReminder, setSendingReminder] = useState(false);
+  const [reminderToast, setReminderToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [showCreditNoteModal, setShowCreditNoteModal] = useState(false);
   const [creditNoteForm, setCreditNoteForm] = useState({
     adjustmentReason: "",
@@ -693,6 +695,21 @@ export default function InvoiceDetailPage() {
     }
   }
 
+  async function handleSendReminder() {
+    if (!invoice) return;
+    setSendingReminder(true);
+    try {
+      const res = await invoiceApi.sendReminder(id) as { sentTo: string };
+      setReminderToast({ message: `Reminder sent to ${res.sentTo}`, type: "success" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to send reminder.";
+      setReminderToast({ message: msg, type: "error" });
+    } finally {
+      setSendingReminder(false);
+      setTimeout(() => setReminderToast(null), 4000);
+    }
+  }
+
   function copyPaymentLink() {
     const link = `${window.location.origin}/pay/${invoice!.id}`;
     navigator.clipboard.writeText(link).then(() => {
@@ -813,6 +830,7 @@ export default function InvoiceDetailPage() {
   const isRejected = ["REJECTED", "SUBMISSION_FAILED", "DEAD_LETTERED", "VALIDATION_FAILED"].includes(invoice.status);
   const canCancel = ["DRAFT", "QUEUED", "VALIDATION_FAILED", "ACCEPTED"].includes(invoice.status);
   const canRecordPayment = isAccepted && invoice.paymentStatus !== "PAID";
+  const canSendReminder = isAccepted && invoice.paymentStatus !== "PAID" && !!(invoice as any).buyerEmail;
   const amountOutstanding = invoice.totalAmount - (invoice.amountPaid ?? 0);
   const collectedPct = invoice.totalAmount > 0
     ? Math.round(((invoice.amountPaid ?? 0) / invoice.totalAmount) * 100)
@@ -875,6 +893,11 @@ export default function InvoiceDetailPage() {
           {canRecordPayment && (
             <Button size="sm" onClick={openPaymentModal}>
               Record payment
+            </Button>
+          )}
+          {canSendReminder && (
+            <Button variant="secondary" size="sm" loading={sendingReminder} onClick={handleSendReminder}>
+              Send reminder
             </Button>
           )}
           {canCancel && (
@@ -1388,6 +1411,24 @@ export default function InvoiceDetailPage() {
           </svg>
           Payment link copied!
         </div>
+      </div>
+
+      {/* ── Reminder toast ─────────────────────────────────────────────────────── */}
+      <div className={`fixed bottom-36 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${reminderToast ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2 pointer-events-none"}`}>
+        {reminderToast && (
+          <div className={`flex items-center gap-2 px-4 py-2.5 text-white text-sm font-medium rounded-xl shadow-lg ${reminderToast.type === "success" ? "bg-green" : "bg-red-500"}`}>
+            {reminderToast.type === "success" ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            )}
+            {reminderToast.message}
+          </div>
+        )}
       </div>
 
       {/* ── Issue credit note modal ─────────────────────────────────────────── */}
