@@ -736,6 +736,25 @@ export class InvoiceController {
     return this.invoiceService.submitDraft(id, ctx.tenantId, ctx.actor, body);
   }
 
+  // ── Manual payment reminder ────────────────────────────────────────────────
+
+  @Post('dashboard/:id/reminder')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Send a manual payment reminder email to the buyer (dashboard / JWT auth)',
+  })
+  async sendReminderDashboard(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.sendManualReminder(id, ctx.tenantId, ctx.actor);
+  }
+
   // ── Send to buyer ──────────────────────────────────────────────────────────
 
   @Post('dashboard/:id/send')

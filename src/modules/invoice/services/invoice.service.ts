@@ -4,6 +4,8 @@ import {
   Optional,
   NotFoundException,
   BadRequestException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InvoiceRepository } from '../repositories/invoice.repository';
@@ -1838,5 +1840,123 @@ export class InvoiceService {
     const reasons = Array.from(reasonMap.values()).sort((a, b) => b.count - a.count);
 
     return { totalRejected: rejectedInvoices.length, allResolved: false, reasons };
+  }
+
+  async sendManualReminder(
+    invoiceId: string,
+    tenantId: string,
+    actor: string,
+  ): Promise<{ message: string; sentTo: string }> {
+    const invoice = await this.prisma.asAdmin((tx) =>
+      tx.invoice.findUnique({
+        where: { id: invoiceId },
+        select: {
+          id: true,
+          tenantId: true,
+          status: true,
+          paymentStatus: true,
+          buyerEmail: true,
+          buyerName: true,
+          platformIrn: true,
+          firsConfirmedIrn: true,
+          totalAmount: true,
+          amountPaid: true,
+          currency: true,
+          paymentDueDate: true,
+          paymentLink: true,
+          lastReminderAt: true,
+        },
+      }),
+    );
+
+    if (!invoice || invoice.tenantId !== tenantId) {
+      throw new NotFoundException('Invoice not found');
+    }
+
+    if (invoice.status !== 'ACCEPTED') {
+      throw new BadRequestException(
+        'Reminders can only be sent for FIRS-accepted invoices',
+      );
+    }
+
+    if (invoice.paymentStatus === 'PAID') {
+      throw new BadRequestException('This invoice has already been paid');
+    }
+
+    if (!invoice.buyerEmail) {
+      throw new BadRequestException(
+        'Cannot send reminder — invoice has no buyer email',
+      );
+    }
+
+    if (invoice.lastReminderAt) {
+      const hoursSince =
+        (Date.now() - new Date(invoice.lastReminderAt).getTime()) /
+        (1000 * 60 * 60);
+      if (hoursSince < 24) {
+        throw new HttpException(
+          {
+            message: 'A reminder was already sent in the last 24 hours',
+            lastSentAt: invoice.lastReminderAt,
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+
+    const tenant = await this.prisma.asAdmin((tx) =>
+      tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true },
+      }),
+    );
+
+    this.emailService.sendBuyerPaymentReminder({
+      to: invoice.buyerEmail,
+      buyerName: invoice.buyerName,
+      invoiceNumber: invoice.firsConfirmedIrn ?? invoice.platformIrn,
+      invoiceId: invoice.id,
+      totalAmount: Number(invoice.totalAmount),
+      amountOutstanding: Math.max(
+        0,
+        Number(invoice.totalAmount) - Number(invoice.amountPaid ?? 0),
+      ),
+      currency: invoice.currency ?? 'NGN',
+      dueDate: invoice.paymentDueDate ?? undefined,
+      paymentLink: invoice.paymentLink ?? undefined,
+      tenantName: tenant?.name ?? 'Your supplier',
+    });
+
+    await this.prisma.asAdmin((tx) =>
+      Promise.all([
+        (tx as any).reminderLog.create({
+          data: {
+            invoiceId: invoice.id,
+            tenantId,
+            ruleId: null,
+            emailSentTo: invoice.buyerEmail,
+            webhookDelivered: false,
+          },
+        }),
+        tx.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            reminderCount: { increment: 1 },
+            lastReminderAt: new Date(),
+          },
+        }),
+      ]),
+    );
+
+    this.activityService.track({
+      tenantId,
+      eventType: 'REMINDER_SENT',
+      actor,
+      entityType: 'Invoice',
+      entityId: invoice.id,
+      payload: { manual: true, emailSentTo: invoice.buyerEmail },
+    });
+
+    return { message: 'Reminder sent', sentTo: invoice.buyerEmail };
   }
 }
