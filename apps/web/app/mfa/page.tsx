@@ -106,6 +106,7 @@ function MfaForm() {
   const [loading, setLoading] = useState(false);
   const [resendSent, setResendSent] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendMessage, setResendMessage] = useState("");
   const refs = useRef<(HTMLInputElement | null)[]>([]);
 
   const code = digits.join("");
@@ -170,8 +171,10 @@ function MfaForm() {
     if (resendCooldown > 0) return;
     try {
       await authApi.resendMfa(mfaToken);
-    } catch {
-      // silently ignore — endpoint may not support resend for TOTP
+      setResendMessage("New code sent to your email.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not resend code.";
+      setResendMessage(msg);
     }
     setResendSent(true);
     setResendCooldown(60);
@@ -245,7 +248,7 @@ function MfaForm() {
         <div>
           {resendSent ? (
             <p className="text-sm text-muted">
-              Code sent!{resendCooldown > 0 ? ` Resend again in ${resendCooldown}s` : ""}
+              {resendMessage || "Code sent!"}{resendCooldown > 0 ? ` (${resendCooldown}s)` : ""}
             </p>
           ) : (
             <button
