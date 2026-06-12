@@ -225,7 +225,7 @@ function FirsRejectionsCard({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl border border-border border-l-4 border-l-gray-200 p-5">
+      <div className="bg-white rounded-xl border border-border shadow-card border-l-4 border-l-gray-200 p-5">
         <Sk className="h-4 w-36 mb-2" />
         <Sk className="h-3 w-48 mb-3" />
         <Sk className="h-8 w-full" />
@@ -235,7 +235,7 @@ function FirsRejectionsCard({
 
   if (!data || data.allResolved) {
     return (
-      <div className="bg-white rounded-xl border border-border border-l-4 border-l-[#1D9E75] p-5 flex items-center justify-between gap-4">
+      <div className="bg-white rounded-xl border border-border shadow-card border-l-4 border-l-[#1D9E75] p-5 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-full bg-green-50 flex items-center justify-center shrink-0">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -257,7 +257,7 @@ function FirsRejectionsCard({
   const moreCount = data.reasons.length - 3;
 
   return (
-    <div className="bg-white rounded-xl border border-border border-l-4 border-l-red-500 p-5">
+    <div className="bg-white rounded-xl border border-border shadow-card border-l-4 border-l-red-500 p-5">
       <div className="flex items-center justify-between gap-4 mb-3">
         <div className="flex items-center gap-2">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -704,7 +704,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-3 gap-4">
             {/* Receivables */}
             <Link href="/payments" className="block">
-              <div className="bg-white rounded-xl border border-border border-l-4 border-l-[#1D9E75] p-5 h-full hover:shadow-sm transition-shadow">
+              <div className="bg-white rounded-xl border border-border shadow-card border-l-4 border-l-[#1D9E75] p-5 h-full hover:shadow-sm transition-shadow">
                 <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3">Outstanding receivables</p>
                 {statsLoading ? (
                   <>
@@ -728,7 +728,7 @@ export default function DashboardPage() {
 
             {/* Payables */}
             <Link href="/invoices?tab=received" className="block">
-              <div className={`bg-white rounded-xl border border-border border-l-4 p-5 h-full hover:shadow-sm transition-shadow ${
+              <div className={`bg-white rounded-xl border border-border shadow-card border-l-4 p-5 h-full hover:shadow-sm transition-shadow ${
                 outstandingPayables > 0 ? 'border-l-red-500' : 'border-l-gray-300'
               }`}>
                 <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3">Outstanding payables</p>
@@ -751,7 +751,7 @@ export default function DashboardPage() {
             </Link>
 
             {/* Net position */}
-            <div className={`bg-white rounded-xl border border-border border-l-4 p-5 ${
+            <div className={`bg-white rounded-xl border border-border shadow-card border-l-4 p-5 ${
               statsLoading || incomingLoading
                 ? 'border-l-gray-200'
                 : netCash > 0
@@ -808,7 +808,7 @@ export default function DashboardPage() {
           chartsLoading ? (
             <div className={`grid gap-4 ${visibleChartCount === 3 ? 'grid-cols-3' : visibleChartCount === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
               {Array.from({ length: visibleChartCount }).map((_, i) => (
-                <div key={i} className="bg-white rounded-xl border border-border p-5">
+                <div key={i} className="bg-white rounded-xl border border-border shadow-card p-5">
                   <Sk className="h-4 w-36 mb-1" />
                   <Sk className="h-3 w-48 mb-4" />
                   <Sk className="h-[220px] w-full" />
@@ -816,7 +816,7 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : noChartData ? (
-            <div className="bg-white rounded-xl border border-border p-10 flex flex-col items-center gap-3 text-center">
+            <div className="bg-white rounded-xl border border-border shadow-card p-10 flex flex-col items-center gap-3 text-center">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 strokeWidth="1.5" className="text-gray-300">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -835,7 +835,7 @@ export default function DashboardPage() {
             <div className={`grid gap-4 ${visibleChartCount === 3 ? 'grid-cols-3' : visibleChartCount === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
               {/* Chart 1 — Monthly Revenue (financial, OWNER/ADMIN/ACCOUNTANT only) */}
               {showRevenueChart && chartData && (
-                <div className="bg-white rounded-xl border border-border p-5">
+                <div className="bg-white rounded-xl border border-border shadow-card p-5">
                   <h2 className="font-semibold text-dark">Monthly Revenue</h2>
                   <p className="text-xs text-muted mt-0.5 mb-4">
                     Accepted invoices — last 6 months. Click a bar to view that month&apos;s invoices.
@@ -879,7 +879,7 @@ export default function DashboardPage() {
 
               {/* Chart 2 — Invoice Pipeline */}
               {showPipelineChart && chartData && (
-                <div className="bg-white rounded-xl border border-border p-5 min-w-0">
+                <div className="bg-white rounded-xl border border-border shadow-card p-5 min-w-0">
                   <h2 className="font-semibold text-dark">Invoice Pipeline</h2>
                   <p className="text-xs text-muted mt-0.5 mb-4">
                     Current status of all sent invoices. Click a segment to view those invoices.
@@ -948,7 +948,7 @@ export default function DashboardPage() {
 
               {/* Chart 3 — Invoice Activity */}
               {showActivityChart && chartData && (
-                <div className="bg-white rounded-xl border border-border p-5">
+                <div className="bg-white rounded-xl border border-border shadow-card p-5">
                   <h2 className="font-semibold text-dark">Invoice Activity</h2>
                   <p className="text-xs text-muted mt-0.5 mb-4">
                     Invoices sent and received — last 6 months
@@ -991,7 +991,7 @@ export default function DashboardPage() {
         {/* ── Bottom two panels ─────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-4">
           {/* Recent payments */}
-          <div className="bg-white rounded-xl border border-border overflow-hidden">
+          <div className="bg-white rounded-xl border border-border shadow-card overflow-hidden">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <h2 className="font-semibold text-dark">Recent payments</h2>
               <Link href="/payments" className="text-xs text-[#1D9E75] font-medium hover:underline">
@@ -1036,7 +1036,7 @@ export default function DashboardPage() {
 
           {/* Needs attention */}
           {sectionVisible('needs_attention') && (
-            <div className="bg-white rounded-xl border border-border overflow-hidden">
+            <div className="bg-white rounded-xl border border-border shadow-card overflow-hidden">
               <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                 <h2 className="font-semibold text-dark">Needs attention</h2>
                 <Link href="/invoices" className="text-xs text-[#1D9E75] font-medium hover:underline">

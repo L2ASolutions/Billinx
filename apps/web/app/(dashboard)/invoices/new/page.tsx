@@ -99,7 +99,7 @@ function inp(cls = "") {
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-border p-6">
+    <div className="bg-white rounded-xl border border-border shadow-card p-6">
       <h2 className="font-semibold text-dark mb-4">{title}</h2>
       {children}
     </div>
@@ -1595,7 +1595,7 @@ function NewInvoiceForm() {
           </SectionCard>
 
           {/* ── Additional parties ───────────────────────────────────────────── */}
-          <div className="bg-white rounded-xl border border-border">
+          <div className="bg-white rounded-xl border border-border shadow-card">
             <button type="button"
               onClick={() => setShowAdditionalParties((v) => !v)}
               className="w-full flex items-center justify-between px-6 py-4 text-sm font-semibold text-dark hover:bg-surface/50 transition-colors rounded-xl">
@@ -1696,11 +1696,11 @@ function NewInvoiceForm() {
             </div>
           )}
           <div className="flex gap-3 flex-wrap">
-            <Button type="submit" size="lg">Preview &amp; submit →</Button>
-            <Button type="button" variant="secondary" size="lg" loading={draftSaving} onClick={doSaveDraft}>
+            <Button type="submit" size="lg" className="font-semibold">Preview &amp; submit →</Button>
+            <Button type="button" size="lg" loading={draftSaving} onClick={doSaveDraft} className="border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400">
               {draftSaved ? "✓ Saved" : "Save draft"}
             </Button>
-            <Button type="button" variant="secondary" size="lg" onClick={() => router.push("/invoices")}>
+            <Button type="button" size="lg" onClick={() => router.push("/invoices")} className="text-gray-400 hover:text-gray-600 bg-transparent hover:bg-transparent border-0 px-4">
               Cancel
             </Button>
           </div>

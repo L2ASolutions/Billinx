@@ -220,13 +220,13 @@ function NavContent({
                   prefetch={true}
                   onClick={onNavClick}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    "flex items-center gap-3 py-2.5 rounded-r-md text-sm font-medium transition-colors",
                     active
-                      ? "bg-green text-white"
-                      : "text-white/60 hover:text-white hover:bg-white/10"
+                      ? "bg-white/[0.08] text-white border-l-[3px] border-l-[#1D9E75] pl-[9px] pr-3"
+                      : "text-[#9CA3AF] hover:text-white hover:bg-white/[0.04] pl-3 pr-3"
                   )}
                 >
-                  {item.icon}
+                  <span className={active ? "text-[#1D9E75]" : ""}>{item.icon}</span>
                   <span className="flex-1">{item.label}</span>
                   {item.badge === "invoices" && combinedInvoiceBadge > 0 && (
                     <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center leading-none">
@@ -297,7 +297,7 @@ export function Sidebar({
   const userArea = (
     <div className="flex-shrink-0 border-t border-white/10 p-4">
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-green flex items-center justify-center text-white text-sm font-bold shrink-0">
+        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)' }}>
           {initials}
         </div>
         <div className="flex-1 min-w-0">
@@ -318,15 +318,7 @@ export function Sidebar({
 
   const logo = (
     <div className="px-6 py-5 border-b border-white/10 flex-shrink-0">
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-md bg-green flex items-center justify-center">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-          </svg>
-        </div>
-        <span className="text-white font-bold text-lg">Billinx</span>
-      </div>
+      <img src="/billinx-wordmark-dark.svg" alt="Billinx Solutions" height="36" className="h-9 w-auto" />
       {user?.tenantName && (
         <p className="text-white/40 text-xs mt-1.5 truncate">{user.tenantName}</p>
       )}
@@ -359,15 +351,7 @@ export function Sidebar({
           {/* Drawer */}
           <div className="relative w-72 bg-dark flex flex-col h-full shadow-2xl">
             <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-md bg-green flex items-center justify-center">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                  </svg>
-                </div>
-                <span className="text-white font-bold text-lg">Billinx</span>
-              </div>
+              <img src="/billinx-wordmark-dark.svg" alt="Billinx Solutions" height="36" className="h-9 w-auto" />
               <button
                 onClick={onMobileClose}
                 className="text-white/40 hover:text-white transition-colors p-1"
