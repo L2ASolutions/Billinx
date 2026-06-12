@@ -77,7 +77,9 @@ export class InvoiceRepository {
       where.paymentStatus = { not: 'PAID' };
     }
     if (filters.forPayments) {
-      where.status = { in: ['SUBMITTED', 'ACCEPTED', 'REJECTED'] as any[] };
+      where.status = {
+        notIn: ['DRAFT', 'CANCELLED', 'VALIDATION_FAILED', 'SUBMISSION_FAILED', 'DEAD_LETTERED'] as any[],
+      };
       where.NOT = {
         AND: [
           { OR: [{ buyerName: null }, { buyerName: '' }] },

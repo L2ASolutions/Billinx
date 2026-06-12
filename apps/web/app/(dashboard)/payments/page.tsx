@@ -344,19 +344,20 @@ function PaymentCharts({ data, loading }: { data: PaymentChartsData | null; load
     data.collectionTrend.some((p) => p.invoiced > 0 || p.collected > 0);
 
   if (!hasData) return null;
+  if (!data.collectionTrend.length) return null;
 
   const totalCollected = data.paymentMethods.reduce((s, m) => s + m.amount, 0);
 
   return (
-    <div className="flex gap-4 mb-6">
+    <div className="flex gap-4 mb-6 items-stretch">
       {/* Chart 1 — Collection Trend */}
       <div
         className="bg-white border border-[#F3F4F6] rounded-xl p-5"
-        style={{ flex: "0 0 55%", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+        style={{ flex: "0 0 55%", minHeight: 280, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
       >
         <p className="text-sm font-semibold text-dark">Collection trend</p>
         <p className="text-xs text-muted mb-4">Invoiced vs collected — last 6 months</p>
-        <ResponsiveContainer width="100%" height={200}>
+        <ResponsiveContainer width="100%" height={200} minWidth={0}>
           <BarChart data={data.collectionTrend} barSize={12} barGap={4} barCategoryGap="30%">
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
             <XAxis
@@ -392,13 +393,13 @@ function PaymentCharts({ data, loading }: { data: PaymentChartsData | null; load
       {/* Chart 2 — Payment Methods donut */}
       <div
         className="bg-white border border-[#F3F4F6] rounded-xl p-5 flex-1"
-        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)", minHeight: 280 }}
       >
         <p className="text-sm font-semibold text-dark">Payment methods</p>
         <p className="text-xs text-muted mb-2">All time collection by channel</p>
         <div className="flex items-center gap-4">
-          <div style={{ width: 160, height: 160, flexShrink: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ width: 160, height: 200, flexShrink: 0 }}>
+            <ResponsiveContainer width="100%" height={200} minWidth={0}>
               <PieChart>
                 <Pie
                   data={data.paymentMethods}
