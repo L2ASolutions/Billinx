@@ -311,7 +311,7 @@ function PayModal({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function IncomingInvoiceDetailPage() {
+export default function PurchaseInvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [invoice, setInvoice] = useState<IncomingInvoiceDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -439,7 +439,7 @@ export default function IncomingInvoiceDetailPage() {
   if (loading) {
     return (
       <>
-        <Topbar title="Incoming invoice" />
+        <Topbar title="Purchase Invoice" />
         <div className="p-6 space-y-6">
           <div className="bg-white rounded-xl border border-border p-6">
             <Skeleton className="h-7 w-28 mb-4" />
@@ -461,7 +461,7 @@ export default function IncomingInvoiceDetailPage() {
   if (error || !invoice) {
     return (
       <>
-        <Topbar title="Incoming invoice" />
+        <Topbar title="Purchase Invoice" />
         <div className="p-6">
           <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
             {error || "Invoice not found"}
@@ -483,8 +483,8 @@ export default function IncomingInvoiceDetailPage() {
         title="Incoming invoice"
         actions={
           <div className="flex gap-2 flex-wrap items-center">
-            <Link href="/incoming-invoices">
-              <Button variant="secondary" size="sm">← Back</Button>
+            <Link href="/purchases">
+              <Button variant="secondary" size="sm">← Back to Purchase Invoices</Button>
             </Link>
             {canValidate && (
               <Button size="sm" variant="secondary" loading={actionLoading} onClick={handleValidate}>Validate</Button>

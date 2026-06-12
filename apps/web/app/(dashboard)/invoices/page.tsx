@@ -6,9 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
-import { invoiceApi, incomingInvoiceApi, invalidateCache } from "@/lib/api";
+import { invoiceApi } from "@/lib/api";
 import { formatCurrency, formatDate, formatInvoiceNumber } from "@/lib/utils";
-import { getInvoiceStatusPill, getReceivedInvoiceStatusPill, PillVariant } from "@/lib/invoice-status";
+import { getInvoiceStatusPill, PillVariant } from "@/lib/invoice-status";
 import { SampleInvoiceModal } from "@/components/invoice/SampleInvoiceModal";
 
 // ── Status pill rendering ─────────────────────────────────────────────────────
@@ -171,22 +171,6 @@ interface Invoice {
   paymentDueDate?: string;
   hasCreditNote?: boolean;
   netAmount?: number;
-  createdAt: string;
-}
-
-interface IncomingInvoice {
-  id: string;
-  supplierName?: string;
-  supplierEmail?: string;
-  supplierTin?: string;
-  platformIrn?: string;
-  invoiceNumber?: string;
-  issueDate?: string;
-  dueDate?: string;
-  totalAmount?: number;
-  currency?: string;
-  status: string;
-  paymentStatus?: string;
   createdAt: string;
 }
 
@@ -649,301 +633,35 @@ function SentPanel({ initialTab = "ALL" }: { initialTab?: SentTab }) {
   );
 }
 
-// ── Received panel ────────────────────────────────────────────────────────────
-
-type ReceivedTab = "ALL" | "TO_REVIEW" | "APPROVED" | "PAID";
-
-const RECEIVED_TABS: { key: ReceivedTab; label: string }[] = [
-  { key: "ALL",       label: "All" },
-  { key: "TO_REVIEW", label: "To review" },
-  { key: "APPROVED",  label: "Approved" },
-  { key: "PAID",      label: "Paid" },
-];
-
-function ReceivedPanel() {
-  const router = useRouter();
-  const [allInvoices, setAllInvoices] = useState<IncomingInvoice[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [activeTab, setActiveTab] = useState<ReceivedTab>("ALL");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [toReviewCount, setToReviewCount] = useState<number | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const params: Parameters<typeof incomingInvoiceApi.list>[0] = { page, limit: 50 };
-      const res = await incomingInvoiceApi.list(params);
-      setAllInvoices(res.data as IncomingInvoice[]);
-      setTotal(res.total);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load received invoices");
-      setAllInvoices([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [page]);
-
-  useEffect(() => { load(); }, [load]);
-
-  useEffect(() => {
-    incomingInvoiceApi.stats().then((s: any) => setToReviewCount(s.received ?? 0)).catch(() => {});
-  }, []);
-
-  const invoices = useMemo(() => {
-    switch (activeTab) {
-      case "TO_REVIEW": return allInvoices.filter(inv => inv.status === "RECEIVED" || inv.status === "VALIDATED");
-      case "APPROVED":  return allInvoices.filter(inv => inv.status === "APPROVED");
-      case "PAID":      return allInvoices.filter(inv => inv.paymentStatus === "PAID" || inv.status === "PAID");
-      default:          return allInvoices;
-    }
-  }, [allInvoices, activeTab]);
-
-  async function doAction(id: string, action: "validate" | "approve" | "reject", e: React.MouseEvent) {
-    e.stopPropagation();
-    setActionLoading(id + action);
-    try {
-      if (action === "validate") await incomingInvoiceApi.validate(id);
-      else if (action === "approve") await incomingInvoiceApi.approve(id);
-      else await incomingInvoiceApi.reject(id, "Rejected by reviewer");
-      invalidateCache('/v1/incoming-invoices/stats');
-      await load();
-      incomingInvoiceApi.stats().then((s: any) => setToReviewCount(s.received ?? 0)).catch(() => {});
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Action failed");
-    } finally {
-      setActionLoading(null);
-    }
-  }
-
-  const totalPages = Math.ceil(total / 50);
-
-  return (
-    <div className="p-6 space-y-4">
-      {error && <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">{error}</div>}
-
-      <div className="bg-white rounded-xl border border-border overflow-hidden">
-        {/* Filter tabs */}
-        <div className="px-4 border-b border-border">
-          <div className="flex">
-            {RECEIVED_TABS.map(({ key, label }) => (
-              <button key={key}
-                onClick={() => setActiveTab(key)}
-                className={`px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-                  activeTab === key ? "border-green text-green" : "border-transparent text-muted hover:text-dark"
-                }`}
-              >
-                {label}
-                {key === "TO_REVIEW" && toReviewCount !== null && toReviewCount > 0 && (
-                  <span className="inline-flex items-center justify-center text-xs font-bold rounded-full px-1.5 py-0.5 leading-none bg-red-100 text-red-700">
-                    {toReviewCount}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Table */}
-        {loading ? (
-          <div className="px-6 py-4 space-y-2">
-            {[0,1,2,3,4].map(i => <SkeletonTableRow key={i} />)}
-          </div>
-        ) : invoices.length === 0 ? (
-          <div className="p-14 text-center">
-            <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center mx-auto mb-4">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted">
-                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
-                <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
-              </svg>
-            </div>
-            <p className="font-semibold text-dark mb-1">No received invoices</p>
-            <p className="text-sm text-muted mb-5">Add invoices you receive from suppliers to track what you owe.</p>
-            <Link href="/incoming-invoices">
-              <Button size="sm" variant="secondary">Add invoice →</Button>
-            </Link>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-surface/50">
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Sender</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Invoice #</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-right">Amount</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left hidden sm:table-cell">Due Date</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide text-left">Status</th>
-                  <th className="px-5 py-3 w-24" />
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => {
-                  const pill = getReceivedInvoiceStatusPill(inv);
-                  return (
-                    <tr key={inv.id}
-                      onClick={() => router.push(`/incoming-invoices/${inv.id}`)}
-                      className="border-b border-border last:border-0 cursor-pointer hover:bg-gray-50 transition-colors"
-                    >
-                      {/* Sender */}
-                      <td className="px-5 py-3.5">
-                        <p className="text-sm font-medium text-dark truncate max-w-[180px]" title={inv.supplierName}>
-                          {inv.supplierName ?? "—"}
-                        </p>
-                      </td>
-                      {/* Invoice # */}
-                      <td className="px-5 py-3.5">
-                        <p className="text-sm font-semibold text-dark leading-tight">
-                          {formatInvoiceNumber({ platformIrn: inv.invoiceNumber ?? inv.platformIrn, id: inv.id })}
-                        </p>
-                        <p className="text-xs text-muted mt-0.5">{formatDate(inv.createdAt)}</p>
-                      </td>
-                      {/* Amount */}
-                      <td className="px-5 py-3.5 text-right">
-                        <p className="text-sm font-semibold text-dark tabular-nums">
-                          {inv.totalAmount != null ? formatCurrency(inv.totalAmount, inv.currency ?? "NGN") : "—"}
-                        </p>
-                      </td>
-                      {/* Due Date */}
-                      <td className="px-5 py-3.5 hidden sm:table-cell">
-                        <DueDateCell dueDate={inv.dueDate} />
-                      </td>
-                      {/* Status */}
-                      <td className="px-5 py-3.5">
-                        <StatusPillCell pill={pill} />
-                      </td>
-                      {/* Actions */}
-                      <td className="px-3 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        {inv.status === "RECEIVED" && (
-                          <button
-                            disabled={actionLoading === inv.id + "validate"}
-                            onClick={(e) => doAction(inv.id, "validate", e)}
-                            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
-                          >
-                            Validate
-                          </button>
-                        )}
-                        {inv.status === "VALIDATED" && (
-                          <button
-                            disabled={actionLoading === inv.id + "approve"}
-                            onClick={(e) => doAction(inv.id, "approve", e)}
-                            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50"
-                          >
-                            Approve
-                          </button>
-                        )}
-                        {inv.status === "APPROVED" && (
-                          <Link
-                            href={`/incoming-invoices/${inv.id}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
-                          >
-                            Pay →
-                          </Link>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {totalPages > 1 && activeTab === "ALL" && (
-        <div className="flex items-center justify-between text-sm text-muted">
-          <span>Showing {allInvoices.length} of {total}</span>
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-            <span className="px-3 py-1.5 text-dark">{page} / {totalPages}</span>
-            <Button variant="secondary" size="sm" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function InvoicesPage() {
   const searchParams = useSearchParams();
-  const router = useRouter();
-
-  const directionParam = searchParams.get("direction");
   const filterParam = searchParams.get("filter");
-  const tabParam = searchParams.get("tab");
-
-  const topTab = (directionParam === "received" ? "received" : directionParam === "sent" ? "sent" : tabParam ?? "sent") as "sent" | "received";
   const initialSentTab: SentTab = filterParam ? (FILTER_PARAM_TO_TAB[filterParam] ?? "ALL") : "ALL";
-
-  const [sentTotal, setSentTotal] = useState<number | null>(null);
-  const [receivedTotal, setReceivedTotal] = useState<number | null>(null);
-
-  useEffect(() => {
-    invoiceApi.stats().then((s: any) => setSentTotal(s.total ?? 0)).catch(() => {});
-    incomingInvoiceApi.stats().then((s: any) => setReceivedTotal(s.total ?? 0)).catch(() => {});
-  }, []);
-
-  function setTopTab(t: "sent" | "received") {
-    router.push(`/invoices?tab=${t}`);
-  }
 
   return (
     <>
-      <div className="bg-white border-b border-border px-6 pt-5 pb-0 flex items-start justify-between">
+      <div className="bg-white border-b border-border px-6 pt-5 pb-4 flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-dark">Invoices</h1>
-          <p className="text-sm text-muted mt-0.5 mb-3">
-            {topTab === "sent" ? "Invoices you have sent to buyers" : "Invoices received from suppliers"}
-          </p>
-          <div className="flex gap-0 -mb-px">
-            {(["sent", "received"] as const).map((t) => {
-              const count = t === "sent" ? sentTotal : receivedTotal;
-              return (
-                <button
-                  key={t}
-                  onClick={() => setTopTab(t)}
-                  className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
-                    topTab === t ? "border-green text-green" : "border-transparent text-muted hover:text-dark"
-                  }`}
-                >
-                  {t === "sent" ? "Sent" : "Received"}
-                  {count !== null && (
-                    <span className="text-xs font-medium text-muted">({count})</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <h1 className="text-xl font-bold text-dark">Sales Invoices</h1>
+          <p className="text-sm text-muted mt-0.5">Invoices you issue to customers</p>
         </div>
         <div className="flex gap-2 mt-1">
-          {topTab === "sent" ? (
-            <>
-              <Button size="sm" variant="secondary" onClick={() => document.dispatchEvent(new CustomEvent("open-bulk"))}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 inline">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
-                </svg>
-                Import CSV
-              </Button>
-              <Link href="/invoices/new">
-                <Button size="sm">+ Create invoice</Button>
-              </Link>
-            </>
-          ) : (
-            <Link href="/incoming-invoices">
-              <Button size="sm" variant="secondary">View all received →</Button>
-            </Link>
-          )}
+          <Button size="sm" variant="secondary" onClick={() => document.dispatchEvent(new CustomEvent("open-bulk"))}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 inline">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            Import CSV
+          </Button>
+          <Link href="/invoices/new">
+            <Button size="sm">+ Create invoice</Button>
+          </Link>
         </div>
       </div>
 
-      {topTab === "sent" ? <SentPanel initialTab={initialSentTab} /> : <ReceivedPanel />}
+      <SentPanel initialTab={initialSentTab} />
     </>
   );
 }

@@ -515,7 +515,7 @@ function AddInvoiceModal({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function IncomingInvoicesPage() {
+export default function PurchasesPage() {
   const [invoices, setInvoices] = useState<IncomingInvoice[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -596,7 +596,7 @@ export default function IncomingInvoicesPage() {
   return (
     <>
       <Topbar
-        title="Incoming invoices"
+        title="Purchase Invoices"
         actions={
           <Button size="sm" onClick={() => setShowAdd(true)}>
             + Add invoice
@@ -606,7 +606,7 @@ export default function IncomingInvoicesPage() {
 
       <div className="p-6 space-y-4">
         <p className="text-sm text-muted -mt-2">
-          Supplier invoices received by your business
+          Invoices received from your suppliers
         </p>
 
         {error && (
@@ -706,7 +706,7 @@ export default function IncomingInvoicesPage() {
                     >
                       <td className="px-6 py-3">
                         <Link
-                          href={`/incoming-invoices/${inv.id}`}
+                          href={`/purchases/${inv.id}`}
                           className="text-sm font-mono text-green hover:underline"
                         >
                           {inv.invoiceNumber}
@@ -749,7 +749,7 @@ export default function IncomingInvoicesPage() {
                       <td className="px-6 py-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">
                           <Link
-                            href={`/incoming-invoices/${inv.id}`}
+                            href={`/purchases/${inv.id}`}
                             className="text-xs font-medium text-green hover:underline"
                           >
                             View
