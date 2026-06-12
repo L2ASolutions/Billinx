@@ -306,6 +306,41 @@ export class InvoiceService {
       );
     }
 
+    // Validate FIRS mandatory fields using the effective (post-merge) values
+    // so a draft with incomplete data cannot be queued for submission.
+    const effectiveSellerTin = request.seller?.tin ?? invoice.sellerTin;
+    const effectiveSellerName = request.seller?.partyName ?? invoice.sellerName;
+    const effectiveBuyerName = request.buyer?.partyName ?? invoice.buyerName;
+    const effectiveIssueDate = request.issueDate ?? invoice.issueDate;
+    const effectiveKind =
+      request.invoiceKind ?? (invoice as any).invoiceKind;
+    const effectiveBuyerTin =
+      request.buyer?.tin ?? (invoice as any).buyerTin;
+    const effectiveLineItems: any[] =
+      request.lineItems ?? (invoice.lineItems as any[]) ?? [];
+    const effectiveTotal =
+      request.legalMonetaryTotal?.payableAmount ?? Number(invoice.totalAmount);
+
+    if (!effectiveSellerTin)
+      throw new BadRequestException('seller.tin is required');
+    if (!effectiveSellerName)
+      throw new BadRequestException('seller.partyName is required');
+    if (!effectiveBuyerName)
+      throw new BadRequestException('buyer.partyName is required');
+    if (!effectiveIssueDate)
+      throw new BadRequestException('issueDate is required');
+    if (
+      (effectiveKind === 'B2B' || effectiveKind === 'B2G') &&
+      !effectiveBuyerTin
+    )
+      throw new BadRequestException(
+        'buyer.tin is required for B2B / B2G invoices',
+      );
+    if (!effectiveLineItems.length)
+      throw new BadRequestException('At least one line item is required');
+    if (Number(effectiveTotal) <= 0)
+      throw new BadRequestException('Invoice total must be greater than zero');
+
     // Apply any field updates the user made before submitting.
     await this.prisma.asAdmin(async (tx) => {
       await tx.invoice.update({
