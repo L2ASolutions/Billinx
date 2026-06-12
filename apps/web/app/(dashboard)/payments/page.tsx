@@ -2,6 +2,10 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell,
+} from "recharts";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -28,6 +32,13 @@ const PROVIDER_DOTS: Record<string, string> = {
   PAYSTACK:      "bg-green-500",
   FLUTTERWAVE:   "bg-orange-500",
   MANUAL:        "bg-gray-400",
+};
+
+const METHOD_COLORS: Record<string, string> = {
+  "Bank Transfer": "#1D9E75",
+  "Paystack":      "#3B82F6",
+  "Flutterwave":   "#F59E0B",
+  "Manual":        "#9CA3AF",
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -68,6 +79,22 @@ interface PaymentStats {
   providerBreakdown: Array<{ provider: string; total: number }>;
 }
 
+interface CollectionTrendPoint {
+  month: string;
+  invoiced: number;
+  collected: number;
+}
+
+interface PaymentMethodPoint {
+  method: string;
+  amount: number;
+}
+
+interface PaymentChartsData {
+  collectionTrend: CollectionTrendPoint[];
+  paymentMethods: PaymentMethodPoint[];
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function effectiveAmount(inv: InvoiceRow) {
@@ -88,81 +115,74 @@ function isRowOverdue(inv: InvoiceRow) {
   return new Date(inv.paymentDueDate) < new Date(new Date().toDateString());
 }
 
-// ── FIRS status pill ──────────────────────────────────────────────────────────
-
-function FirsStatusPill({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    ACCEPTED:               { label: "Accepted",   cls: "bg-green-50 text-green-700" },
-    DRAFT:                  { label: "Draft",      cls: "bg-gray-100 text-gray-500" },
-    REJECTED:               { label: "Rejected",   cls: "bg-red-50 text-red-600" },
-    VALIDATION_FAILED:      { label: "Rejected",   cls: "bg-red-50 text-red-600" },
-    SUBMISSION_FAILED:      { label: "Rejected",   cls: "bg-red-50 text-red-600" },
-    VALIDATING:             { label: "Pending",    cls: "bg-amber-50 text-amber-700" },
-    QUEUED:                 { label: "Pending",    cls: "bg-amber-50 text-amber-700" },
-    SUBMITTING:             { label: "Pending",    cls: "bg-amber-50 text-amber-700" },
-    DEAD_LETTERED:          { label: "Failed",     cls: "bg-gray-100 text-gray-500" },
-    CANCELLED:              { label: "Cancelled",  cls: "bg-gray-100 text-gray-500" },
-    CANCELLATION_REQUESTED: { label: "Cancelling", cls: "bg-gray-100 text-gray-500" },
-  };
-  const { label, cls } = map[status] ?? { label: status, cls: "bg-gray-100 text-gray-500" };
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>
-      {label}
-    </span>
-  );
+function fmtAxisAmount(v: number) {
+  if (v >= 1_000_000) return `₦${(v / 1_000_000).toFixed(1)}m`;
+  if (v >= 1_000)     return `₦${(v / 1_000).toFixed(0)}k`;
+  return `₦${v}`;
 }
 
-// ── Smart payment status cell ─────────────────────────────────────────────────
+function fmtCompact(v: number) {
+  if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)}b`;
+  if (v >= 1_000_000)     return `${(v / 1_000_000).toFixed(1)}m`;
+  if (v >= 1_000)         return `${(v / 1_000).toFixed(0)}k`;
+  return String(Math.round(v));
+}
 
-function PaymentStatusCell({ inv }: { inv: InvoiceRow }) {
+// ── Amount cell — merges amount + payment status ───────────────────────────────
+
+function AmountCell({ inv }: { inv: InvoiceRow }) {
+  const net       = effectiveAmount(inv);
   const remaining = calcRemaining(inv);
+  const isPaid    = inv.paymentStatus === "PAID" || remaining === 0;
+  const isPartial = !isPaid && (inv.paymentStatus === "PARTIAL" || Number(inv.amountPaid ?? 0) > 0);
+  const overdue   = !isPaid && !isPartial && isRowOverdue(inv);
 
-  if (inv.paymentStatus === "PAID" || remaining === 0) {
-    return (
-      <div>
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
-          Paid
-        </span>
-        {inv.paidAt && (
-          <p className="text-xs text-muted mt-0.5">{formatDate(inv.paidAt)}</p>
-        )}
-      </div>
-    );
-  }
+  return (
+    <div className="text-right">
+      {/* Line 1: Amount */}
+      {inv.hasCreditNote ? (
+        <div>
+          <span className="text-sm font-medium text-dark">{formatCurrency(net, inv.currency)}</span>
+          <div className="flex items-center justify-end gap-1 mt-0.5">
+            <span className="px-1 rounded text-xs font-medium bg-gray-100 text-gray-500" title="Credit note issued">CN</span>
+            <s className="text-xs text-muted tabular-nums">{formatCurrency(inv.totalAmount, inv.currency)}</s>
+          </div>
+        </div>
+      ) : (
+        <span className="text-sm font-medium text-dark">{formatCurrency(inv.totalAmount, inv.currency)}</span>
+      )}
 
-  if (inv.paymentStatus === "PARTIAL" || Number(inv.amountPaid ?? 0) > 0) {
-    return (
-      <div>
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
-          Partial
-        </span>
-        <p className="text-xs text-muted mt-0.5">{formatCurrency(remaining, inv.currency)} remaining</p>
-      </div>
-    );
-  }
-
-  if (inv.status === "ACCEPTED") {
-    if (inv.paymentDueDate) {
-      const due = new Date(inv.paymentDueDate);
-      const today = new Date(new Date().toDateString());
-      if (inv.isOverdue || due < today) {
-        const days = Math.max(1, Math.round((today.getTime() - due.getTime()) / 86400000));
-        return <span className="text-sm text-red-600 font-medium">{days} day{days !== 1 ? "s" : ""} overdue</span>;
-      }
-      return <span className="text-sm text-muted">Due {formatDate(inv.paymentDueDate)}</span>;
-    }
-    if (inv.isOverdue) {
-      return <span className="text-sm text-red-600 font-medium">Overdue</span>;
-    }
-  } else if (inv.paymentDueDate) {
-    const due = new Date(inv.paymentDueDate);
-    const today = new Date(new Date().toDateString());
-    if (due >= today) {
-      return <span className="text-sm text-muted">Due {formatDate(inv.paymentDueDate)}</span>;
-    }
-  }
-
-  return null;
+      {/* Line 2: Status indicator */}
+      {isPaid && (
+        <div className="mt-1 flex items-center justify-end gap-1.5">
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+            Paid
+          </span>
+          {inv.paidAt && (
+            <span className="text-xs text-muted">{formatDate(inv.paidAt)}</span>
+          )}
+        </div>
+      )}
+      {isPartial && (
+        <div className="mt-1 flex items-center justify-end gap-1.5">
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
+            Partial
+          </span>
+          <span className="text-xs text-muted">{formatCurrency(remaining, inv.currency)} remaining</span>
+        </div>
+      )}
+      {overdue && (() => {
+        const due   = new Date(inv.paymentDueDate ?? Date.now());
+        const today = new Date(new Date().toDateString());
+        const days  = Math.max(1, Math.round((today.getTime() - due.getTime()) / 86400000));
+        return (
+          <p className="mt-1 text-xs text-red-600 font-medium">
+            {days} day{days !== 1 ? "s" : ""} overdue
+          </p>
+        );
+      })()}
+    </div>
+  );
 }
 
 // ── Actions cell ──────────────────────────────────────────────────────────────
@@ -287,6 +307,145 @@ function Sk({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse bg-gray-100 rounded ${className}`} />;
 }
 
+// ── Chart tooltip ─────────────────────────────────────────────────────────────
+
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-border rounded-lg shadow-lg px-3 py-2 text-xs space-y-1">
+      {label && <p className="font-medium text-dark mb-1">{label}</p>}
+      {payload.map((p: any) => (
+        <div key={p.name} className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full" style={{ background: p.fill ?? p.color }} />
+          <span className="text-muted">{p.name}:</span>
+          <span className="font-medium text-dark">{formatCurrency(Number(p.value))}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Payment Charts ────────────────────────────────────────────────────────────
+
+function PaymentCharts({ data, loading }: { data: PaymentChartsData | null; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="flex gap-4 mb-6">
+        <div className="animate-pulse bg-gray-100 rounded-xl h-[268px]" style={{ flex: "0 0 55%" }} />
+        <div className="animate-pulse bg-gray-100 rounded-xl h-[268px] flex-1" />
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const hasData =
+    data.paymentMethods.length > 0 ||
+    data.collectionTrend.some((p) => p.invoiced > 0 || p.collected > 0);
+
+  if (!hasData) return null;
+
+  const totalCollected = data.paymentMethods.reduce((s, m) => s + m.amount, 0);
+
+  return (
+    <div className="flex gap-4 mb-6">
+      {/* Chart 1 — Collection Trend */}
+      <div
+        className="bg-white border border-[#F3F4F6] rounded-xl p-5"
+        style={{ flex: "0 0 55%", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+      >
+        <p className="text-sm font-semibold text-dark">Collection trend</p>
+        <p className="text-xs text-muted mb-4">Invoiced vs collected — last 6 months</p>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={data.collectionTrend} barSize={12} barGap={4} barCategoryGap="30%">
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+            <XAxis
+              dataKey="month"
+              tick={{ fontSize: 11, fill: "#9CA3AF" }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tickFormatter={fmtAxisAmount}
+              tick={{ fontSize: 11, fill: "#9CA3AF" }}
+              axisLine={false}
+              tickLine={false}
+              width={48}
+            />
+            <Tooltip content={<ChartTooltip />} />
+            <Bar dataKey="invoiced" name="Invoiced" fill="#E5E7EB" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="collected" name="Collected" fill="#1D9E75" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+        <div className="flex items-center gap-4 mt-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted">
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#E5E7EB]" />
+            Invoiced
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-muted">
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#1D9E75]" />
+            Collected
+          </div>
+        </div>
+      </div>
+
+      {/* Chart 2 — Payment Methods donut */}
+      <div
+        className="bg-white border border-[#F3F4F6] rounded-xl p-5 flex-1"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+      >
+        <p className="text-sm font-semibold text-dark">Payment methods</p>
+        <p className="text-xs text-muted mb-2">All time collection by channel</p>
+        <div className="flex items-center gap-4">
+          <div style={{ width: 160, height: 160, flexShrink: 0 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data.paymentMethods}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={48}
+                  outerRadius={72}
+                  paddingAngle={2}
+                  dataKey="amount"
+                  nameKey="method"
+                >
+                  {data.paymentMethods.map((entry, i) => (
+                    <Cell key={i} fill={METHOD_COLORS[entry.method] ?? "#9CA3AF"} />
+                  ))}
+                </Pie>
+                <Tooltip content={<ChartTooltip />} />
+                <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle">
+                  <tspan x="50%" dy="-5" fontSize="13" fontWeight="700" fill="#111827">
+                    ₦{fmtCompact(totalCollected)}
+                  </tspan>
+                  <tspan x="50%" dy="16" fontSize="10" fill="#9CA3AF">collected</tspan>
+                </text>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex flex-col gap-2 flex-1 min-w-0">
+            {data.paymentMethods.map((m) => {
+              const pct = totalCollected > 0 ? Math.round((m.amount / totalCollected) * 100) : 0;
+              return (
+                <div key={m.method} className="flex items-center gap-2 text-xs">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ background: METHOD_COLORS[m.method] ?? "#9CA3AF" }}
+                  />
+                  <span className="text-muted flex-1 truncate">{m.method}</span>
+                  <span className="font-medium text-dark tabular-nums">{formatCurrency(m.amount)}</span>
+                  <span className="text-muted w-8 text-right">{pct}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PaymentsPage() {
@@ -301,6 +460,9 @@ export default function PaymentsPage() {
   const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
+  const [chartData, setChartData] = useState<PaymentChartsData | null>(null);
+  const [chartsLoading, setChartsLoading] = useState(true);
+
   const [recordFor, setRecordFor] = useState<InvoiceRow | null>(null);
   const [form, setForm] = useState<RecordPaymentForm>({
     amount: "", provider: "MANUAL", reference: "",
@@ -313,7 +475,7 @@ export default function PaymentsPage() {
     setLoading(true);
     setError("");
     try {
-      const params: Record<string, string | number> = { page, limit: 20 };
+      const params: Record<string, string | number> = { page, limit: 20, forPayments: "true" };
       if (search) params.search = search;
       if (activeTab === "PAID")    params.paymentStatus = "PAID";
       else if (activeTab === "UNPAID")  params.paymentStatus = "UNPAID";
@@ -338,6 +500,14 @@ export default function PaymentsPage() {
       .then((s) => setPaymentStats(s as PaymentStats))
       .catch(() => {})
       .finally(() => setStatsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    setChartsLoading(true);
+    invoiceApi.paymentCharts()
+      .then((d) => setChartData(d as PaymentChartsData))
+      .catch(() => {})
+      .finally(() => setChartsLoading(false));
   }, []);
 
   const totalBilled = invoices.reduce((s, i) => s + effectiveAmount(i), 0);
@@ -388,7 +558,7 @@ export default function PaymentsPage() {
           {/* ── Left column (70%) ─────────────────────────────────────────── */}
           <div className="flex-1 min-w-0 space-y-6">
 
-            {/* 4 metric cards — unchanged */}
+            {/* 4 metric cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
                 { label: "Total billed",    value: formatCurrency(totalBilled),     cls: "text-dark" },
@@ -423,7 +593,10 @@ export default function PaymentsPage() {
               </div>
             )}
 
-            {/* Filter tabs + search — unchanged */}
+            {/* Charts row */}
+            <PaymentCharts data={chartData} loading={chartsLoading} />
+
+            {/* Filter tabs + search */}
             <div className="bg-white rounded-xl border border-border overflow-hidden">
               <div className="flex items-center justify-between px-4 border-b border-border">
                 <div className="flex">
@@ -461,19 +634,16 @@ export default function PaymentsPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border">
-                        <th className="px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide text-left w-[35%]">Client &amp; Invoice</th>
+                        <th className="px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide text-left w-[50%]">Client &amp; Invoice</th>
                         <th className="px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide text-right">Amount</th>
-                        <th className="px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide text-left">Payment Status</th>
-                        <th className="px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide text-left">FIRS</th>
                         <th className="px-4 py-3 text-xs font-medium text-muted uppercase tracking-wide text-right"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {invoices.map((inv) => {
-                        const net = effectiveAmount(inv);
                         const remaining = calcRemaining(inv);
-                        const isPaid = inv.paymentStatus === "PAID" || remaining === 0;
-                        const overdue = isRowOverdue(inv);
+                        const isPaid    = inv.paymentStatus === "PAID" || remaining === 0;
+                        const overdue   = isRowOverdue(inv);
 
                         return (
                           <tr
@@ -498,39 +668,12 @@ export default function PaymentsPage() {
                               </p>
                             </td>
 
-                            {/* Col 2: Amount — credit note display preserved exactly */}
-                            <td className="px-6 py-3.5 text-sm font-medium text-dark text-right">
-                              {inv.hasCreditNote ? (
-                                <div>
-                                  <span>{formatCurrency(net, inv.currency)}</span>
-                                  <div className="flex items-center justify-end gap-1 mt-0.5">
-                                    <span
-                                      className="px-1 rounded text-xs font-medium bg-gray-100 text-gray-500"
-                                      title="Credit note issued"
-                                    >
-                                      CN
-                                    </span>
-                                    <s className="text-xs text-muted tabular-nums">
-                                      {formatCurrency(inv.totalAmount, inv.currency)}
-                                    </s>
-                                  </div>
-                                </div>
-                              ) : (
-                                formatCurrency(inv.totalAmount, inv.currency)
-                              )}
-                            </td>
-
-                            {/* Col 3: Payment Status */}
+                            {/* Col 2: Amount + payment status merged */}
                             <td className="px-6 py-3.5">
-                              <PaymentStatusCell inv={inv} />
+                              <AmountCell inv={inv} />
                             </td>
 
-                            {/* Col 4: FIRS Status */}
-                            <td className="px-6 py-3.5">
-                              <FirsStatusPill status={inv.status} />
-                            </td>
-
-                            {/* Col 5: Actions */}
+                            {/* Col 3: Actions */}
                             <td className="px-4 py-3.5">
                               <ActionsCell
                                 inv={inv}
@@ -538,7 +681,7 @@ export default function PaymentsPage() {
                                 onRecord={() => {
                                   setRecordFor(inv);
                                   setForm({
-                                    amount: String(remaining > 0 ? remaining : net),
+                                    amount: String(remaining > 0 ? remaining : effectiveAmount(inv)),
                                     provider: "MANUAL", reference: "",
                                     paidAt: new Date().toISOString().slice(0, 10), notes: "",
                                   });
