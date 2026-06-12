@@ -968,6 +968,60 @@ export class InvoiceService {
     });
   }
 
+  async getPaymentCharts(tenantId: string) {
+    const now = new Date();
+    const PROVIDER_LABELS: Record<string, string> = {
+      BANK_TRANSFER: 'Bank Transfer',
+      PAYSTACK: 'Paystack',
+      FLUTTERWAVE: 'Flutterwave',
+      MANUAL: 'Manual',
+    };
+
+    const collectionTrend: Array<{ month: string; invoiced: number; collected: number }> = [];
+
+    for (let i = 5; i >= 0; i--) {
+      const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+      const label = start.toLocaleString('en-NG', { month: 'short', year: 'numeric' });
+
+      const [invoicedAgg, collectedAgg] = await this.prisma.asAdmin(async (tx) => {
+        const ia = await (tx as any).invoice.aggregate({
+          where: { tenantId, status: 'ACCEPTED', issueDate: { gte: start, lt: end } },
+          _sum: { totalAmount: true },
+        });
+        const ca = await (tx as any).paymentRecord.aggregate({
+          where: { tenantId, paidAt: { gte: start, lt: end } },
+          _sum: { amount: true },
+        });
+        return [ia, ca];
+      });
+
+      collectionTrend.push({
+        month: label,
+        invoiced: Number(invoicedAgg._sum.totalAmount ?? 0),
+        collected: Number(collectedAgg._sum.amount ?? 0),
+      });
+    }
+
+    const providerRows: Array<{ provider: string; _sum: { amount: any } }> =
+      await this.prisma.asAdmin((tx) =>
+        (tx as any).paymentRecord.groupBy({
+          by: ['provider'],
+          where: { tenantId },
+          _sum: { amount: true },
+        }),
+      );
+
+    const paymentMethods = providerRows
+      .map((row) => ({
+        method: PROVIDER_LABELS[row.provider] ?? row.provider,
+        amount: Number(row._sum.amount ?? 0),
+      }))
+      .filter((m) => m.amount > 0);
+
+    return { collectionTrend, paymentMethods };
+  }
+
   async exportAsXml(id: string, tenantId: string): Promise<string> {
     const invoice = await this.invoiceRepository.findById(id);
     if (!invoice || invoice.tenantId !== tenantId) {
