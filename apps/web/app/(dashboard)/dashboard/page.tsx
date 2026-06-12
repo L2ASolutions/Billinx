@@ -688,7 +688,7 @@ export default function DashboardPage() {
                   ? '/invoices?tab=sent&status=rejected'
                   : showOverdue
                   ? '/invoices?tab=sent&filter=overdue'
-                  : '/invoices?tab=received&filter=review'
+                  : '/purchases'
               }
               className={`text-xs font-semibold shrink-0 hover:underline ${
                 showRejections || showOverdue ? 'text-red-700' : 'text-amber-700'
@@ -727,7 +727,7 @@ export default function DashboardPage() {
             </Link>
 
             {/* Payables */}
-            <Link href="/invoices?tab=received" className="block">
+            <Link href="/purchases" className="block">
               <div className={`bg-white rounded-xl border border-border shadow-card border-l-4 p-5 h-full hover:shadow-sm transition-shadow ${
                 outstandingPayables > 0 ? 'border-l-red-500' : 'border-l-gray-300'
               }`}>
