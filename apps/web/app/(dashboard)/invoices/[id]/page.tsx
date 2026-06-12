@@ -816,7 +816,7 @@ export default function InvoiceDetailPage() {
             <h1 className="text-lg font-bold text-dark">Submitting to FIRS</h1>
             <p className="text-xs text-muted font-mono mt-0.5">{invoice.platformIrn}</p>
           </div>
-          <Link href="/invoices"><Button variant="secondary" size="sm">← All invoices</Button></Link>
+          <Link href="/invoices"><Button variant="secondary" size="sm">← Sales Invoices</Button></Link>
         </div>
         <SubmissionProgress invoice={invoice} onCorrect={() => {
           window.location.href = `/invoices/new?originalIrn=${encodeURIComponent(invoice.platformIrn)}&type=${invoice.invoiceType}`;
@@ -866,7 +866,7 @@ export default function InvoiceDetailPage() {
           {pageSubtitle && <p className="text-xs text-muted mt-0.5 font-mono">{pageSubtitle}</p>}
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Link href="/invoices"><Button variant="secondary" size="sm">← All invoices</Button></Link>
+          <Link href="/invoices"><Button variant="secondary" size="sm">← Sales Invoices</Button></Link>
           {isDraft && (
             <Link href={`/invoices/new?id=${invoice.id}`}>
               <Button size="sm" variant="secondary">Edit draft →</Button>
@@ -1175,7 +1175,7 @@ export default function InvoiceDetailPage() {
       {/* ── Bottom sticky action bar ────────────────────────────────────────── */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-border px-6 py-3 flex items-center gap-3 flex-wrap z-20">
         <Link href="/invoices" className="text-sm font-medium text-muted hover:text-dark transition-colors">
-          ← All invoices
+          ← Sales Invoices
         </Link>
         <div className="flex-1" />
         {isAccepted && (

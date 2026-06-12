@@ -23,10 +23,20 @@ const InvoiceIcon = () => (
   </svg>
 );
 
-const IncomingInvoiceIcon = () => (
+const PurchasesIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <polyline points="14 2 14 8 20 8" /><polyline points="12 18 9 15 12 12" /><line x1="15" y1="15" x2="9" y2="15" />
+    <polyline points="14 2 14 8 20 8" /><polyline points="12 12 9 15 12 18" /><line x1="15" y1="15" x2="9" y2="15" />
+  </svg>
+);
+
+const WebhooksIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 16.016c.27.15.54.3.81.45M9 9c.27-.15.54-.3.81-.45" />
+    <circle cx="5" cy="19" r="2" /><circle cx="19" cy="19" r="2" /><circle cx="12" cy="5" r="2" />
+    <path d="M5 17v-1a7 7 0 0 1 7-7" />
+    <path d="M21 17v-1a7 7 0 0 0-4.17-6.4" />
+    <path d="M11 7.07A7 7 0 0 1 19 14" />
   </svg>
 );
 
@@ -153,10 +163,15 @@ function buildNavSections(inventoryEnabled: boolean): NavSection[] {
     {
       label: "Finance",
       items: [
-        { label: "Invoices",          href: "/invoices",          icon: <InvoiceIcon />,         badge: "invoices" },
-        { label: "Incoming invoices", href: "/incoming-invoices", icon: <IncomingInvoiceIcon /> },
-        { label: "Payments",          href: "/payments",          icon: <PaymentsIcon />,         badge: "payments" },
-        { label: "Clients",           href: "/clients",           icon: <CustomersIcon /> },
+        { label: "Sales Invoices", href: "/invoices", icon: <InvoiceIcon />, badge: "invoices" },
+        { label: "Payments",       href: "/payments", icon: <PaymentsIcon />, badge: "payments" },
+        { label: "Clients",        href: "/clients",  icon: <CustomersIcon /> },
+      ],
+    },
+    {
+      label: "Purchases",
+      items: [
+        { label: "Purchase Invoices", href: "/purchases", icon: <PurchasesIcon /> },
       ],
     },
     {
@@ -180,6 +195,7 @@ function buildNavSections(inventoryEnabled: boolean): NavSection[] {
       items: [
         { label: "Team",     href: "/team",     icon: <TeamIcon /> },
         { label: "Settings", href: "/settings", icon: <SettingsIcon /> },
+        { label: "Webhooks", href: "/webhooks", icon: <WebhooksIcon /> },
         { label: "Support",  href: "/support",  icon: <SupportIcon /> },
       ],
     },
