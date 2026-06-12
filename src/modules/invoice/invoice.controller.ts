@@ -449,6 +449,7 @@ export class InvoiceController {
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'paymentStatus', required: false })
   @ApiQuery({ name: 'isOverdue', required: false, type: Boolean })
+  @ApiQuery({ name: 'forPayments', required: false, type: Boolean })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to', required: false })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -459,6 +460,7 @@ export class InvoiceController {
     @Query('search') search?: string,
     @Query('paymentStatus') paymentStatus?: string,
     @Query('isOverdue') isOverdue?: string,
+    @Query('forPayments') forPayments?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('page') page?: number,
@@ -470,6 +472,7 @@ export class InvoiceController {
       search,
       paymentStatus,
       isOverdue: isOverdue === 'true',
+      forPayments: forPayments === 'true',
       from,
       to,
       page: page ? Number(page) : 1,
@@ -522,6 +525,16 @@ export class InvoiceController {
   async getPaymentStats(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getPaymentStats(ctx.tenantId);
+  }
+
+  @Get('dashboard/payment-charts')
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'VIEWER')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get payment chart data (collection trend + payment methods) for dashboard (JWT auth)' })
+  async getPaymentCharts(@Req() req: Request) {
+    const ctx = this.getCtx(req);
+    return this.invoiceService.getPaymentCharts(ctx.tenantId);
   }
 
   @Get('dashboard/export')
