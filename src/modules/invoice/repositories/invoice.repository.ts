@@ -77,13 +77,14 @@ export class InvoiceRepository {
       where.paymentStatus = { not: 'PAID' };
     }
     if (filters.forPayments) {
-      where.status = { in: ['SUBMITTED', 'ACCEPTED', 'REJECTED'] as any[] };
-      where.NOT = {
-        AND: [
-          { OR: [{ buyerName: null }, { buyerName: '' }] },
-          { OR: [{ buyerTin: null }, { buyerTin: '' }] },
+      where.status = { notIn: ['DRAFT', 'CANCELLED'] as any[] };
+      if (!where.AND) where.AND = [];
+      (where.AND as any[]).push({
+        OR: [
+          { AND: [{ buyerName: { not: null } }, { buyerName: { not: '' } }] },
+          { AND: [{ buyerTin: { not: null } }, { buyerTin: { not: '' } }] },
         ],
-      };
+      });
     }
 
     // Single asAdmin() with sequential awaits. Concurrent $transaction calls

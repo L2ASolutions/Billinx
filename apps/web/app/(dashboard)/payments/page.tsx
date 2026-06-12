@@ -356,7 +356,8 @@ function PaymentCharts({ data, loading }: { data: PaymentChartsData | null; load
       >
         <p className="text-sm font-semibold text-dark">Collection trend</p>
         <p className="text-xs text-muted mb-4">Invoiced vs collected — last 6 months</p>
-        <ResponsiveContainer width="100%" height={200}>
+        <div style={{ width: "100%", height: 200 }}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <BarChart data={data.collectionTrend} barSize={12} barGap={4} barCategoryGap="30%">
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
             <XAxis
@@ -377,6 +378,7 @@ function PaymentCharts({ data, loading }: { data: PaymentChartsData | null; load
             <Bar dataKey="collected" name="Collected" fill="#1D9E75" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+        </div>
         <div className="flex items-center gap-4 mt-3">
           <div className="flex items-center gap-1.5 text-xs text-muted">
             <span className="w-2.5 h-2.5 rounded-sm bg-[#E5E7EB]" />
@@ -397,8 +399,8 @@ function PaymentCharts({ data, loading }: { data: PaymentChartsData | null; load
         <p className="text-sm font-semibold text-dark">Payment methods</p>
         <p className="text-xs text-muted mb-2">All time collection by channel</p>
         <div className="flex items-center gap-4">
-          <div style={{ width: 160, height: 160, flexShrink: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ width: 160, height: 200, flexShrink: 0 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie
                   data={data.paymentMethods}
@@ -712,7 +714,7 @@ export default function PaymentsPage() {
           </div>
 
           {/* ── Right column — Collection Summary sidebar, unchanged ───────── */}
-          <div className="w-72 shrink-0 space-y-4">
+          <div className="w-72 shrink-0 space-y-4 self-start">
             <div className="bg-white rounded-xl border border-border p-5">
               <h3 className="text-sm font-semibold text-dark mb-4">Collection summary</h3>
               {statsLoading ? (
