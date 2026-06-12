@@ -36,6 +36,7 @@ export interface InvoiceFilterParams {
   search?: string;
   paymentStatus?: string;
   isOverdue?: boolean;
+  forPayments?: boolean;
 }
 
 export interface InvoiceResponse {

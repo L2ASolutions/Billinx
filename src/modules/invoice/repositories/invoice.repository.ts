@@ -76,6 +76,15 @@ export class InvoiceRepository {
       where.isOverdue = true;
       where.paymentStatus = { not: 'PAID' };
     }
+    if (filters.forPayments) {
+      where.status = { in: ['SUBMITTED', 'ACCEPTED', 'REJECTED'] as any[] };
+      where.NOT = {
+        AND: [
+          { OR: [{ buyerName: null }, { buyerName: '' }] },
+          { OR: [{ buyerTin: null }, { buyerTin: '' }] },
+        ],
+      };
+    }
 
     // Single asAdmin() with sequential awaits. Concurrent $transaction calls
     // each hold ~200 MB in Prisma's query engine. Sequential queries inside

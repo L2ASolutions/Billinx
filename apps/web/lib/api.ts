@@ -216,6 +216,7 @@ export const invoiceApi = {
   },
   stats: () => cachedGet<unknown>('/v1/invoices/dashboard/stats'),
   paymentStats: () => api.get<unknown>('/v1/invoices/dashboard/payment-stats'),
+  paymentCharts: () => api.get<unknown>('/v1/invoices/dashboard/payment-charts'),
   getXml: (id: string) => requestBlob(`/v1/invoices/dashboard/${id}/xml`),
   getStatus: (id: string) =>
     api.get<unknown>(`/v1/invoices/dashboard/${id}/status`),
