@@ -39,6 +39,7 @@ import {
   InvoiceStatus,
   InvoiceTypeCode,
 } from '../../../packages/types/invoice';
+import { InvoiceDashboardFilterDto } from './dto/invoice-dashboard-filter.dto';
 
 @ApiTags('Invoices')
 @Controller('v1/invoices')
@@ -456,27 +457,19 @@ export class InvoiceController {
   @ApiQuery({ name: 'limit', required: false, type: Number })
   async listInvoicesDashboard(
     @Req() req: Request,
-    @Query('status') status?: InvoiceStatus,
-    @Query('search') search?: string,
-    @Query('paymentStatus') paymentStatus?: string,
-    @Query('isOverdue') isOverdue?: string,
-    @Query('forPayments') forPayments?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query() filters: InvoiceDashboardFilterDto,
   ) {
     const ctx = this.getCtx(req);
     return this.invoiceService.listInvoices(ctx.tenantId, {
-      status,
-      search,
-      paymentStatus,
-      isOverdue: isOverdue === 'true',
-      forPayments: forPayments === 'true',
-      from,
-      to,
-      page: page ? Number(page) : 1,
-      limit: limit ? Number(limit) : 20,
+      status: filters.status as InvoiceStatus,
+      search: filters.search,
+      paymentStatus: filters.paymentStatus,
+      isOverdue: filters.isOverdue,
+      forPayments: filters.forPayments,
+      from: filters.from,
+      to: filters.to,
+      page: filters.page ?? 1,
+      limit: filters.limit ?? 20,
     });
   }
 
