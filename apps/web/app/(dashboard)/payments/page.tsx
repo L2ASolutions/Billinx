@@ -473,6 +473,7 @@ export default function PaymentsPage() {
   const [submitError, setSubmitError] = useState("");
 
   const load = useCallback(async () => {
+    if (typeof window === "undefined") return;
     setLoading(true);
     setError("");
     try {
