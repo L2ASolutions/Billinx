@@ -173,91 +173,67 @@ async function main() {
   await prisma.nigerianState.createMany({ data: states, skipDuplicates: true });
   console.log('  ✓ nigerian_states');
 
-  // LGAs (selected major ones per state — complete list for key states)
+  // LGAs — complete official list, all 774 LGAs across 36 states + FCT
+  function lgasFor(stateCode: string, names: string[]) {
+    const seen = new Set<string>();
+    return names.map((name) => {
+      const base = name
+        .replace(/[^A-Za-z]/g, '')
+        .toUpperCase()
+        .slice(0, 2) || 'XX';
+      let code = base;
+      let n = 1;
+      while (seen.has(code)) {
+        code = `${base[0]}${n}`;
+        n++;
+      }
+      seen.add(code);
+      return { code: `${stateCode}-${code}`, name, stateCode };
+    });
+  }
+
   const lgas = [
-    // Lagos (20 LGAs)
-    { code: 'NG-LA-AG', name: 'Agege', stateCode: 'NG-LA' },
-    { code: 'NG-LA-AL', name: 'Ajeromi-Ifelodun', stateCode: 'NG-LA' },
-    { code: 'NG-LA-AK', name: 'Alimosho', stateCode: 'NG-LA' },
-    { code: 'NG-LA-AM', name: 'Amuwo-Odofin', stateCode: 'NG-LA' },
-    { code: 'NG-LA-AP', name: 'Apapa', stateCode: 'NG-LA' },
-    { code: 'NG-LA-BA', name: 'Badagry', stateCode: 'NG-LA' },
-    { code: 'NG-LA-EP', name: 'Epe', stateCode: 'NG-LA' },
-    { code: 'NG-LA-ET', name: 'Eti-Osa', stateCode: 'NG-LA' },
-    { code: 'NG-LA-IB', name: 'Ibeju-Lekki', stateCode: 'NG-LA' },
-    { code: 'NG-LA-IF', name: 'Ifako-Ijaiye', stateCode: 'NG-LA' },
-    { code: 'NG-LA-IK', name: 'Ikeja', stateCode: 'NG-LA' },
-    { code: 'NG-LA-IR', name: 'Ikorodu', stateCode: 'NG-LA' },
-    { code: 'NG-LA-IS', name: 'Isale-Eko', stateCode: 'NG-LA' },
-    { code: 'NG-LA-KO', name: 'Kosofe', stateCode: 'NG-LA' },
-    { code: 'NG-LA-LA', name: 'Lagos Island', stateCode: 'NG-LA' },
-    { code: 'NG-LA-LM', name: 'Lagos Mainland', stateCode: 'NG-LA' },
-    { code: 'NG-LA-MD', name: 'Mushin', stateCode: 'NG-LA' },
-    { code: 'NG-LA-OJ', name: 'Ojo', stateCode: 'NG-LA' },
-    { code: 'NG-LA-OS', name: 'Oshodi-Isolo', stateCode: 'NG-LA' },
-    { code: 'NG-LA-SO', name: 'Somolu', stateCode: 'NG-LA' },
-    // FCT (6 area councils)
-    { code: 'NG-FC-AB', name: 'Abaji', stateCode: 'NG-FC' },
-    { code: 'NG-FC-AC', name: 'Abuja Municipal', stateCode: 'NG-FC' },
-    { code: 'NG-FC-BW', name: 'Bwari', stateCode: 'NG-FC' },
-    { code: 'NG-FC-GW', name: 'Gwagwalada', stateCode: 'NG-FC' },
-    { code: 'NG-FC-KU', name: 'Kuje', stateCode: 'NG-FC' },
-    { code: 'NG-FC-KW', name: 'Kwali', stateCode: 'NG-FC' },
-    // Rivers (23 LGAs — selected)
-    { code: 'NG-RI-PH', name: 'Port Harcourt', stateCode: 'NG-RI' },
-    { code: 'NG-RI-OB', name: 'Obio-Akpor', stateCode: 'NG-RI' },
-    { code: 'NG-RI-EL', name: 'Eleme', stateCode: 'NG-RI' },
-    { code: 'NG-RI-AH', name: 'Ahoada East', stateCode: 'NG-RI' },
-    { code: 'NG-RI-AW', name: 'Ahoada West', stateCode: 'NG-RI' },
-    { code: 'NG-RI-BN', name: 'Bonny', stateCode: 'NG-RI' },
-    { code: 'NG-RI-DE', name: 'Degema', stateCode: 'NG-RI' },
-    { code: 'NG-RI-EM', name: 'Emohua', stateCode: 'NG-RI' },
-    { code: 'NG-RI-EK', name: 'Etche', stateCode: 'NG-RI' },
-    { code: 'NG-RI-GK', name: 'Gokana', stateCode: 'NG-RI' },
-    // Kano (44 LGAs — selected)
-    { code: 'NG-KN-MU', name: 'Kano Municipal', stateCode: 'NG-KN' },
-    { code: 'NG-KN-FB', name: 'Fagge', stateCode: 'NG-KN' },
-    { code: 'NG-KN-DS', name: 'Dala', stateCode: 'NG-KN' },
-    { code: 'NG-KN-GW', name: 'Gwale', stateCode: 'NG-KN' },
-    { code: 'NG-KN-KM', name: 'Kumbotso', stateCode: 'NG-KN' },
-    { code: 'NG-KN-NA', name: 'Nasarawa', stateCode: 'NG-KN' },
-    { code: 'NG-KN-TU', name: 'Tarauni', stateCode: 'NG-KN' },
-    { code: 'NG-KN-UN', name: 'Ungogo', stateCode: 'NG-KN' },
-    // Ogun (20 LGAs — selected)
-    { code: 'NG-OG-AB', name: 'Abeokuta North', stateCode: 'NG-OG' },
-    { code: 'NG-OG-AS', name: 'Abeokuta South', stateCode: 'NG-OG' },
-    { code: 'NG-OG-AD', name: 'Ado-Odo/Ota', stateCode: 'NG-OG' },
-    { code: 'NG-OG-EW', name: 'Ewekoro', stateCode: 'NG-OG' },
-    { code: 'NG-OG-IK', name: 'Ifo', stateCode: 'NG-OG' },
-    { code: 'NG-OG-SA', name: 'Sagamu', stateCode: 'NG-OG' },
-    // Delta (25 LGAs — selected)
-    { code: 'NG-DE-AS', name: 'Asaba', stateCode: 'NG-DE' },
-    { code: 'NG-DE-WA', name: 'Warri South', stateCode: 'NG-DE' },
-    { code: 'NG-DE-WN', name: 'Warri North', stateCode: 'NG-DE' },
-    { code: 'NG-DE-WW', name: 'Warri West', stateCode: 'NG-DE' },
-    { code: 'NG-DE-UV', name: 'Uvwie', stateCode: 'NG-DE' },
-    // Anambra (21 LGAs — selected)
-    { code: 'NG-AN-AW', name: 'Awka North', stateCode: 'NG-AN' },
-    { code: 'NG-AN-AS', name: 'Awka South', stateCode: 'NG-AN' },
-    { code: 'NG-AN-ON', name: 'Onitsha North', stateCode: 'NG-AN' },
-    { code: 'NG-AN-OS', name: 'Onitsha South', stateCode: 'NG-AN' },
-    { code: 'NG-AN-IN', name: 'Idemili North', stateCode: 'NG-AN' },
-    // Enugu (17 LGAs — selected)
-    { code: 'NG-EN-EN', name: 'Enugu East', stateCode: 'NG-EN' },
-    { code: 'NG-EN-EW', name: 'Enugu West', stateCode: 'NG-EN' },
-    { code: 'NG-EN-EN', name: 'Enugu North', stateCode: 'NG-EN' },
-    // Kaduna (23 LGAs — selected)
-    { code: 'NG-KD-KN', name: 'Kaduna North', stateCode: 'NG-KD' },
-    { code: 'NG-KD-KS', name: 'Kaduna South', stateCode: 'NG-KD' },
-    { code: 'NG-KD-ZA', name: 'Zaria', stateCode: 'NG-KD' },
+    ...lgasFor('NG-AB', ['Aba North', 'Aba South', 'Arochukwu', 'Bende', 'Ikwuano', 'Isiala Ngwa North', 'Isiala Ngwa South', 'Isuikwuato', 'Obi Ngwa', 'Ohafia', 'Osisioma', 'Ugwunagbo', 'Ukwa East', 'Ukwa West', 'Umuahia North', 'Umuahia South', 'Umu Nneochi']),
+    ...lgasFor('NG-AD', ['Demsa', 'Fufure', 'Ganye', 'Girei', 'Gombi', 'Guyuk', 'Hong', 'Jada', 'Lamurde', 'Madagali', 'Maiha', 'Mayo-Belwa', 'Michika', 'Mubi North', 'Mubi South', 'Numan', 'Shelleng', 'Song', 'Toungo', 'Yola North', 'Yola South']),
+    ...lgasFor('NG-AK', ['Abak', 'Eastern Obolo', 'Eket', 'Esit Eket', 'Essien Udim', 'Etim Ekpo', 'Etinan', 'Ibeno', 'Ibesikpo Asutan', 'Ibiono Ibom', 'Ika', 'Ikono', 'Ikot Abasi', 'Ikot Ekpene', 'Ini', 'Itu', 'Mbo', 'Mkpat Enin', 'Nsit Atai', 'Nsit Ibom', 'Nsit Ubium', 'Obot Akara', 'Okobo', 'Onna', 'Oron', 'Oruk Anam', 'Udung Uko', 'Ukanafun', 'Uruan', 'Urue-Offong/Oruko', 'Uyo']),
+    ...lgasFor('NG-AN', ['Aguata', 'Anambra East', 'Anambra West', 'Anaocha', 'Awka North', 'Awka South', 'Ayamelum', 'Dunukofia', 'Ekwusigo', 'Idemili North', 'Idemili South', 'Ihiala', 'Njikoka', 'Nnewi North', 'Nnewi South', 'Ogbaru', 'Onitsha North', 'Onitsha South', 'Orumba North', 'Orumba South', 'Oyi']),
+    ...lgasFor('NG-BA', ['Alkaleri', 'Bauchi', 'Bogoro', 'Damban', 'Darazo', 'Dass', 'Gamawa', 'Ganjuwa', 'Giade', "Itas/Gadau", "Jama'are", 'Katagum', 'Kirfi', 'Misau', 'Ningi', 'Shira', 'Tafawa Balewa', 'Toro', 'Warji', 'Zaki']),
+    ...lgasFor('NG-BY', ['Brass', 'Ekeremor', 'Kolokuma/Opokuma', 'Nembe', 'Ogbia', 'Sagbama', 'Southern Ijaw', 'Yenagoa']),
+    ...lgasFor('NG-BE', ['Ado', 'Agatu', 'Apa', 'Buruku', 'Gboko', 'Guma', 'Gwer East', 'Gwer West', 'Katsina-Ala', 'Konshisha', 'Kwande', 'Logo', 'Makurdi', 'Obi', 'Ogbadibo', 'Ohimini', 'Oju', 'Okpokwu', 'Otukpo', 'Tarka', 'Ukum', 'Ushongo', 'Vandeikya']),
+    ...lgasFor('NG-BO', ['Abadam', 'Askira/Uba', 'Bama', 'Bayo', 'Biu', 'Chibok', 'Damboa', 'Dikwa', 'Gubio', 'Guzamala', 'Gwoza', 'Hawul', 'Jere', 'Kaga', 'Kala/Balge', 'Konduga', 'Kukawa', 'Kwaya Kusar', 'Mafa', 'Magumeri', 'Maiduguri', 'Marte', 'Mobbar', 'Monguno', 'Ngala', 'Nganzai', 'Shani']),
+    ...lgasFor('NG-CR', ['Abi', 'Akamkpa', 'Akpabuyo', 'Bakassi', 'Bekwarra', 'Biase', 'Boki', 'Calabar Municipal', 'Calabar South', 'Etung', 'Ikom', 'Obanliku', 'Obubra', 'Obudu', 'Odukpani', 'Ogoja', 'Yakuur', 'Yala']),
+    ...lgasFor('NG-DE', ['Aniocha North', 'Aniocha South', 'Bomadi', 'Burutu', 'Ethiope East', 'Ethiope West', 'Ika North East', 'Ika South', 'Isoko North', 'Isoko South', 'Ndokwa East', 'Ndokwa West', 'Okpe', 'Oshimili North', 'Oshimili South', 'Patani', 'Sapele', 'Udu', 'Ughelli North', 'Ughelli South', 'Ukwuani', 'Uvwie', 'Warri North', 'Warri South', 'Warri South West']),
+    ...lgasFor('NG-EB', ['Abakaliki', 'Afikpo North', 'Afikpo South', 'Ebonyi', 'Ezza North', 'Ezza South', 'Ikwo', 'Ishielu', 'Ivo', 'Izzi', 'Ohaozara', 'Ohaukwu', 'Onicha']),
+    ...lgasFor('NG-ED', ['Akoko-Edo', 'Egor', 'Esan Central', 'Esan North-East', 'Esan South-East', 'Esan West', 'Etsako Central', 'Etsako East', 'Etsako West', 'Igueben', 'Ikpoba Okha', 'Orhionmwon', 'Oredo', 'Ovia North-East', 'Ovia South-West', 'Owan East', 'Owan West', 'Uhunmwonde']),
+    ...lgasFor('NG-EK', ['Ado Ekiti', 'Efon', 'Ekiti East', 'Ekiti South-West', 'Ekiti West', 'Emure', 'Gbonyin', 'Ido Osi', 'Ijero', 'Ikere', 'Ikole', 'Ilejemeje', 'Irepodun/Ifelodun', 'Ise/Orun', 'Moba', 'Oye']),
+    ...lgasFor('NG-EN', ['Aninri', 'Awgu', 'Enugu East', 'Enugu North', 'Enugu South', 'Ezeagu', 'Igbo Etiti', 'Igbo Eze North', 'Igbo Eze South', 'Isi Uzo', 'Nkanu East', 'Nkanu West', 'Nsukka', 'Oji River', 'Udenu', 'Udi', 'Uzo Uwani']),
+    ...lgasFor('NG-FC', ['Abaji', 'Abuja Municipal', 'Bwari', 'Gwagwalada', 'Kuje', 'Kwali']),
+    ...lgasFor('NG-GO', ['Akko', 'Balanga', 'Billiri', 'Dukku', 'Funakaye', 'Gombe', 'Kaltungo', 'Kwami', 'Nafada', 'Shongom', 'Yamaltu/Deba']),
+    ...lgasFor('NG-IM', ['Aboh Mbaise', 'Ahiazu Mbaise', 'Ehime Mbano', 'Ezinihitte', 'Ideato North', 'Ideato South', 'Ihitte/Uboma', 'Ikeduru', 'Isiala Mbano', 'Isu', 'Mbaitoli', 'Ngor Okpala', 'Njaba', 'Nkwerre', 'Nwangele', 'Obowo', 'Oguta', 'Ohaji/Egbema', 'Okigwe', 'Orlu', 'Orsu', 'Oru East', 'Oru West', 'Owerri Municipal', 'Owerri North', 'Owerri West', 'Unuimo']),
+    ...lgasFor('NG-JI', ['Auyo', 'Babura', 'Biriniwa', 'Birnin Kudu', 'Buji', 'Dutse', 'Gagarawa', 'Garki', 'Gumel', 'Guri', 'Gwaram', 'Gwiwa', 'Hadejia', 'Jahun', 'Kafin Hausa', 'Kaugama', 'Kazaure', 'Kiri Kasama', 'Kiyawa', 'Maigatari', 'Malam Madori', 'Miga', 'Ringim', 'Roni', 'Sule Tankarkar', 'Taura', 'Yankwashi']),
+    ...lgasFor('NG-KD', ['Birnin Gwari', 'Chikun', 'Giwa', 'Igabi', 'Ikara', 'Jaba', "Jema'a", 'Kachia', 'Kaduna North', 'Kaduna South', 'Kagarko', 'Kajuru', 'Kaura', 'Kauru', 'Kubau', 'Kudan', 'Lere', 'Makarfi', 'Sabon Gari', 'Sanga', 'Soba', 'Zangon Kataf', 'Zaria']),
+    ...lgasFor('NG-KN', ['Ajingi', 'Albasu', 'Bagwai', 'Bebeji', 'Bichi', 'Bunkure', 'Dala', 'Dambatta', 'Dawakin Kudu', 'Dawakin Tofa', 'Doguwa', 'Fagge', 'Gabasawa', 'Garko', 'Garun Mallam', 'Gaya', 'Gezawa', 'Gwale', 'Gwarzo', 'Kabo', 'Kano Municipal', 'Karaye', 'Kibiya', 'Kiru', 'Kumbotso', 'Kunchi', 'Kura', 'Madobi', 'Makoda', 'Minjibir', 'Nasarawa', 'Rano', 'Rimin Gado', 'Rogo', 'Shanono', 'Sumaila', 'Takai', 'Tarauni', 'Tofa', 'Tsanyawa', 'Tudun Wada', 'Ungogo', 'Warawa', 'Wudil']),
+    ...lgasFor('NG-KT', ['Bakori', 'Batagarawa', 'Batsari', 'Baure', 'Bindawa', 'Charanchi', 'Dandume', 'Danja', 'Dan Musa', 'Daura', 'Dutsi', "Dutsin-Ma", 'Faskari', 'Funtua', 'Ingawa', 'Jibia', 'Kafur', 'Kaita', 'Kankara', 'Kankia', 'Katsina', 'Kurfi', 'Kusada', "Mai'Adua", 'Malumfashi', 'Mani', 'Mashi', 'Matazu', 'Musawa', 'Rimi', 'Sabuwa', 'Safana', 'Sandamu', 'Zango']),
+    ...lgasFor('NG-KE', ['Aleiro', 'Arewa Dandi', 'Argungu', 'Augie', 'Bagudo', 'Birnin Kebbi', 'Bunza', 'Dandi', 'Fakai', 'Gwandu', 'Jega', 'Kalgo', 'Koko/Besse', 'Maiyama', 'Ngaski', 'Sakaba', 'Shanga', 'Suru', 'Wasagu/Danko', 'Yauri', 'Zuru']),
+    ...lgasFor('NG-KO', ['Adavi', 'Ajaokuta', 'Ankpa', 'Bassa', 'Dekina', 'Ibaji', 'Idah', 'Igalamela Odolu', 'Ijumu', 'Kabba/Bunu', 'Kogi', 'Lokoja', 'Mopa Muro', 'Ofu', 'Ogori/Magongo', 'Okehi', 'Okene', 'Olamaboro', 'Omala', 'Yagba East', 'Yagba West']),
+    ...lgasFor('NG-KW', ['Asa', 'Baruten', 'Edu', 'Ekiti', 'Ifelodun', 'Ilorin East', 'Ilorin South', 'Ilorin West', 'Irepodun', 'Isin', 'Kaiama', 'Moro', 'Offa', 'Oke Ero', 'Oyun', 'Pategi']),
+    ...lgasFor('NG-LA', ['Agege', 'Ajeromi-Ifelodun', 'Alimosho', 'Amuwo-Odofin', 'Apapa', 'Badagry', 'Epe', 'Eti-Osa', 'Ibeju-Lekki', 'Ifako-Ijaiye', 'Ikeja', 'Ikorodu', 'Isale-Eko', 'Kosofe', 'Lagos Island', 'Lagos Mainland', 'Mushin', 'Ojo', 'Oshodi-Isolo', 'Somolu']),
+    ...lgasFor('NG-NA', ['Akwanga', 'Awe', 'Doma', 'Karu', 'Keana', 'Keffi', 'Kokona', 'Lafia', 'Nasarawa', 'Nasarawa Egon', 'Obi', 'Toto', 'Wamba']),
+    ...lgasFor('NG-NI', ['Agaie', 'Agwara', 'Bida', 'Borgu', 'Bosso', 'Chanchaga', 'Edati', 'Gbako', 'Gurara', 'Katcha', 'Kontagora', 'Lapai', 'Lavun', 'Magama', 'Mariga', 'Mashegu', 'Mokwa', 'Moya', 'Paikoro', 'Rafi', 'Rijau', 'Shiroro', 'Suleja', 'Tafa', 'Wushishi']),
+    ...lgasFor('NG-OG', ['Abeokuta North', 'Abeokuta South', 'Ado-Odo/Ota', 'Egbado North', 'Egbado South', 'Ewekoro', 'Ifo', 'Ijebu East', 'Ijebu North', 'Ijebu North East', 'Ijebu Ode', 'Ikenne', 'Imeko Afon', 'Ipokia', 'Obafemi Owode', 'Odeda', 'Odogbolu', 'Ogun Waterside', 'Remo North', 'Sagamu']),
+    ...lgasFor('NG-ON', ['Akoko North-East', 'Akoko North-West', 'Akoko South-West', 'Akoko South-East', 'Akure North', 'Akure South', 'Ese Odo', 'Idanre', 'Ifedore', 'Ilaje', 'Ile Oluji/Okeigbo', 'Irele', 'Odigbo', 'Okitipupa', 'Ondo East', 'Ondo West', 'Ose', 'Owo']),
+    ...lgasFor('NG-OS', ['Aiyedaade', 'Aiyedire', 'Atakunmosa East', 'Atakunmosa West', 'Boluwaduro', 'Boripe', 'Ede North', 'Ede South', 'Egbedore', 'Ejigbo', 'Ife Central', 'Ife East', 'Ife North', 'Ife South', 'Ifedayo', 'Ifelodun', 'Ila', 'Ilesa East', 'Ilesa West', 'Irepodun', 'Irewole', 'Isokan', 'Iwo', 'Obokun', 'Odo Otin', 'Ola Oluwa', 'Olorunda', 'Oriade', 'Orolu', 'Osogbo']),
+    ...lgasFor('NG-OY', ['Afijio', 'Akinyele', 'Atiba', 'Atisbo', 'Egbeda', 'Ibadan North', 'Ibadan North-East', 'Ibadan North-West', 'Ibadan South-East', 'Ibadan South-West', 'Ibarapa Central', 'Ibarapa East', 'Ibarapa North', 'Ido', 'Irepo', 'Iseyin', 'Itesiwaju', 'Iwajowa', 'Kajola', 'Lagelu', 'Ogbomosho North', 'Ogbomosho South', 'Ogo Oluwa', 'Olorunsogo', 'Oluyole', 'Ona Ara', 'Orelope', 'Ori Ire', 'Oyo East', 'Oyo West', 'Saki East', 'Saki West', 'Surulere']),
+    ...lgasFor('NG-PL', ['Bokkos', 'Barkin Ladi', 'Bassa', 'Jos East', 'Jos North', 'Jos South', 'Kanam', 'Kanke', 'Langtang North', 'Langtang South', 'Mangu', 'Mikang', 'Pankshin', "Qua'an Pan", 'Riyom', 'Shendam', 'Wase']),
+    ...lgasFor('NG-RI', ['Abua/Odual', 'Ahoada East', 'Ahoada West', 'Akuku-Toru', 'Andoni', 'Asari-Toru', 'Bonny', 'Degema', 'Eleme', 'Emohua', 'Etche', 'Gokana', 'Ikwerre', 'Khana', 'Obio/Akpor', 'Ogba/Egbema/Ndoni', 'Ogu/Bolo', 'Okrika', 'Omuma', 'Opobo/Nkoro', 'Oyigbo', 'Port Harcourt', 'Tai']),
+    ...lgasFor('NG-SO', ['Binji', 'Bodinga', 'Dange Shuni', 'Gada', 'Goronyo', 'Gudu', 'Gwadabawa', 'Illela', 'Isa', 'Kebbe', 'Kware', 'Rabah', 'Sabon Birni', 'Shagari', 'Silame', 'Sokoto North', 'Sokoto South', 'Tambuwal', 'Tangaza', 'Tureta', 'Wamako', 'Wurno', 'Yabo']),
+    ...lgasFor('NG-TA', ['Ardo Kola', 'Bali', 'Donga', 'Gashaka', 'Gassol', 'Ibi', 'Jalingo', 'Karim Lamido', 'Kurmi', 'Lau', 'Sardauna', 'Takum', 'Ussa', 'Wukari', 'Yorro', 'Zing']),
+    ...lgasFor('NG-YO', ['Bade', 'Bursari', 'Damaturu', 'Fika', 'Fune', 'Geidam', 'Gujba', 'Gulani', 'Jakusko', 'Karasuwa', 'Machina', 'Nangere', 'Nguru', 'Potiskum', 'Tarmuwa', 'Yunusari', 'Yusufari']),
+    ...lgasFor('NG-ZA', ['Anka', 'Bakura', 'Birnin Magaji/Kiyaw', 'Bukkuyum', 'Bungudu', 'Gummi', 'Gusau', 'Kaura Namoda', 'Maradun', 'Maru', 'Shinkafi', 'Talata Mafara', 'Tsafe', 'Zurmi']),
   ];
 
-  // Remove duplicate codes (Enugu North/East share code)
-  const uniqueLgas = lgas.filter(
-    (lga, idx, arr) => arr.findIndex((l) => l.code === lga.code) === idx,
-  );
-  await prisma.lga.createMany({ data: uniqueLgas, skipDuplicates: true });
-  console.log('  ✓ lgas');
+  await prisma.lga.createMany({ data: lgas, skipDuplicates: true });
+  console.log(`  ✓ lgas (${lgas.length})`);
 
   // Countries (ISO 3166-1 — Africa + major trading partners)
   await prisma.country.createMany({
