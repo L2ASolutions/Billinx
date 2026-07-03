@@ -71,11 +71,13 @@ interface RecordPaymentForm {
 interface PaymentStats {
   totalBilled: number;
   totalCollected: number;
+  totalOutstanding: number;
   collectionRate: number;
   paidInFull: number;
   partiallyPaid: number;
   unpaidNotDue: number;
   overdue: number;
+  overdueAmount: number;
   providerBreakdown: Array<{ provider: string; total: number }>;
 }
 
@@ -512,16 +514,11 @@ export default function PaymentsPage() {
       .finally(() => setChartsLoading(false));
   }, []);
 
-  const totalBilled = invoices.reduce((s, i) => s + effectiveAmount(i), 0);
-  const totalCollected = invoices.reduce((s, i) => s + Number(i.amountPaid ?? 0), 0);
-  const totalOutstanding = invoices.reduce((s, i) => {
-    if (i.paymentStatus === "PAID") return s;
-    return s + Math.max(0, effectiveAmount(i) - Number(i.amountPaid ?? 0));
-  }, 0);
-  const overdueCount = invoices.filter(isRowOverdue).length;
-  const overdueAmount = invoices
-    .filter(isRowOverdue)
-    .reduce((s, i) => s + calcRemaining(i), 0);
+  const totalBilled = paymentStats?.totalBilled ?? 0;
+  const totalCollected = paymentStats?.totalCollected ?? 0;
+  const totalOutstanding = paymentStats?.totalOutstanding ?? 0;
+  const overdueCount = paymentStats?.overdue ?? 0;
+  const overdueAmount = paymentStats?.overdueAmount ?? 0;
 
   async function handleRecordPayment() {
     if (!recordFor) return;
@@ -570,13 +567,13 @@ export default function PaymentsPage() {
               ].map(({ label, value, cls }) => (
                 <div key={label} className="bg-white rounded-xl border border-border p-5">
                   <p className="text-xs font-medium text-muted uppercase tracking-wide mb-2">{label}</p>
-                  {loading ? <Sk className="h-8 w-24" /> : <p className={`text-2xl font-bold ${cls}`}>{value}</p>}
+                  {statsLoading ? <Sk className="h-8 w-24" /> : <p className={`text-2xl font-bold ${cls}`}>{value}</p>}
                 </div>
               ))}
             </div>
 
             {/* Overdue alert banner */}
-            {!loading && overdueCount > 0 && (
+            {!statsLoading && overdueCount > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 flex items-center gap-3">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                   strokeWidth="2" className="text-red-600 shrink-0">

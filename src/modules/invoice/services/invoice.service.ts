@@ -144,6 +144,7 @@ export class InvoiceService {
       buyerName: request.buyer?.partyName,
       issueDate: new Date(request.issueDate),
       dueDate: request.dueDate ? new Date(request.dueDate) : null,
+      paymentDueDate: request.dueDate ? new Date(request.dueDate) : null,
       taxPointDate: request.taxPointDate
         ? new Date(request.taxPointDate)
         : null,
@@ -356,6 +357,9 @@ export class InvoiceService {
           dueDate: request.dueDate
             ? new Date(request.dueDate)
             : (invoice as any).dueDate,
+          paymentDueDate: request.dueDate
+            ? new Date(request.dueDate)
+            : (invoice as any).paymentDueDate,
           currency: request.currency ?? invoice.currency,
           invoiceKind: request.invoiceKind ?? (invoice as any).invoiceKind,
           subtotal:
@@ -928,17 +932,26 @@ export class InvoiceService {
       });
       const totalBilled = Number(billedAgg._sum.totalAmount ?? 0);
       const totalCollected = Number(collectedAgg._sum.amount ?? 0);
+      const totalOutstanding = Math.max(0, totalBilled - totalCollected);
       const collectionRate = totalBilled > 0
         ? Math.round((totalCollected / totalBilled) * 100)
         : 0;
 
-      const [paidInFull, partiallyPaid, overdue, accepted] = await Promise.all([
+      const [paidInFull, partiallyPaid, overdue, accepted, overdueInvoices] = await Promise.all([
         tx.invoice.count({ where: { tenantId, status: 'ACCEPTED', paymentStatus: 'PAID' } }),
         tx.invoice.count({ where: { tenantId, status: 'ACCEPTED', paymentStatus: 'PARTIAL' } }),
         tx.invoice.count({ where: { tenantId, status: 'ACCEPTED', isOverdue: true } }),
         tx.invoice.count({ where: { tenantId, status: 'ACCEPTED' } }),
+        tx.invoice.findMany({
+          where: { tenantId, status: 'ACCEPTED', isOverdue: true },
+          select: { totalAmount: true, amountPaid: true },
+        }),
       ]);
       const unpaidNotDue = accepted - paidInFull - partiallyPaid - overdue;
+      const overdueAmount = overdueInvoices.reduce(
+        (sum, inv) => sum + Math.max(0, Number(inv.totalAmount) - Number(inv.amountPaid ?? 0)),
+        0,
+      );
 
       const providerRows = await (tx as any).paymentRecord.groupBy({
         by: ['provider'],
@@ -958,11 +971,13 @@ export class InvoiceService {
       return {
         totalBilled,
         totalCollected,
+        totalOutstanding,
         collectionRate,
         paidInFull,
         partiallyPaid,
         unpaidNotDue: Math.max(0, unpaidNotDue),
         overdue,
+        overdueAmount,
         providerBreakdown,
       };
     });
@@ -1271,6 +1286,7 @@ export class InvoiceService {
       buyerName: request.buyer?.partyName ?? '',
       issueDate: request.issueDate ? new Date(request.issueDate) : new Date(),
       dueDate: request.dueDate ? new Date(request.dueDate) : null,
+      paymentDueDate: request.dueDate ? new Date(request.dueDate) : null,
       currency: request.currency ?? 'NGN',
       subtotal: request.legalMonetaryTotal?.lineExtensionAmount ?? 0,
       vatAmount: (request.taxTotal ?? []).reduce(
@@ -1347,6 +1363,9 @@ export class InvoiceService {
             ? new Date(body.issueDate)
             : invoice.issueDate,
           dueDate: body.dueDate ? new Date(body.dueDate) : invoice.dueDate,
+          paymentDueDate: body.dueDate
+            ? new Date(body.dueDate)
+            : (invoice as any).paymentDueDate,
           currency: body.currency ?? invoice.currency,
           invoiceKind: body.invoiceKind ?? invoice.invoiceKind,
           subtotal:
