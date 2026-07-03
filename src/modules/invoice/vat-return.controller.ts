@@ -191,6 +191,5 @@ export class VatReturnController {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
     await workbook.xlsx.write(res);
-    res.end();
   }
 }
