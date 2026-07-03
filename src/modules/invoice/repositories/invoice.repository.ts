@@ -74,7 +74,13 @@ export class InvoiceRepository {
     if (filters.paymentStatus) where.paymentStatus = filters.paymentStatus;
     if (filters.isOverdue) {
       where.isOverdue = true;
-      where.paymentStatus = { not: 'PAID' };
+      // paymentStatus is nullable and defaults to null until a payment is
+      // recorded, so `{ not: 'PAID' }` alone drops those rows under SQL's
+      // three-valued NULL logic — explicitly include null alongside not-PAID.
+      where.AND = [
+        ...(where.AND ?? []),
+        { OR: [{ paymentStatus: null }, { paymentStatus: { not: 'PAID' } }] },
+      ];
     }
     if (filters.forPayments) {
       where.status = {
@@ -82,7 +88,7 @@ export class InvoiceRepository {
       };
       where.NOT = {
         AND: [
-          { OR: [{ buyerName: null }, { buyerName: '' }] },
+          { buyerName: '' },
           { OR: [{ buyerTin: null }, { buyerTin: '' }] },
         ],
       };
