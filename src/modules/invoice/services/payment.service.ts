@@ -230,7 +230,10 @@ export class PaymentService {
           status: 'ACCEPTED',
           isOverdue: false,
           paymentDueDate: { lt: now },
-          paymentStatus: { not: 'PAID' },
+          // paymentStatus defaults to null until a payment is recorded, and
+          // SQL's three-valued NULL logic means `{ not: 'PAID' }` alone would
+          // silently drop those rows — explicitly include null alongside not-PAID.
+          OR: [{ paymentStatus: null }, { paymentStatus: { not: 'PAID' } }],
         },
         select: {
           id: true,
