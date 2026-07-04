@@ -2,7 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../infrastructure/database/prisma.service';
 import { RedisService } from '../shared/redis/redis.service';
-import { submissionQueue } from '../modules/submission/queues/submission.queue';
+import { getSubmissionQueue } from '../modules/submission/queues/submission.queue';
 
 @ApiTags('Health')
 @Controller()
@@ -39,7 +39,7 @@ export class HealthController {
 
     let queueDepth = 0;
     try {
-      const counts = await submissionQueue.getJobCounts();
+      const counts = await getSubmissionQueue().getJobCounts();
       queueDepth =
         (counts.waiting ?? 0) + (counts.active ?? 0) + (counts.delayed ?? 0);
     } catch {
