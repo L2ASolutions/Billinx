@@ -1,20 +1,22 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { vatReminderQueue } from './vat-reminder.queue';
+import { getVatReminderQueue } from './vat-reminder.queue';
 
 @Injectable()
 export class VatReminderScheduler implements OnModuleInit {
   private readonly logger = new Logger(VatReminderScheduler.name);
 
   async onModuleInit() {
+    const queue = getVatReminderQueue();
+
     // Remove stale copies so config changes take effect on restart
-    const existing = await vatReminderQueue.getRepeatableJobs();
+    const existing = await queue.getRepeatableJobs();
     for (const job of existing) {
       if (job.name === 'vat-return-reminder') {
-        await vatReminderQueue.removeRepeatableByKey(job.key);
+        await queue.removeRepeatableByKey(job.key);
       }
     }
 
-    await vatReminderQueue.add(
+    await queue.add(
       'vat-return-reminder',
       {},
       {

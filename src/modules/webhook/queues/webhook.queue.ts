@@ -7,9 +7,13 @@ export const WEBHOOK_QUEUE_NAME = 'webhook-delivery';
 
 export const webhookRedisConnection = buildRedisConnectionOptions();
 
-export const webhookQueue = new Queue<WebhookDeliveryJobData>(
-  WEBHOOK_QUEUE_NAME,
-  {
+let queueInstance: Queue<WebhookDeliveryJobData> | undefined;
+
+// Lazily constructed so importing this module (e.g. transitively, via
+// WebhookService/WebhookController) never opens a live Redis connection by
+// itself — only actually enqueuing a delivery does.
+function getWebhookQueue(): Queue<WebhookDeliveryJobData> {
+  queueInstance ??= new Queue<WebhookDeliveryJobData>(WEBHOOK_QUEUE_NAME, {
     connection: webhookRedisConnection,
     defaultJobOptions: {
       attempts: 3,
@@ -17,14 +21,15 @@ export const webhookQueue = new Queue<WebhookDeliveryJobData>(
       removeOnComplete: { count: 200 },
       removeOnFail: { count: 500 },
     },
-  },
-);
+  });
+  return queueInstance;
+}
 
 export async function addToWebhookQueue(
   data: WebhookDeliveryJobData,
 ): Promise<void> {
   const logger = new Logger('WebhookQueue');
-  await webhookQueue.add('deliver-webhook', data, {
+  await getWebhookQueue().add('deliver-webhook', data, {
     jobId: `webhook-${data.deliveryId}`,
   });
   logger.log(`Webhook delivery ${data.deliveryId} enqueued`);
