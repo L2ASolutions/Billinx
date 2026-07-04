@@ -109,6 +109,7 @@ export class UserController {
 
   @Post('auth/reset-password')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Reset password using reset token' })
   async resetPassword(@Body() body: ResetPasswordDto) {
     return this.userService.resetPassword(body);
@@ -116,6 +117,7 @@ export class UserController {
 
   @Post('auth/accept-invitation')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Accept invitation and set password' })
   async acceptInvitation(
     @Body() body: Record<string, any>,
@@ -481,6 +483,7 @@ export class UserController {
   // ── Public: request access ────────────────────────────────────────────────
   @Post('request-access')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Request access to Billinx platform' })
   async requestAccess(@Body() body: Record<string, any>, @Req() req: Request) {
     return this.userService.requestAccess(
