@@ -1,6 +1,7 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ReferenceDataService } from './reference-data.service';
+import { ReferenceSearchRateLimitGuard } from '../../shared/guards/reference-search-rate-limit.guard';
 
 @ApiTags('Reference Data')
 @Controller('v1/reference')
@@ -32,6 +33,7 @@ export class ReferenceDataController {
   }
 
   @Get('hs-codes')
+  @UseGuards(ReferenceSearchRateLimitGuard)
   @ApiOperation({ summary: 'Search HS codes by code or description' })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -49,6 +51,7 @@ export class ReferenceDataController {
   }
 
   @Get('service-codes')
+  @UseGuards(ReferenceSearchRateLimitGuard)
   @ApiOperation({ summary: 'Search service codes by code or description' })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'limit', required: false, type: Number })
