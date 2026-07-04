@@ -11,11 +11,13 @@ import {
   Req,
   RawBodyRequest,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
 import * as crypto from 'crypto';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PaymentProviderService } from './payment.service';
+import { PaymentRateLimitGuard } from '../../shared/guards/payment-rate-limit.guard';
 
 @ApiTags('Payments')
 @Controller('v1/payments')
@@ -28,6 +30,7 @@ export class PaymentController {
 
   @Post('paystack/initialize')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(PaymentRateLimitGuard)
   @ApiOperation({ summary: 'Initialize a Paystack payment for an invoice' })
   async paystackInitialize(@Body() body: Record<string, any>) {
     return this.paymentService.paystackInitialize(
@@ -37,6 +40,7 @@ export class PaymentController {
   }
 
   @Get('paystack/verify/:reference')
+  @UseGuards(PaymentRateLimitGuard)
   @ApiOperation({ summary: 'Verify a Paystack payment by reference' })
   async paystackVerify(@Param('reference') reference: string) {
     return this.paymentService.paystackVerify(reference);
@@ -69,6 +73,7 @@ export class PaymentController {
 
   @Post('flutterwave/initialize')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(PaymentRateLimitGuard)
   @ApiOperation({ summary: 'Initialize a Flutterwave payment for an invoice' })
   async flutterwaveInitialize(@Body() body: Record<string, any>) {
     return this.paymentService.flutterwaveInitialize(
