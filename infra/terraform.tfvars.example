@@ -25,6 +25,11 @@ environment = "production"
 # Email for CloudWatch alarm notifications (leave empty to disable email alerts)
 alert_email = "devops@l2asolutions.com"
 
+# Comma-separated IPs/CIDRs allowed to reach /v1/admin routes.
+# REQUIRED for production — AdminIpGuard fails OPEN (allows all IPs) if left empty.
+# Example: office IP + L2A staff VPN range.
+admin_allowed_ips = "203.0.113.42,10.8.0.0/24"
+
 # ── Networking ────────────────────────────────────────────────────────────────
 
 vpc_cidr             = "10.0.0.0/16"

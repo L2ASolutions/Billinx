@@ -37,15 +37,24 @@ billinx/
 │   │   ├── user/          Users, roles, MFA, invitations, access requests
 │   │   ├── invoice/       Invoice CRUD + IRN generation + state machine
 │   │   ├── submission/    Async FIRS submission queue (BullMQ) + adapters
-│   │   ├── compliance/    FIRS validation rules
-│   │   ├── validation/    Data validation layer
+│   │   ├── (compliance/ and validation/ do NOT exist as directories — FIRS
+│   │   │     validation logic lives inline in invoice.service.ts, see below)
 │   │   ├── webhook/       Subscriptions + HMAC-signed event delivery
 │   │   ├── activity/      Activity events + system error tracking
 │   │   ├── kyb/           Know Your Business (CAC verification + risk scoring)
 │   │   ├── admin/         L2A Solutions staff portal
 │   │   ├── consent/       NDPA 2023 consent + right-to-erasure
 │   │   ├── product-catalog/ Tenant product catalog; /v1/products CRUD + line-item formatter
-│   │   └── export/        Compliance CSV/JSON/monthly export + platform-wide admin export
+│   │   ├── export/        Compliance CSV/JSON/monthly export + platform-wide admin export
+│   │   ├── reference-data/ Public FIRS lookup tables (invoice types, HS codes, states/LGAs, etc.)
+│   │   ├── incoming-invoice/ Purchase invoice lifecycle: validate/approve/reject/mark-paid/attachments
+│   │   ├── vat/           VAT Return Assistant: summary, annual summary, entries, reconciliation
+│   │   ├── payment/       Paystack/Flutterwave invoice payment initiation + webhooks
+│   │   ├── client/        Tenant customer/client CRUD + frequent-clients list
+│   │   ├── analytics/     Top items/purchases/suppliers/clients, price trends, revenue-vs-expenses
+│   │   ├── inventory/     Stock movements, low-stock alerts, adjustments, reorder
+│   │   ├── notification/  In-app notification feed (list, mark read/read-all)
+│   │   └── reminder/      Tenant-configurable payment reminder rules (/v1/reminder-rules CRUD)
 │   ├── infrastructure/
 │   │   ├── database/      PrismaService (shared DB client, RLS middleware)
 │   │   └── secrets/       SecretsService (AWS Secrets Manager, 5-min cache)
@@ -57,8 +66,8 @@ billinx/
 │       ├── filters/       GlobalExceptionFilter → SystemError table
 │       └── guards/        AuthRateLimitGuard
 ├── prisma/
-│   ├── schema.prisma      Full data model (22 models, 11 enums)
-│   └── migrations/        11 applied migrations (chronological below)
+│   ├── schema.prisma      Full data model (45 models, 21 enums)
+│   └── migrations/        40 applied migrations (chronological below)
 ├── infra/                 Terraform: VPC, ECS Fargate, RDS, ElastiCache, ALB, ECR, Secrets
 ├── scripts/               AWS setup, secret rotation, migration runner, health check
 ├── docs/                  Deployment runbook, NRS/Interswitch API specs, invoice schema
@@ -80,7 +89,7 @@ billinx/
 
 ### tenant
 - Multi-tenant provisioning; every resource is scoped to a `Tenant`
-- **CredentialService** — AES-256-CBC encrypt/decrypt for adapter credentials, webhook signing keys, MFA secrets
+- **CredentialService** — AES-256-GCM encrypt/decrypt for adapter credentials, webhook signing keys, MFA secrets
 - Adapter config stored encrypted: `encryptedCredential + credentialIv`, per-adapter fields
 - Admin-only endpoints: `POST/GET/PATCH/DELETE /v1/tenants`
 
@@ -103,7 +112,7 @@ billinx/
 - Dashboard endpoints (JWT auth) separate from API endpoints (API key auth)
 
 ### submission
-- BullMQ job queue; no controller — purely background workers
+- BullMQ job queue; mostly background workers, plus one route: `GET /v1/submissions/export`
 - **Adapters** (pluggable): `MockAdapter` (dev), `InterswitchAdapter` (production NRS)
 - Max 3 attempts per invoice; final failure → `DEAD_LETTERED`
 - Each attempt stored in `SubmissionAttempt` with full request/response payloads
@@ -140,11 +149,50 @@ billinx/
 - Stores IP, user agent, consent version for audit trail
 - Fire-and-forget from registration/login flows; no controller
 
+### incoming-invoice (`src/modules/incoming-invoice/`)
+- Purchase-invoice lifecycle, mirrors the outbound invoice state machine
+- `POST/GET /v1/incoming-invoices`, `GET .../stats`, `GET .../:id`
+- `PATCH :id/validate`, `PATCH :id/approve`, `PATCH :id/reject`, `PATCH :id/mark-paid`
+- `POST :id/send-receipt`, `POST/GET/DELETE :id/attachment`
+
+### vat (`src/modules/vat/`)
+- VAT Return Assistant backend: `GET /v1/vat/summary`, `.../summary/annual`, `.../entries`
+- `PATCH /v1/vat/entries/:id/reconcile`, `GET /v1/vat/mismatches`
+- Feeds the dashboard VAT return page + Excel export + monthly filing reminder cron
+
+### payment (`src/modules/payment/`)
+- Buyer-facing invoice payment initiation via Paystack and Flutterwave
+- `POST /v1/payments/paystack/initialize`, `GET .../paystack/verify/:reference`, `POST .../paystack/webhook`
+- `POST /v1/payments/flutterwave/initialize`, `POST .../flutterwave/webhook`
+- Webhooks are HMAC-verified; initialize/verify routes are currently **unauthenticated with no rate limiting** — flagged as a hardening gap (see Open Issues)
+- Rolls its own raw `https` request client rather than the providers' SDKs, with regex-based invoice-ID recovery from the payment reference as a fallback when webhook metadata is missing
+
+### client (`src/modules/client/`)
+- Tenant customer/client CRUD: `GET/POST /v1/clients`, `GET .../frequent`, `GET/PATCH/DELETE .../:id`
+
+### analytics (`src/modules/analytics/`)
+- Read-only reporting: `GET /v1/analytics/top-items-sold`, `.../top-purchases`, `.../top-suppliers`, `.../top-clients`, `.../price-trends`, `.../revenue-vs-expenses`
+
+### inventory (`src/modules/inventory/`)
+- Stock tracking for product-catalog items: `GET /v1/inventory`, `.../alerts`, `.../:productId/movements`
+- `POST /v1/inventory/:productId/adjust`, `.../reorder`
+
+### notification (`src/modules/notification/`)
+- In-app notification feed: `GET /v1/notifications`, `PATCH .../read-all`, `PATCH .../:id/read`
+
+### reminder (`src/modules/reminder/`)
+- Tenant-configurable payment reminder rules: `GET/POST /v1/reminder-rules`, `PATCH/DELETE .../:id`
+- Distinct from the invoice-level "Send Reminder" button (`POST /v1/invoices/dashboard/:id/reminder`), which lives in the `invoice` module
+
+---
+
+**Note on architecture drift:** CLAUDE.md previously listed `compliance/` and `validation/` as separate top-level module directories. **They do not exist as separate modules** — FIRS validation logic lives inline inside `invoice.service.ts`'s `validateInvoice()` method, as part of the invoice god-service (see Engineer To-Dos). Treat this doc's old architecture tree as aspirational, not current, until that logic is actually split out.
+
 ---
 
 ## Data Models (Prisma)
 
-22 models. Key ones:
+45 models, 21 enums. Key ones (many newer models — Client, InventoryMovement, Notification, VatEntry, ReminderRule, CreditNote, etc. — omitted here for brevity):
 
 | Model | Purpose |
 |---|---|
@@ -187,13 +235,38 @@ billinx/
 20260516000000_add_kyb
 20260516010000_add_consent
 20260516020000_add_nrs_invoice_fields
+20260517120000_add_row_level_security
 20260517130000_add_data_retention_fields
 20260517140000_add_audit_hash_chaining
 20260517150000_add_product_catalog
 20260517160000_add_bulk_batches         # feat/bulk-processing — BulkBatch model + BulkBatchSource enum
 20260517170000_add_api_key_usage_tracking  # feat/tenant-api-improvements — lastUsedIp, requestCount, expiresAt index
+20260518000000_add_source_reference_index
+20260521000000_add_payment_tracking
+20260521010000_add_reminder_rules
+20260527014408_add_invoice_list_indexes
+20260528000000_add_incoming_invoices
+20260528000000_add_user_preferences
+20260530004420_add_vat_reconciliation
+20260531000000_add_wht_tracking
 20260601000000_add_firs_reference_data  # feat/firs-reference-data — 10 lookup tables (invoice types, payment means, tax categories, currencies, HS/service codes, states, LGAs, countries, quantity codes)
+20260602000000_add_invoice_optional_fields
+20260602100000_add_payment_fields
+20260603023311_add_tenant_tax_representative
+20260603135639_add_industry_phone_to_tenant
+20260603142204_add_invoice_payment_status_index
+20260604100000_add_clients
+20260604200000_add_supplier_bank
+20260605000000_add_inventory
+20260606000000_add_performance_indexes
+20260607000000_add_invoice_attachment
+20260609032519_add_credit_note_model
+20260609035413_add_notification_model
+20260609175435_add_tenant_dashboard_visibility
+20260611000000_make_reminder_log_rule_id_nullable
 ```
+
+40 migrations applied as of 2026-07-04; database schema confirmed in sync via `npx prisma migrate status`.
 
 Run pending migrations: `npx prisma migrate deploy`
 
@@ -328,10 +401,12 @@ terraform apply
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| `deploy.yml` | Push to `main` | Build Docker image → push ECR → Prisma migrate → ECS deploy → health check → auto-rollback on failure |
-| `pr-checks.yml` | Pull request | Lint + type-check + unit tests |
+| `deploy.yml` | **Manual (`workflow_dispatch`)** — not automatic on push to `main` | Test → build Docker image → Trivy scan (CRITICAL/HIGH, blocking) → push ECR → Prisma migrate → ECS deploy → health check → auto-rollback on failure |
+| `pr-checks.yml` | Pull request | Type-check + lint + unit tests + `npm audit --audit-level=high` + Docker build check (no push) |
 
-Deployment pipeline: test → build-and-push → migrate → deploy (needs both build-and-push AND migrate). Auto-rollback: if `/health` fails after 10 retries × 15s, previous ECS task definition is restored.
+Deployment pipeline: test → build-and-push (incl. Trivy image scan) → migrate → deploy (needs both build-and-push AND migrate). Auto-rollback: if `/health` fails after 10 retries × 15s, previous ECS task definition is restored.
+
+No CodeQL/SAST or dedicated secret-scanning (gitleaks/trufflehog) step exists in either workflow — see Open Issues.
 
 ---
 
@@ -440,26 +515,49 @@ Deployment pipeline: test → build-and-push → migrate → deploy (needs both 
 - NDPR compliance required; Data Processing Agreements with Nigerian tech lawyer pending
 - Hosting regions (planned): AWS eu-west-1 and af-south-1
 
-### Current State (as of 2026-06-11)
-- 144+ PRs merged to main
-- 83 tests passing, 5 test suites, 36 DB models, 20 enums
-- Last merged PRs: #144 fix/payments-ui-cleanup, #143 feat/dashboard-role-visibility, #142 fix/credit-note-visibility
+### Current State (as of 2026-07-04)
+- 152+ PRs merged to main (through PR #164)
+- 83 tests passing, 5 test suites, 45 DB models, 21 enums — **test count unchanged since 2026-06-11 despite 35 commits of new feature work since**
+- Last merged PRs: #164 fix/lga-reference-data-and-vat-export, #163 fix/payments-overdue-data-consistency, #161 fix/npm-audit-deps, #160 fix/payments-ssr-auth, #159/#162 dependency bumps
 
-### Open Issues (Medium Severity)
-1. **Ghost endpoints** — frontend calls these but neither exists in any controller (both return 404):
-   - `POST /v1/invoices/dashboard/:id/reminder`
-   - `POST /v1/auth/mfa/resend`
-2. **Thin test coverage** — tests exist only for: auth, invoice flow, XML builder, incoming invoice, VAT service. No tests for: webhooks, payments, admin, submission adapters, or frontend.
+### Open Issues
+
+**Resolved since 2026-06-11 (kept here so nobody re-investigates them):**
+- ~~Ghost endpoint `POST /v1/invoices/dashboard/:id/reminder`~~ — now implemented (`invoice.controller.ts`, "Send Reminder" button on invoice detail page works).
+- ~~Ghost endpoint `POST /v1/auth/mfa/resend`~~ — route now exists, but is a **deliberate permanent stub** that always returns 400 ("TOTP codes are generated by your authenticator app and cannot be resent"). The frontend still shows a "Resend code" link on the MFA login page that can never succeed — needs UX follow-up (remove the link or change copy), not a backend fix.
+
+**Security (from 2026-07-04 audit — see full report in project history for details):**
+1. ~~RSA private key committed to git history~~ — **investigated and downgraded, false alarm.** Commit `3c11a74` (2026-05-16, removed next day in `e4e9248`) added a `DEV_RSA_PRIVATE_KEY` constant that *looks* like a PEM block but fails `openssl rsa -check` — only 3 lines of base64 body, not a parseable RSA-2048 key. It's an inert placeholder string, not real key material, and the code path was gated behind `!isProduction` so it never touched the production signing path. **No rotation needed.** Still worth a git-history cleanup for hygiene (see below) so it doesn't trip future secret scanners as a false positive, but this is not an active exposure.
+2. **Admin IP allowlist (`AdminIpGuard`) fails open** — `ADMIN_ALLOWED_IPS` wasn't set anywhere in infra/ECS config, so every `/v1/admin/*` route was reachable from any IP. **Partially fixed 2026-07-04:** `admin_allowed_ips` is now a real Terraform variable (`infra/variables.tf`), wired into the ECS task env vars (`infra/main.tf`), documented in `infra/terraform.tfvars.example`, and added as a placeholder in `docker/ecs-task-definition.json`. **Still needed before this is actually closed:** (1) the real IP/CIDR list (office IP, staff VPN range, etc. — only Kay/the team knows these), and (2) an engineer with AWS credentials running `terraform apply` to push it to the live ECS service. Not added to `config.validation.ts`'s hard-required production vars — doing so would crash-loop the *entire* app on next deploy if the live infra doesn't have a real value set yet, which couldn't be verified from this environment (no AWS access). Guard still fails open with a warning log until the real value is deployed.
+3. ~~Payment endpoints have no auth or rate limiting~~ — **fixed 2026-07-04.** Added `PaymentRateLimitGuard` (`src/shared/guards/payment-rate-limit.guard.ts`, 10 requests / 5 min per IP, same fixed-window Redis primitive as `AuthRateLimitGuard`/`TenantRateLimitInterceptor`, fails open on Redis outage — consistent with the rest of the app's non-auth rate limiting). Applied to `POST /v1/payments/paystack/initialize`, `GET .../paystack/verify/:reference`, `POST .../flutterwave/initialize`. Webhook receivers were left unguarded by design (already HMAC-verified; rate-limiting them risks dropping legitimate provider retries). Verified live: 11th request in the window correctly returns `429` with `X-RateLimit-*`/`Retry-After` headers; build, full app boot, and existing test suite (83/83) all still pass.
+   - **Still open, not addressed by this fix:** `PaymentProviderService` still rolls its own raw `https` client instead of a vetted Paystack/Flutterwave SDK, with regex-based invoice-ID recovery as a webhook fallback — this is money-handling code with zero test coverage and deserves a focused review pass of its own, separate from the rate-limiting gap.
+4. ~~No rate limiting on `auth/reset-password`, `auth/accept-invitation`, `users/request-access`, `kyb/tin-confirm`, or `reference-data` search endpoints~~ — **fixed 2026-07-04.** `reset-password`, `accept-invitation`, and `request-access` now use the existing `AuthRateLimitGuard` (5/15min per IP, shared bucket with login/register/forgot-password on that same IP — this is existing, intentional behavior, not new). `kyb/tin-confirm` also now uses `AuthRateLimitGuard`. `reference-data`'s `hs-codes`/`service-codes` search endpoints got a new, more generous `ReferenceSearchRateLimitGuard` (60/5min per IP — sized for real usage, since the frontend debounces search input at 300ms and a user builds an invoice with many line items in one sitting; a tight limit would have broken the actual feature). Also fixed the unbounded `limit`/`offset` query params on `hs-codes`/`service-codes` — now clamped server-side to 1–100 / ≥0 regardless of what's requested. All verified live: booted the app, hit each endpoint past its threshold and confirmed `429` + correct `X-RateLimit-*`/`Retry-After` headers; confirmed `limit=99999` clamps to 100 and negative values clamp to the floor; full test suite (83/83) and `tsc`/`nest build` still clean throughout.
+5. `dump.rdb` and `..env.swp` are committed to the repo; neither `*.swp`/`*.swo` nor `dump.rdb` is in `.gitignore`.
+6. Several production env vars aren't validated at startup (silent misconfig risk): `INTERSWITCH_PROD_URL` (falls back to a hardcoded URL if unset), `CAC_API_KEY`, `ADMIN_ALLOWED_IPS`. `NRS_API_BASE_URL` is documented everywhere but unused in code — dead config.
+7. Tenant isolation is correctly implemented everywhere sampled, but relies on ~217 manual `tenantId` checks inside `prisma.asAdmin()` calls rather than a DB-enforced guarantee (Postgres RLS is explicitly bypassed inside those calls) — one missed check in a future PR would silently leak cross-tenant.
+
+**Test coverage** — thinner than previously documented:
+- Real coverage exists only for: invoice-flow, XML builder, incoming-invoice, VAT service (83 tests / 5 suites).
+- **Zero tests** for: identity/auth, tenant, user, webhook, admin, kyb, consent, product-catalog, export, reference-data, submission adapters, and the newer modules — payment, client, analytics, inventory, notification, reminder.
+- Three spec files under `test/unit/` are orphaned — never executed by any npm script because Jest's `rootDir` is scoped to `src/`; one is a stale duplicate missing newer test cases.
+- Frontend has zero test infrastructure (no framework, no config, no test script).
+
+**Dead/misleading UI:**
+- `adminApi.exportPlatformCsv` and `adminApi.unlockAccount` are fully wired in the frontend API client (`lib/api.ts`) but have **no UI caller anywhere** — admin staff cannot actually trigger a platform-wide CSV export or unlock a locked account from any screen today.
+- The "Live chat" support button always falls back to `mailto:` because Intercom is never loaded in the app, despite UI copy promising live chat.
+- Two permanently-disabled "Coming soon" toggles in Settings (POS Integration, Email Invoice Intake) advertise unbuilt features.
 
 ### Engineer To-Dos (do not run through Claude Code without engineering review)
-**Backend refactors:**
-- `invoice.service.ts` — 1,842 lines (god service: create, validate, XML, draft, duplicate, stats, charts, sample)
-- `invoice.controller.ts` — 761 lines (two auth surfaces in one file)
+**Backend refactors — grew, not shrunk, since last noted:**
+- `invoice.service.ts` — now **2,070 lines** (was 1,842) — god service: create, validate, XML, draft, duplicate, stats, charts, sample. This is also where the "missing" compliance/validation logic lives (see architecture-drift note above) — splitting FIRS validation out into its own module would address both problems at once.
+- `invoice.controller.ts` — now **786 lines** (was 761) — two auth surfaces in one file.
+- **New, previously unflagged:** `src/shared/email/email.service.ts` — 927 lines. `src/modules/user/services/user.service.ts` — 880 lines.
 
-**Frontend refactors:**
-- `invoices/new/page.tsx` — ~1,557 lines → extract into sub-components
-- `invoices/[id]/page.tsx` — ~1,486 lines → extract into sub-components
-- `settings/page.tsx` — ~1,138 lines → extract into sub-components
+**Frontend refactors — grew, not shrunk, since last noted:**
+- `invoices/new/page.tsx` — now **1,734 lines** (was ~1,557) → extract into sub-components.
+- `invoices/[id]/page.tsx` — now **1,527 lines** (was ~1,486) → extract into sub-components.
+- `settings/page.tsx` — unchanged at 1,138 lines → extract into sub-components.
+- **New, previously unflagged:** `dashboard/page.tsx` — 1,111 lines. `purchases/page.tsx` — 851 lines. `payments/page.tsx` — 845 lines.
 
 ### Completed Frontend Features
 - VAT Return Assistant: VAT category per line item, credit note model, VAT return summary endpoint + Excel export + dashboard page, BullMQ cron for monthly filing deadline reminders

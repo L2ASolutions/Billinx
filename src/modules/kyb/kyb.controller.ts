@@ -11,6 +11,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
 import { KybService } from './services/kyb.service';
 import { AdminJwtGuard } from '../admin/guards/admin-jwt.guard';
+import { AuthRateLimitGuard } from '../../shared/guards/auth-rate-limit.guard';
 
 @ApiTags('KYB')
 @Controller('v1')
@@ -19,6 +20,7 @@ export class KybController {
 
   @Post('kyb/tin-confirm')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({
     summary: 'Confirm TIN for an access request (access requester self-serve)',
   })

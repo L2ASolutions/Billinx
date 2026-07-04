@@ -170,6 +170,7 @@ module "ecs" {
     INTERSWITCH_PROD_URL  = "https://api.interswitchgroup.com"
     INTERSWITCH_SANDBOX_URL = "https://qa.interswitchgroup.com"
     CAC_API_BASE_URL      = "https://services.erca.gov.ng/api/companies"
+    ADMIN_ALLOWED_IPS     = var.admin_allowed_ips
   }
 
   depends_on = [module.cloudwatch, module.secrets, module.alb]

@@ -111,3 +111,11 @@ variable "alert_email" {
   type        = string
   default     = ""
 }
+
+# ── Admin access control ───────────────────────────────────────────────────────
+
+variable "admin_allowed_ips" {
+  description = "Comma-separated IPs/CIDR ranges allowed to reach /v1/admin routes. AdminIpGuard fails OPEN if this is empty (logs a warning, allows all IPs) — must be set for production."
+  type        = string
+  default     = ""
+}
