@@ -517,7 +517,7 @@ No CodeQL/SAST or dedicated secret-scanning (gitleaks/trufflehog) step exists in
 
 ### Current State (as of 2026-07-04)
 - 152+ PRs merged to main (through PR #164)
-- 127 tests passing, 8 test suites, 45 DB models, 21 enums (payment module tests added 2026-07-04; was 83/5, unchanged since 2026-06-11, until then)
+- 188 tests passing, 10 test suites, 45 DB models, 21 enums (payment + webhook module tests added 2026-07-04; was 83/5, unchanged since 2026-06-11, until then)
 - Last merged PRs: #164 fix/lga-reference-data-and-vat-export, #163 fix/payments-overdue-data-consistency, #161 fix/npm-audit-deps, #160 fix/payments-ssr-auth, #159/#162 dependency bumps
 
 ### Open Issues
@@ -538,8 +538,8 @@ No CodeQL/SAST or dedicated secret-scanning (gitleaks/trufflehog) step exists in
 7. Tenant isolation is correctly implemented everywhere sampled, but relies on ~217 manual `tenantId` checks inside `prisma.asAdmin()` calls rather than a DB-enforced guarantee (Postgres RLS is explicitly bypassed inside those calls) — one missed check in a future PR would silently leak cross-tenant.
 
 **Test coverage** — thinner than previously documented:
-- Real coverage exists for: invoice-flow, XML builder, incoming-invoice, VAT service, and (added 2026-07-04) payment (127 tests / 8 suites total).
-- **Zero tests** for: identity/auth, tenant, user, webhook, admin, kyb, consent, product-catalog, export, reference-data, submission adapters, and the newer modules — client, analytics, inventory, notification, reminder.
+- Real coverage exists for: invoice-flow, XML builder, incoming-invoice, VAT service, and (added 2026-07-04) payment and webhook (188 tests / 10 suites total). Webhook coverage (`webhook.service.spec.ts`, 52 tests; `webhook.controller.spec.ts`, 9 tests) includes the SSRF-protection allow/block list in `validateUrl` (private IPv4/IPv6 ranges, `.local`/`.internal`, AWS metadata endpoint), delivery retry/dead-letter math against `MAX_ATTEMPTS`, and the outbound HMAC-SHA256 delivery signature — the `WebhookWorker`'s BullMQ wiring itself is intentionally untested (no business logic there beyond calling `processDelivery`, which is covered).
+- **Zero tests** for: identity/auth, tenant, user, admin, kyb, consent, product-catalog, export, reference-data, submission adapters, and the newer modules — client, analytics, inventory, notification, reminder.
 - Three spec files under `test/unit/` are orphaned — never executed by any npm script because Jest's `rootDir` is scoped to `src/`; one is a stale duplicate missing newer test cases.
 - Frontend has zero test infrastructure (no framework, no config, no test script).
 
