@@ -16,8 +16,8 @@ import {
 import { RedisService } from '../../../shared/redis/redis.service';
 import { EmailService } from '../../../shared/email/email.service';
 import { ConsentService } from '../../consent/consent.service';
-import { submissionQueue } from '../../submission/queues/submission.queue';
-import { bulkSubmissionQueue } from '../../submission/queues/bulk-submission.queue';
+import { getSubmissionQueue } from '../../submission/queues/submission.queue';
+import { getBulkSubmissionQueue } from '../../submission/queues/bulk-submission.queue';
 import { RetentionService } from '../../../shared/retention/retention.service';
 import { ExportService } from '../../export/export.service';
 import * as bcrypt from 'bcrypt';
@@ -548,7 +548,7 @@ export class AdminService {
   // ── Queue monitoring ──────────────────────────────────────────────────────
   async getQueueStatus() {
     try {
-      const counts = await submissionQueue.getJobCounts();
+      const counts = await getSubmissionQueue().getJobCounts();
       return {
         waiting: counts.waiting ?? 0,
         active: counts.active ?? 0,
@@ -571,7 +571,7 @@ export class AdminService {
 
   async retryFailedJobs() {
     try {
-      const failedJobs = await submissionQueue.getFailed();
+      const failedJobs = await getSubmissionQueue().getFailed();
       let retried = 0;
       for (const job of failedJobs) {
         await job.retry();
@@ -588,7 +588,7 @@ export class AdminService {
   // ── Bulk queue monitoring ─────────────────────────────────────────────────
   async getBulkQueueStatus() {
     try {
-      const counts = await bulkSubmissionQueue.getJobCounts();
+      const counts = await getBulkSubmissionQueue().getJobCounts();
       return {
         waiting: counts.waiting ?? 0,
         active: counts.active ?? 0,
