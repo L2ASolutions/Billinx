@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 
-import { StateMachineService } from '../../../src/modules/invoice/services/state-machine.service';
+import { StateMachineService } from './state-machine.service';
 
 describe('StateMachineService', () => {
   let service: StateMachineService;
