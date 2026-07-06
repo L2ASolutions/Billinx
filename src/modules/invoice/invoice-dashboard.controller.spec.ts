@@ -12,7 +12,6 @@ jest.mock('exceljs', () => {
 });
 
 import { InvoiceDashboardController } from './invoice-dashboard.controller';
-import { InvoiceService } from './services/invoice.service';
 import { PaymentService } from './services/payment.service';
 
 function makeReq(ctx: Record<string, any> = {}): any {
@@ -34,7 +33,9 @@ function makeRes(): any {
 describe('InvoiceDashboardController', () => {
   let controller: InvoiceDashboardController;
   let invoiceService: jest.Mocked<any>;
-  let paymentService: jest.Mocked<Pick<PaymentService, 'recordPayment' | 'listPayments'>>;
+  let paymentService: jest.Mocked<
+    Pick<PaymentService, 'recordPayment' | 'listPayments'>
+  >;
 
   beforeEach(() => {
     invoiceService = {
@@ -53,9 +54,13 @@ describe('InvoiceDashboardController', () => {
       getInvoice: jest.fn().mockResolvedValue({ id: 'inv-1' }),
       exportAsXml: jest.fn().mockResolvedValue('<Invoice/>'),
       getInvoiceStatus: jest.fn().mockResolvedValue({ status: 'ACCEPTED' }),
-      cancelInvoice: jest.fn().mockResolvedValue({ id: 'inv-1', status: 'CANCELLED' }),
+      cancelInvoice: jest
+        .fn()
+        .mockResolvedValue({ id: 'inv-1', status: 'CANCELLED' }),
       duplicateInvoice: jest.fn().mockResolvedValue({ id: 'inv-2' }),
-      submitDraft: jest.fn().mockResolvedValue({ id: 'inv-1', status: 'QUEUED' }),
+      submitDraft: jest
+        .fn()
+        .mockResolvedValue({ id: 'inv-1', status: 'QUEUED' }),
       sendManualReminder: jest.fn().mockResolvedValue({ sent: true }),
       sendToBuyer: jest.fn().mockResolvedValue({ sent: true }),
     };
@@ -64,7 +69,7 @@ describe('InvoiceDashboardController', () => {
       listPayments: jest.fn().mockResolvedValue([]),
     };
     controller = new InvoiceDashboardController(
-      invoiceService as unknown as InvoiceService,
+      invoiceService,
       paymentService as unknown as PaymentService,
     );
   });
@@ -116,7 +121,7 @@ describe('InvoiceDashboardController', () => {
     await controller.listInvoicesDashboard(makeReq(), {
       status: 'ACCEPTED',
       search: 'acme',
-    } as any);
+    });
     expect(invoiceService.listInvoices).toHaveBeenCalledWith('tenant-1', {
       status: 'ACCEPTED',
       search: 'acme',
@@ -138,14 +143,20 @@ describe('InvoiceDashboardController', () => {
 
   it('getDashboardStats strips the user: prefix from actor when actorType is user', async () => {
     await controller.getDashboardStats(makeReq());
-    expect(invoiceService.getDashboardStats).toHaveBeenCalledWith('tenant-1', 'user-1');
+    expect(invoiceService.getDashboardStats).toHaveBeenCalledWith(
+      'tenant-1',
+      'user-1',
+    );
   });
 
   it('getDashboardStats passes undefined userId when actorType is not user', async () => {
     await controller.getDashboardStats(
       makeReq({ actor: 'api-key:key-1', actorType: 'apiKey' }),
     );
-    expect(invoiceService.getDashboardStats).toHaveBeenCalledWith('tenant-1', undefined);
+    expect(invoiceService.getDashboardStats).toHaveBeenCalledWith(
+      'tenant-1',
+      undefined,
+    );
   });
 
   it('getDashboardCharts delegates to the service', async () => {
@@ -155,7 +166,9 @@ describe('InvoiceDashboardController', () => {
 
   it('getDashboardRejections delegates to the service', async () => {
     await controller.getDashboardRejections(makeReq());
-    expect(invoiceService.getDashboardRejections).toHaveBeenCalledWith('tenant-1');
+    expect(invoiceService.getDashboardRejections).toHaveBeenCalledWith(
+      'tenant-1',
+    );
   });
 
   it('getPaymentStats delegates to the service', async () => {
@@ -188,7 +201,7 @@ describe('InvoiceDashboardController', () => {
       total: 1,
     });
     const res = makeRes();
-    await controller.exportInvoicesDashboard(makeReq(), res, 'ACCEPTED' as any);
+    await controller.exportInvoicesDashboard(makeReq(), res, 'ACCEPTED');
     expect(invoiceService.listInvoices).toHaveBeenCalledWith('tenant-1', {
       status: 'ACCEPTED',
       search: undefined,
@@ -211,16 +224,26 @@ describe('InvoiceDashboardController', () => {
 
   it('getDashboardInvoiceXml delegates to exportAsXml', async () => {
     await controller.getDashboardInvoiceXml('inv-1', makeReq());
-    expect(invoiceService.exportAsXml).toHaveBeenCalledWith('inv-1', 'tenant-1');
+    expect(invoiceService.exportAsXml).toHaveBeenCalledWith(
+      'inv-1',
+      'tenant-1',
+    );
   });
 
   it('getDashboardInvoiceStatus delegates to the service', async () => {
     await controller.getDashboardInvoiceStatus('inv-1', makeReq());
-    expect(invoiceService.getInvoiceStatus).toHaveBeenCalledWith('inv-1', 'tenant-1');
+    expect(invoiceService.getInvoiceStatus).toHaveBeenCalledWith(
+      'inv-1',
+      'tenant-1',
+    );
   });
 
   it('cancelInvoiceDashboard delegates id/tenant/actor/body', async () => {
-    await controller.cancelInvoiceDashboard('inv-1', { reason: 'x' }, makeReq());
+    await controller.cancelInvoiceDashboard(
+      'inv-1',
+      { reason: 'x' },
+      makeReq(),
+    );
     expect(invoiceService.cancelInvoice).toHaveBeenCalledWith(
       'inv-1',
       'tenant-1',
@@ -232,7 +255,14 @@ describe('InvoiceDashboardController', () => {
   it('recordPaymentDashboard maps body fields and delegates to PaymentService', async () => {
     await controller.recordPaymentDashboard(
       'inv-1',
-      { amount: 500, reference: 'ref-1', provider: 'PAYSTACK', paidAt: '2026-01-01', notes: 'n', metadata: {} },
+      {
+        amount: 500,
+        reference: 'ref-1',
+        provider: 'PAYSTACK',
+        paidAt: '2026-01-01',
+        notes: 'n',
+        metadata: {},
+      },
       makeReq(),
     );
     expect(paymentService.recordPayment).toHaveBeenCalledWith(
@@ -252,7 +282,10 @@ describe('InvoiceDashboardController', () => {
 
   it('listPaymentsDashboard delegates to PaymentService', async () => {
     await controller.listPaymentsDashboard('inv-1', makeReq());
-    expect(paymentService.listPayments).toHaveBeenCalledWith('inv-1', 'tenant-1');
+    expect(paymentService.listPayments).toHaveBeenCalledWith(
+      'inv-1',
+      'tenant-1',
+    );
   });
 
   it('duplicateInvoiceDashboard delegates tenant/id/actor/environment', async () => {
@@ -286,6 +319,9 @@ describe('InvoiceDashboardController', () => {
 
   it('sendToBuyerDashboard delegates id/tenant', async () => {
     await controller.sendToBuyerDashboard('inv-1', makeReq());
-    expect(invoiceService.sendToBuyer).toHaveBeenCalledWith('inv-1', 'tenant-1');
+    expect(invoiceService.sendToBuyer).toHaveBeenCalledWith(
+      'inv-1',
+      'tenant-1',
+    );
   });
 });

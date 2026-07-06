@@ -47,7 +47,9 @@ export class InvoiceDashboardController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Save a new DRAFT invoice without queuing for FIRS submission' })
+  @ApiOperation({
+    summary: 'Save a new DRAFT invoice without queuing for FIRS submission',
+  })
   async saveDraftDashboard(
     @Body() body: Record<string, any>,
     @Req() req: Request,
@@ -65,14 +67,21 @@ export class InvoiceDashboardController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update fields of an existing DRAFT invoice without submitting' })
+  @ApiOperation({
+    summary: 'Update fields of an existing DRAFT invoice without submitting',
+  })
   async updateDraftDashboard(
     @Param('id') id: string,
     @Body() body: Record<string, any>,
     @Req() req: Request,
   ) {
     const ctx = this.getCtx(req);
-    return this.invoiceService.updateDraftFields(id, ctx.tenantId, ctx.actor, body);
+    return this.invoiceService.updateDraftFields(
+      id,
+      ctx.tenantId,
+      ctx.actor,
+      body,
+    );
   }
 
   @Post()
@@ -136,7 +145,10 @@ export class InvoiceDashboardController {
   @Get('sample')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get a static sample invoice for onboarding reference (dashboard / JWT auth)' })
+  @ApiOperation({
+    summary:
+      'Get a static sample invoice for onboarding reference (dashboard / JWT auth)',
+  })
   getSampleInvoice() {
     return this.invoiceService.getSampleInvoice();
   }
@@ -147,7 +159,8 @@ export class InvoiceDashboardController {
   @ApiOperation({ summary: 'Get invoice stats for dashboard (JWT auth)' })
   async getDashboardStats(@Req() req: Request) {
     const ctx = this.getCtx(req);
-    const userId = ctx.actorType === 'user' ? ctx.actor.replace('user:', '') : undefined;
+    const userId =
+      ctx.actorType === 'user' ? ctx.actor.replace('user:', '') : undefined;
     return this.invoiceService.getDashboardStats(ctx.tenantId, userId);
   }
 
@@ -165,7 +178,9 @@ export class InvoiceDashboardController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'VIEWER')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get FIRS rejection summary for dashboard (JWT auth)' })
+  @ApiOperation({
+    summary: 'Get FIRS rejection summary for dashboard (JWT auth)',
+  })
   async getDashboardRejections(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getDashboardRejections(ctx.tenantId);
@@ -174,7 +189,9 @@ export class InvoiceDashboardController {
   @Get('payment-stats')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get payment collection stats for dashboard (JWT auth)' })
+  @ApiOperation({
+    summary: 'Get payment collection stats for dashboard (JWT auth)',
+  })
   async getPaymentStats(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getPaymentStats(ctx.tenantId);
@@ -184,7 +201,10 @@ export class InvoiceDashboardController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'VIEWER')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get payment chart data (collection trend + payment methods) for dashboard (JWT auth)' })
+  @ApiOperation({
+    summary:
+      'Get payment chart data (collection trend + payment methods) for dashboard (JWT auth)',
+  })
   async getPaymentCharts(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getPaymentCharts(ctx.tenantId);
@@ -198,7 +218,9 @@ export class InvoiceDashboardController {
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to', required: false })
-  @ApiOperation({ summary: 'Export sent invoices as Excel (dashboard / JWT auth)' })
+  @ApiOperation({
+    summary: 'Export sent invoices as Excel (dashboard / JWT auth)',
+  })
   async exportInvoicesDashboard(
     @Req() req: Request,
     @Res() res: Response,
@@ -223,16 +245,16 @@ export class InvoiceDashboardController {
 
     const sheet = workbook.addWorksheet('Invoices');
     sheet.columns = [
-      { header: 'Invoice #',          key: 'irn',           width: 32 },
-      { header: 'Buyer',              key: 'buyer',         width: 28 },
-      { header: 'Issue Date',         key: 'issueDate',     width: 14 },
-      { header: 'Due Date',           key: 'dueDate',       width: 14 },
-      { header: 'Subtotal',           key: 'subtotal',      width: 16 },
-      { header: 'VAT',                key: 'vat',           width: 14 },
-      { header: 'Total',              key: 'total',         width: 16 },
-      { header: 'Currency',           key: 'currency',      width: 10 },
-      { header: 'FIRS Status',        key: 'status',        width: 18 },
-      { header: 'Payment Status',     key: 'paymentStatus', width: 16 },
+      { header: 'Invoice #', key: 'irn', width: 32 },
+      { header: 'Buyer', key: 'buyer', width: 28 },
+      { header: 'Issue Date', key: 'issueDate', width: 14 },
+      { header: 'Due Date', key: 'dueDate', width: 14 },
+      { header: 'Subtotal', key: 'subtotal', width: 16 },
+      { header: 'VAT', key: 'vat', width: 14 },
+      { header: 'Total', key: 'total', width: 16 },
+      { header: 'Currency', key: 'currency', width: 10 },
+      { header: 'FIRS Status', key: 'status', width: 18 },
+      { header: 'Payment Status', key: 'paymentStatus', width: 16 },
     ];
 
     const fmtDate = (d?: string) =>
@@ -240,15 +262,15 @@ export class InvoiceDashboardController {
 
     for (const inv of result.data) {
       sheet.addRow({
-        irn:           inv.firsConfirmedIrn ?? inv.platformIrn,
-        buyer:         inv.buyerName,
-        issueDate:     fmtDate(inv.issueDate),
-        dueDate:       fmtDate(inv.paymentDueDate ?? inv.dueDate),
-        subtotal:      inv.subtotal,
-        vat:           inv.vatAmount,
-        total:         inv.totalAmount,
-        currency:      inv.currency,
-        status:        inv.status,
+        irn: inv.firsConfirmedIrn ?? inv.platformIrn,
+        buyer: inv.buyerName,
+        issueDate: fmtDate(inv.issueDate),
+        dueDate: fmtDate(inv.paymentDueDate ?? inv.dueDate),
+        subtotal: inv.subtotal,
+        vat: inv.vatAmount,
+        total: inv.totalAmount,
+        currency: inv.currency,
+        status: inv.status,
         paymentStatus: inv.paymentStatus ?? '',
       });
     }
@@ -371,7 +393,9 @@ export class InvoiceDashboardController {
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Duplicate an invoice as a new DRAFT (dashboard / JWT auth)' })
+  @ApiOperation({
+    summary: 'Duplicate an invoice as a new DRAFT (dashboard / JWT auth)',
+  })
   async duplicateInvoiceDashboard(
     @Param('id') id: string,
     @Req() req: Request,
@@ -413,10 +437,7 @@ export class InvoiceDashboardController {
     summary:
       'Send a manual payment reminder email to the buyer (dashboard / JWT auth)',
   })
-  async sendReminderDashboard(
-    @Param('id') id: string,
-    @Req() req: Request,
-  ) {
+  async sendReminderDashboard(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.sendManualReminder(id, ctx.tenantId, ctx.actor);
   }
@@ -428,10 +449,7 @@ export class InvoiceDashboardController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Send invoice to buyer by email (dashboard)' })
-  async sendToBuyerDashboard(
-    @Param('id') id: string,
-    @Req() req: Request,
-  ) {
+  async sendToBuyerDashboard(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.sendToBuyer(id, ctx.tenantId);
   }

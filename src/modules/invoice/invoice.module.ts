@@ -35,7 +35,13 @@ import { InventoryModule } from '../inventory/inventory.module';
 import { NotificationModule } from '../notification/notification.module';
 
 @Module({
-  imports: [EventEmitterModule, EmailModule, TenantModule, InventoryModule, NotificationModule],
+  imports: [
+    EventEmitterModule,
+    EmailModule,
+    TenantModule,
+    InventoryModule,
+    NotificationModule,
+  ],
   controllers: [
     CreditNoteController,
     VatReturnController,
