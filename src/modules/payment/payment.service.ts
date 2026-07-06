@@ -13,6 +13,9 @@ const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY ?? '';
 const FLW_SECRET = process.env.FLW_SECRET_KEY ?? '';
 const BILLINX_URL = process.env.BILLINX_URL ?? 'http://localhost:3001';
 
+const HTTPS_REQUEST_TIMEOUT_MS = 20_000;
+const HTTPS_MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+
 function httpsRequest(
   url: string,
   method: string,
@@ -32,11 +35,29 @@ function httpsRequest(
           ...headers,
           ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
         },
+        timeout: HTTPS_REQUEST_TIMEOUT_MS,
       },
       (res) => {
         let data = '';
-        res.on('data', (chunk: Buffer) => (data += chunk.toString()));
+        let receivedBytes = 0;
+        let aborted = false;
+        res.on('data', (chunk: Buffer) => {
+          if (aborted) return;
+          receivedBytes += chunk.length;
+          if (receivedBytes > HTTPS_MAX_RESPONSE_BYTES) {
+            aborted = true;
+            res.destroy();
+            reject(
+              new Error(
+                `Response from ${parsed.hostname} exceeded maximum allowed size of ${HTTPS_MAX_RESPONSE_BYTES} bytes`,
+              ),
+            );
+            return;
+          }
+          data += chunk.toString();
+        });
         res.on('end', () => {
+          if (aborted) return;
           try {
             resolve(JSON.parse(data));
           } catch {
@@ -45,6 +66,13 @@ function httpsRequest(
         });
       },
     );
+    req.on('timeout', () => {
+      req.destroy(
+        new Error(
+          `Request to ${parsed.hostname} timed out after ${HTTPS_REQUEST_TIMEOUT_MS}ms`,
+        ),
+      );
+    });
     req.on('error', reject);
     if (payload) req.write(payload);
     req.end();
