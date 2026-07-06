@@ -11,7 +11,10 @@ function makeReq(): any {
 describe('InvoiceExportController', () => {
   let controller: InvoiceExportController;
   let exportService: jest.Mocked<
-    Pick<ExportService, 'exportInvoicesCSV' | 'exportInvoicesJSON' | 'exportMonthlyReport'>
+    Pick<
+      ExportService,
+      'exportInvoicesCSV' | 'exportInvoicesJSON' | 'exportMonthlyReport'
+    >
   >;
 
   beforeEach(() => {
@@ -33,7 +36,11 @@ describe('InvoiceExportController', () => {
   });
 
   it('exportCSV delegates to the service with the tenant from context', async () => {
-    const result = await controller.exportCSV(makeReq(), '2026-01-01', '2026-01-31');
+    const result = await controller.exportCSV(
+      makeReq(),
+      '2026-01-01',
+      '2026-01-31',
+    );
     expect(exportService.exportInvoicesCSV).toHaveBeenCalledWith(
       'tenant-1',
       '2026-01-01',
@@ -50,7 +57,11 @@ describe('InvoiceExportController', () => {
   });
 
   it('exportJSON delegates to the service', async () => {
-    const result = await controller.exportJSON(makeReq(), '2026-01-01', '2026-01-31');
+    const result = await controller.exportJSON(
+      makeReq(),
+      '2026-01-01',
+      '2026-01-31',
+    );
     expect(exportService.exportInvoicesJSON).toHaveBeenCalledWith(
       'tenant-1',
       '2026-01-01',
@@ -60,9 +71,9 @@ describe('InvoiceExportController', () => {
   });
 
   it('exportMonthly throws BadRequestException when year or month is missing', async () => {
-    await expect(
-      controller.exportMonthly(makeReq(), '', '6'),
-    ).rejects.toThrow(BadRequestException);
+    await expect(controller.exportMonthly(makeReq(), '', '6')).rejects.toThrow(
+      BadRequestException,
+    );
     expect(exportService.exportMonthlyReport).not.toHaveBeenCalled();
   });
 

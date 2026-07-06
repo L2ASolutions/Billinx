@@ -6,7 +6,12 @@ import {
   Req,
   BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { Request } from 'express';
 import { ExportService } from '../export/export.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';

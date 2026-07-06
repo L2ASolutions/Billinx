@@ -46,7 +46,9 @@ describe('InvoiceApiController', () => {
       createInvoice: jest
         .fn()
         .mockResolvedValue({ invoice: { id: 'inv-1' }, isDuplicate: false }),
-      validateInvoice: jest.fn().mockResolvedValue({ valid: true, errors: [], warnings: [] }),
+      validateInvoice: jest
+        .fn()
+        .mockResolvedValue({ valid: true, errors: [], warnings: [] }),
       createInvoiceFromXml: jest
         .fn()
         .mockResolvedValue({ invoice: { id: 'inv-1' }, isDuplicate: false }),
@@ -56,7 +58,9 @@ describe('InvoiceApiController', () => {
       getInvoice: jest.fn().mockResolvedValue({ id: 'inv-1' }),
       exportAsXml: jest.fn().mockResolvedValue('<Invoice/>'),
       getInvoiceStatus: jest.fn().mockResolvedValue({ status: 'ACCEPTED' }),
-      cancelInvoice: jest.fn().mockResolvedValue({ id: 'inv-1', status: 'CANCELLED' }),
+      cancelInvoice: jest
+        .fn()
+        .mockResolvedValue({ id: 'inv-1', status: 'CANCELLED' }),
     };
     paymentService = {
       recordPayment: jest.fn().mockResolvedValue({ id: 'pay-1' }),
@@ -129,7 +133,7 @@ describe('InvoiceApiController', () => {
   });
 
   it('listInvoices defaults page/limit and passes filters through', async () => {
-    await controller.listInvoices(makeReq(), 'ACCEPTED' as any);
+    await controller.listInvoices(makeReq(), 'ACCEPTED');
     expect(invoiceService.listInvoices).toHaveBeenCalledWith('tenant-1', {
       status: 'ACCEPTED',
       invoiceTypeCode: undefined,
@@ -170,8 +174,14 @@ describe('InvoiceApiController', () => {
       res,
       'application/xml',
     );
-    expect(invoiceService.exportAsXml).toHaveBeenCalledWith('inv-1', 'tenant-1');
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/xml');
+    expect(invoiceService.exportAsXml).toHaveBeenCalledWith(
+      'inv-1',
+      'tenant-1',
+    );
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Type',
+      'application/xml',
+    );
     expect(result).toBe('<Invoice/>');
   });
 
@@ -183,16 +193,26 @@ describe('InvoiceApiController', () => {
 
   it('getInvoiceXml delegates to exportAsXml', async () => {
     await controller.getInvoiceXml('inv-1', makeReq());
-    expect(invoiceService.exportAsXml).toHaveBeenCalledWith('inv-1', 'tenant-1');
+    expect(invoiceService.exportAsXml).toHaveBeenCalledWith(
+      'inv-1',
+      'tenant-1',
+    );
   });
 
   it('getInvoiceStatus delegates to the service', async () => {
     await controller.getInvoiceStatus('inv-1', makeReq());
-    expect(invoiceService.getInvoiceStatus).toHaveBeenCalledWith('inv-1', 'tenant-1');
+    expect(invoiceService.getInvoiceStatus).toHaveBeenCalledWith(
+      'inv-1',
+      'tenant-1',
+    );
   });
 
   it('cancelInvoice delegates id, tenant, actor, and body', async () => {
-    await controller.cancelInvoice('inv-1', { reason: 'buyer request' }, makeReq());
+    await controller.cancelInvoice(
+      'inv-1',
+      { reason: 'buyer request' },
+      makeReq(),
+    );
     expect(invoiceService.cancelInvoice).toHaveBeenCalledWith(
       'inv-1',
       'tenant-1',
@@ -204,7 +224,14 @@ describe('InvoiceApiController', () => {
   it('recordPayment maps the body fields and delegates to PaymentService', async () => {
     await controller.recordPayment(
       'inv-1',
-      { amount: 500, reference: 'ref-1', provider: 'PAYSTACK', paidAt: '2026-01-01', notes: 'n', metadata: { x: 1 } },
+      {
+        amount: 500,
+        reference: 'ref-1',
+        provider: 'PAYSTACK',
+        paidAt: '2026-01-01',
+        notes: 'n',
+        metadata: { x: 1 },
+      },
       makeReq(),
     );
     expect(paymentService.recordPayment).toHaveBeenCalledWith(
@@ -224,6 +251,9 @@ describe('InvoiceApiController', () => {
 
   it('listPayments delegates to PaymentService', async () => {
     await controller.listPayments('inv-1', makeReq());
-    expect(paymentService.listPayments).toHaveBeenCalledWith('inv-1', 'tenant-1');
+    expect(paymentService.listPayments).toHaveBeenCalledWith(
+      'inv-1',
+      'tenant-1',
+    );
   });
 });
