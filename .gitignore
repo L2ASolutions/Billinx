@@ -151,3 +151,10 @@ keys/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Editor swap files
+*.swp
+*.swo
+
+# Redis dump files
+dump.rdb
