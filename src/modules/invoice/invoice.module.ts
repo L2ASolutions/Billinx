@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { InvoiceController } from './invoice.controller';
+import { InvoiceApiController } from './invoice-api.controller';
+import { InvoiceExportController } from './invoice-export.controller';
+import { InvoiceDashboardController } from './invoice-dashboard.controller';
+import { InvoicePublicController } from './invoice-public.controller';
 import { BulkInvoiceController } from './bulk/bulk-invoice.controller';
 import { CreditNoteController } from './credit-note.controller';
 import { VatReturnController } from './vat-return.controller';
@@ -32,8 +35,22 @@ import { InventoryModule } from '../inventory/inventory.module';
 import { NotificationModule } from '../notification/notification.module';
 
 @Module({
-  imports: [EventEmitterModule, EmailModule, TenantModule, InventoryModule, NotificationModule],
-  controllers: [CreditNoteController, VatReturnController, InvoiceController, BulkInvoiceController],
+  imports: [
+    EventEmitterModule,
+    EmailModule,
+    TenantModule,
+    InventoryModule,
+    NotificationModule,
+  ],
+  controllers: [
+    CreditNoteController,
+    VatReturnController,
+    InvoiceApiController,
+    InvoiceExportController,
+    InvoiceDashboardController,
+    InvoicePublicController,
+    BulkInvoiceController,
+  ],
   providers: [
     InvoiceService,
     CreditNoteService,
