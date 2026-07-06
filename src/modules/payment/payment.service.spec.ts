@@ -44,6 +44,48 @@ function mockHttpsError(err: Error) {
   }));
 }
 
+function mockHttpsTimeout() {
+  (https.request as unknown as jest.Mock).mockImplementation(() => {
+    const handlers: Record<string, (arg?: any) => void> = {};
+    const req: any = {
+      on: jest.fn((event: string, handler: (arg?: any) => void) => {
+        handlers[event] = handler;
+        return req;
+      }),
+      write: jest.fn(),
+      end: jest.fn(),
+      destroy: jest.fn((err?: Error) => {
+        process.nextTick(() => handlers.error?.(err));
+      }),
+    };
+    process.nextTick(() => handlers.timeout?.());
+    return req;
+  });
+}
+
+function mockHttpsOversizedResponse(totalBytes: number) {
+  const destroy = jest.fn();
+  (https.request as unknown as jest.Mock).mockImplementation(
+    (_options: unknown, callback: (res: any) => void) => {
+      const handlers: Record<string, (arg?: any) => void> = {};
+      const res = {
+        on(event: string, handler: (arg?: any) => void) {
+          handlers[event] = handler;
+          return res;
+        },
+        destroy,
+      };
+      callback(res);
+      process.nextTick(() => {
+        handlers.data?.(Buffer.alloc(totalBytes, 'a'));
+        handlers.end?.();
+      });
+      return { on: jest.fn(), write: jest.fn(), end: jest.fn() };
+    },
+  );
+  return destroy;
+}
+
 // PAYSTACK_SECRET/FLW_SECRET are captured from process.env at module-load time,
 // so "not configured" scenarios need a fresh module instance with different env.
 function loadServiceWithEnv(env: Record<string, string>): any {
@@ -220,6 +262,21 @@ describe('PaymentProviderService', () => {
       await expect(
         service.paystackInitialize(INVOICE_ID, 'buyer@example.com'),
       ).rejects.toThrow('ECONNREFUSED');
+    });
+
+    it('rejects when the request times out instead of hanging indefinitely', async () => {
+      mockHttpsTimeout();
+      await expect(
+        service.paystackInitialize(INVOICE_ID, 'buyer@example.com'),
+      ).rejects.toThrow(/timed out after 20000ms/);
+    });
+
+    it('rejects and destroys the response when it exceeds the maximum allowed size', async () => {
+      const destroy = mockHttpsOversizedResponse(5 * 1024 * 1024 + 1);
+      await expect(
+        service.paystackInitialize(INVOICE_ID, 'buyer@example.com'),
+      ).rejects.toThrow(/exceeded maximum allowed size/);
+      expect(destroy).toHaveBeenCalled();
     });
   });
 
