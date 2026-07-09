@@ -56,7 +56,7 @@ billinx/
 │   │   ├── notification/  In-app notification feed (list, mark read/read-all)
 │   │   └── reminder/      Tenant-configurable payment reminder rules (/v1/reminder-rules CRUD)
 │   ├── infrastructure/
-│   │   ├── database/      PrismaService (shared DB client, RLS middleware)
+│   │   ├── database/      PrismaService (two-client: app role + owner/admin role; FORCE RLS + $extends)
 │   │   └── secrets/       SecretsService (AWS Secrets Manager, 5-min cache)
 │   └── shared/
 │       ├── context/       CLS request context (tenantId, actor, requestId)
@@ -264,9 +264,10 @@ billinx/
 20260609035413_add_notification_model
 20260609175435_add_tenant_dashboard_visibility
 20260611000000_make_reminder_log_rule_id_nullable
+20260709000000_enforce_rls_and_app_role  # fix/rls-enforcement — FORCE ROW LEVEL SECURITY on all tenant tables + billinx_app non-owner role
 ```
 
-40 migrations applied as of 2026-07-04; database schema confirmed in sync via `npx prisma migrate status`.
+41 migrations applied as of 2026-07-09; database schema confirmed in sync via `npx prisma migrate status`.
 
 Run pending migrations: `npx prisma migrate deploy`
 
@@ -296,8 +297,13 @@ Populated by guards. Read anywhere via `getRequestContext()`. Never pass tenantI
 - Always store both `encryptedFoo` and `fooIv` columns together
 
 ### PrismaService
-- Sets `app.current_tenant_id` via middleware for Postgres RLS
-- Use `prisma.asAdmin()` to bypass RLS for cross-tenant admin queries
+- **Two-client architecture** (migration `20260709000000_enforce_rls_and_app_role`):
+  - Main client (`this`, `DATABASE_URL`) connects as the non-owner `billinx_app` role in production. `FORCE ROW LEVEL SECURITY` is set on all tenant-scoped tables so RLS policies are enforced even if that role were ever granted ownership — and more importantly, they are enforced on the non-superuser `billinx_app` role that cannot bypass them.
+  - Admin client (`adminClient`, `MIGRATION_DATABASE_URL`) connects as the owner/superuser `billinx` role and is used exclusively inside `asAdmin()`.
+- **RLS scoping via `$extends`**: the main client uses a Prisma `$extends` `$allOperations` hook that batches `SELECT set_config('app.current_tenant_id', tenantId, true)` and the actual query in the **same `$transaction([...])`** call so the GUC value is visible to the RLS policy when the query executes. The old `$use` middleware fired `SET LOCAL` on a pooled connection that was unrelated to the query connection — that bug is now fixed.
+- **`asAdmin()`** wraps the admin client in a transaction with `SET LOCAL row_security = OFF`; this succeeds because the admin client connects as the superuser `billinx`.
+- **Production requirement**: `DATABASE_URL` must connect as `billinx_app`; `MIGRATION_DATABASE_URL` must connect as the owner role (`billinx`). Both are required at startup in production — `MIGRATION_DATABASE_URL` is in `PRODUCTION_REQUIRED_VARS` in `config.validation.ts`.
+- **Manual `tenantId` filters are still in place** as defence-in-depth — RLS is an additional layer, not a replacement for them.
 
 ---
 
@@ -309,7 +315,8 @@ NODE_ENV=development|production
 PORT=3000
 
 # Database
-DATABASE_URL=postgresql://...
+DATABASE_URL=postgresql://...          # app role (billinx_app in production; billinx in dev)
+MIGRATION_DATABASE_URL=postgresql://...# owner role (billinx) — used by prisma migrate and asAdmin(); required in production
 # For production: append ?connection_limit=10&pool_timeout=20
 DB_POOL_SIZE=10
 
@@ -516,10 +523,10 @@ No CodeQL/SAST or dedicated secret-scanning (gitleaks/trufflehog) step exists in
 - NDPR compliance required; Data Processing Agreements with Nigerian tech lawyer pending
 - Hosting regions (planned): AWS eu-west-1 and af-south-1
 
-### Current State (as of 2026-07-04)
-- 152+ PRs merged to main (through PR #164)
-- 826 tests passing, 55 test suites, 45 DB models, 21 enums (payment + webhook + identity/auth + user module tests added 2026-07-04; tenant, admin, kyb, consent, product-catalog, export, reference-data, submission-adapter, client, analytics, inventory, notification, and reminder module tests added 2026-07-05 — every backend module now has at least some test coverage; was 83/5, unchanged since 2026-06-11, until then; state-machine spec rescued from the orphaned `test/unit/` tree and colocated into `src/` 2026-07-06, adding 15 more; payment httpsRequest timeout/size-cap tests added 2026-07-06, adding 2 more; invoice controller split into 4 auth-scoped controllers 2026-07-06 with 47 new delegation tests — first-ever test coverage for this controller; JWT auth wired to RS256 via SecretsService 2026-07-09, adding 8 new tests — config.validation spec + updated token.service spec)
-- Last merged PRs: #164 fix/lga-reference-data-and-vat-export, #163 fix/payments-overdue-data-consistency, #161 fix/npm-audit-deps, #160 fix/payments-ssr-auth, #159/#162 dependency bumps
+### Current State (as of 2026-07-09)
+- 152+ PRs merged to main (through PR #188)
+- 827 tests passing, 55 test suites, 45 DB models, 21 enums (payment + webhook + identity/auth + user module tests added 2026-07-04; tenant, admin, kyb, consent, product-catalog, export, reference-data, submission-adapter, client, analytics, inventory, notification, and reminder module tests added 2026-07-05 — every backend module now has at least some test coverage; was 83/5, unchanged since 2026-06-11, until then; state-machine spec rescued from the orphaned `test/unit/` tree and colocated into `src/` 2026-07-06, adding 15 more; payment httpsRequest timeout/size-cap tests added 2026-07-06, adding 2 more; invoice controller split into 4 auth-scoped controllers 2026-07-06 with 47 new delegation tests — first-ever test coverage for this controller; JWT auth wired to RS256 via SecretsService 2026-07-09, adding 8 new tests — config.validation spec + updated token.service spec; RLS enforcement 2026-07-09, adding 1 new unit test — 3 integration tests in separate suite `test:integration`)
+- Last merged PRs: #188 refactor/split-invoice-controller, #187 fix/harden-payment-https-client
 
 ### Open Issues
 
@@ -537,7 +544,7 @@ No CodeQL/SAST or dedicated secret-scanning (gitleaks/trufflehog) step exists in
 4. ~~No rate limiting on `auth/reset-password`, `auth/accept-invitation`, `users/request-access`, `kyb/tin-confirm`, or `reference-data` search endpoints~~ — **fixed 2026-07-04.** `reset-password`, `accept-invitation`, and `request-access` now use the existing `AuthRateLimitGuard` (5/15min per IP, shared bucket with login/register/forgot-password on that same IP — this is existing, intentional behavior, not new). `kyb/tin-confirm` also now uses `AuthRateLimitGuard`. `reference-data`'s `hs-codes`/`service-codes` search endpoints got a new, more generous `ReferenceSearchRateLimitGuard` (60/5min per IP — sized for real usage, since the frontend debounces search input at 300ms and a user builds an invoice with many line items in one sitting; a tight limit would have broken the actual feature). Also fixed the unbounded `limit`/`offset` query params on `hs-codes`/`service-codes` — now clamped server-side to 1–100 / ≥0 regardless of what's requested. All verified live: booted the app, hit each endpoint past its threshold and confirmed `429` + correct `X-RateLimit-*`/`Retry-After` headers; confirmed `limit=99999` clamps to 100 and negative values clamp to the floor; full test suite (83/83) and `tsc`/`nest build` still clean throughout.
 5. ~~`dump.rdb` and `..env.swp` are committed to the repo; neither `*.swp`/`*.swo` nor `dump.rdb` is in `.gitignore`~~ — **fixed 2026-07-06.** Added `*.swp`, `*.swo`, and `dump.rdb` to `.gitignore`, removed both files from the working tree/index. Note: this only stops recurrence going forward — the files (`..env.swp` in particular, a vim swapfile that may contain a past `.env`'s contents) remain in git history and would need a separate history-rewrite pass (`git filter-repo` or similar) to fully purge, same caveat as the RSA-key false-alarm item above. Not investigated further here since a history rewrite is a bigger, riskier operation that needs explicit sign-off.
 6. Several production env vars aren't validated at startup (silent misconfig risk): `INTERSWITCH_PROD_URL` (falls back to a hardcoded URL if unset), `CAC_API_KEY`, `ADMIN_ALLOWED_IPS`. `NRS_API_BASE_URL` is documented everywhere but unused in code — dead config.
-7. Tenant isolation is correctly implemented everywhere sampled, but relies on ~217 manual `tenantId` checks inside `prisma.asAdmin()` calls rather than a DB-enforced guarantee (Postgres RLS is explicitly bypassed inside those calls) — one missed check in a future PR would silently leak cross-tenant.
+7. ~~Tenant isolation relied solely on ~217 manual `tenantId` checks; Postgres RLS bypassed for the owner role~~ — **fixed 2026-07-09 (PR fix/rls-enforcement).** Migration `20260709000000_enforce_rls_and_app_role` adds `FORCE ROW LEVEL SECURITY` to all 30 tenant-scoped tables and creates the `billinx_app` non-owner, non-superuser Postgres role. The app connects as `billinx_app` in production (`DATABASE_URL`) so RLS policies are enforced unconditionally — FORCE RLS applies even to the `billinx_app` role that is not a superuser. `PrismaService` now uses `$extends`+`$transaction([set_config, query])` to correctly scope `app.current_tenant_id` inside the query's own connection/transaction (the old `$use` middleware fired on a different pooled connection). `asAdmin()` uses a separate admin-role client (`MIGRATION_DATABASE_URL`) with `SET LOCAL row_security = OFF`. Manual `tenantId` filters remain as defence-in-depth. Cross-tenant isolation verified by automated integration test (`test/rls-isolation.integration-spec.ts`, 3 tests, wired into CI `rls-isolation` job) that FAILS before the migration and PASSES after.
 8. ~~BullMQ queues are constructed as module-level singletons that eagerly open a live Redis connection at import time~~ — **fully fixed 2026-07-04.** Found while writing webhook tests (a test hung indefinitely; root cause was importing `WebhookService` transitively opening a real, never-closed Redis connection via `new Queue(...)` at the top of `webhook.queue.ts`). All four queue files in the codebase used this pattern and are now fixed the same way — the queue is built lazily on first actual use (`getSubmissionQueue()`, `getBulkSubmissionQueue()`, `getVatReminderQueue()`, and webhook's equivalent), not at module import time:
    - `webhook.queue.ts` — no external call sites, self-contained fix.
    - `submission.queue.ts` — call sites updated: `health.controller.ts` (the endpoint AWS ECS/CI use to decide on deploy rollback) and `admin.service.ts` (`getQueueStatus`, `retryFailedJobs`).
