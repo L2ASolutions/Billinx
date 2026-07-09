@@ -9,6 +9,10 @@ const PRODUCTION_REQUIRED_VARS: string[] = [
   'AWS_REGION',
   'AWS_ACCESS_KEY_ID',
   'AWS_SECRET_ACCESS_KEY',
+  // Owner-role connection used for migrations and admin operations that require
+  // SET LOCAL row_security = OFF (superuser-only in Postgres).
+  // DATABASE_URL should connect as the non-owner billinx_app role in production.
+  'MIGRATION_DATABASE_URL',
 ];
 
 const DEVELOPMENT_REQUIRED_VARS: string[] = ['JWT_PRIVATE_KEY'];
