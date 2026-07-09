@@ -1,5 +1,6 @@
 /// <reference types="jest" />
 
+import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
 import {
   ConflictException,
@@ -10,7 +11,14 @@ import { UserService } from './user.service';
 
 const TENANT_ID = 'tenant-001';
 const USER_ID = 'user-001';
-const JWT_SECRET = 'test-jwt-secret';
+
+// Minimal RSA key pair for tests that exercise issueAccessToken.  Generated
+// once at module load to avoid per-test overhead.
+const { privateKey: TEST_PRIVATE_KEY_PEM } = crypto.generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+}) as { privateKey: string; publicKey: string };
 
 function makeUserRecord(overrides: Record<string, any> = {}): any {
   return {
@@ -109,10 +117,7 @@ describe('UserService', () => {
     listByUser: jest.Mock;
     requestErasure: jest.Mock;
   };
-  const ORIGINAL_ENV = process.env;
-
   beforeEach(() => {
-    process.env = { ...ORIGINAL_ENV, JWT_SECRET };
     userRepository = makeUserRepository();
     prisma = makePrisma();
     activityService = { track: jest.fn() };
@@ -150,17 +155,13 @@ describe('UserService', () => {
     service = new UserService(
       userRepository as any,
       prisma as any,
-      {} as any,
+      { getJwtPrivateKey: jest.fn().mockResolvedValue(TEST_PRIVATE_KEY_PEM) } as any,
       activityService as any,
       redisService as any,
       emailService as any,
       mfaService as any,
       consentService as any,
     );
-  });
-
-  afterEach(() => {
-    process.env = ORIGINAL_ENV;
   });
 
   // ── registerTenant ────────────────────────────────────────────────────────

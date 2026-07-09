@@ -9,7 +9,12 @@ import { MfaService } from './mfa.service';
 const USER_ID = 'user-001';
 const TENANT_ID = 'tenant-001';
 const MASTER_KEY = Buffer.alloc(32, 7);
-const JWT_SECRET = 'test-jwt-secret';
+// Derive the same MFA challenge secret the service produces, so tests can
+// craft tokens that exercise edge-case branches (no-isMfaToken, expired).
+const MFA_CHALLENGE_SECRET = crypto
+  .createHmac('sha256', MASTER_KEY)
+  .update('mfa-challenge')
+  .digest('hex');
 
 // Real base32 TOTP secret generation/verification lives in this module and is
 // not exported, so we drive it through the public API using a real secret we
@@ -83,10 +88,8 @@ describe('MfaService', () => {
   let prisma: ReturnType<typeof makePrisma>;
   let credentialService: ReturnType<typeof makeCredentialService>;
   let secrets: { getMasterEncryptionKey: jest.Mock };
-  const ORIGINAL_ENV = process.env;
 
   beforeEach(() => {
-    process.env = { ...ORIGINAL_ENV, JWT_SECRET };
     prisma = makePrisma();
     credentialService = makeCredentialService();
     secrets = {
@@ -99,9 +102,6 @@ describe('MfaService', () => {
     );
   });
 
-  afterEach(() => {
-    process.env = ORIGINAL_ENV;
-  });
 
   // ── setupMfa ──────────────────────────────────────────────────────────────
 
@@ -280,30 +280,30 @@ describe('MfaService', () => {
   // ── issueMfaToken / verifyMfaToken ────────────────────────────────────────
 
   describe('issueMfaToken / verifyMfaToken', () => {
-    it('issues a token that verifies back to the same userId/tenantId', () => {
-      const token = service.issueMfaToken(USER_ID, TENANT_ID);
-      const result = service.verifyMfaToken(token);
+    it('issues a token that verifies back to the same userId/tenantId', async () => {
+      const token = await service.issueMfaToken(USER_ID, TENANT_ID);
+      const result = await service.verifyMfaToken(token);
       expect(result).toEqual({ userId: USER_ID, tenantId: TENANT_ID });
     });
 
-    it('rejects a token that is not marked isMfaToken', () => {
+    it('rejects a token that is not marked isMfaToken', async () => {
       const bogusToken = jwt.sign(
         { sub: USER_ID, tenantId: TENANT_ID },
-        `${JWT_SECRET}:mfa`,
+        MFA_CHALLENGE_SECRET,
         { expiresIn: '5m' },
       );
-      expect(() => service.verifyMfaToken(bogusToken)).toThrow(
+      await expect(service.verifyMfaToken(bogusToken)).rejects.toThrow(
         'MFA token is invalid or has expired',
       );
     });
 
-    it('rejects an expired MFA token', () => {
+    it('rejects an expired MFA token', async () => {
       const expired = jwt.sign(
         { sub: USER_ID, tenantId: TENANT_ID, isMfaToken: true },
-        `${JWT_SECRET}:mfa`,
+        MFA_CHALLENGE_SECRET,
         { expiresIn: -10 },
       );
-      expect(() => service.verifyMfaToken(expired)).toThrow(
+      await expect(service.verifyMfaToken(expired)).rejects.toThrow(
         'MFA token is invalid or has expired',
       );
     });

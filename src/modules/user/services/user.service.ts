@@ -244,7 +244,7 @@ export class UserService {
 
     // ── 5. MFA check ──────────────────────────────────────────────────────────
     if ((user as any).mfaEnabled) {
-      const mfaToken = this.mfaService.issueMfaToken(user.id, tenantId);
+      const mfaToken = await this.mfaService.issueMfaToken(user.id, tenantId);
       this.activityService.track({
         tenantId,
         eventType: 'USER_LOGIN',
@@ -294,7 +294,7 @@ export class UserService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<MfaChallengeResponse> {
-    const { userId, tenantId } = this.mfaService.verifyMfaToken(mfaToken);
+    const { userId, tenantId } = await this.mfaService.verifyMfaToken(mfaToken);
 
     const valid = await this.mfaService.verifyCode(userId, code);
     if (!valid) {
@@ -663,8 +663,7 @@ export class UserService {
 
   // â"€â"€ Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   private async issueAccessToken(user: any, tenantId: string): Promise<string> {
-    const secret =
-      process.env.JWT_SECRET ?? 'billinx-dev-secret-key-change-in-production';
+    const privateKey = await this.secrets.getJwtPrivateKey();
     const roles = user.roles?.map((r: any) => r.role) ?? [];
     const primaryRole = roles[0] ?? 'VIEWER';
 
@@ -678,8 +677,8 @@ export class UserService {
         environment: 'PRODUCTION',
         tier: 'STANDARD',
       },
-      secret,
-      { expiresIn: ACCESS_TOKEN_TTL },
+      privateKey,
+      { algorithm: 'RS256', expiresIn: ACCESS_TOKEN_TTL },
     );
   }
 

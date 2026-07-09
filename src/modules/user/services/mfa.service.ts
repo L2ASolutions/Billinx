@@ -218,17 +218,19 @@ export class MfaService {
 
   // ─── MFA challenge JWT ─────────────────────────────────────────────────────
 
-  issueMfaToken(userId: string, tenantId: string): string {
+  async issueMfaToken(userId: string, tenantId: string): Promise<string> {
+    const secret = await this.getMfaChallengeSecret();
     return jwt.sign(
       { sub: userId, tenantId, isMfaToken: true },
-      `${this.jwtSecret()}:mfa`,
+      secret,
       { expiresIn: MFA_TOKEN_TTL },
     );
   }
 
-  verifyMfaToken(token: string): { userId: string; tenantId: string } {
+  async verifyMfaToken(token: string): Promise<{ userId: string; tenantId: string }> {
+    const secret = await this.getMfaChallengeSecret();
     try {
-      const payload = jwt.verify(token, `${this.jwtSecret()}:mfa`) as any;
+      const payload = jwt.verify(token, secret) as any;
       if (!payload?.isMfaToken) throw new Error();
       return {
         userId: payload.sub as string,
@@ -340,9 +342,8 @@ export class MfaService {
     );
   }
 
-  private jwtSecret(): string {
-    return (
-      process.env.JWT_SECRET ?? 'billinx-dev-secret-key-change-in-production'
-    );
+  private async getMfaChallengeSecret(): Promise<string> {
+    const key = await this.secrets.getMasterEncryptionKey();
+    return crypto.createHmac('sha256', key).update('mfa-challenge').digest('hex');
   }
 }

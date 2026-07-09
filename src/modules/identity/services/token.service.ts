@@ -62,11 +62,9 @@ export class TokenService {
       role,
     };
 
-    // Use a simple secret for development
-    const secret =
-      process.env.JWT_SECRET ?? 'billinx-dev-secret-key-change-in-production';
-
-    const accessToken = jwt.sign(payload, secret, {
+    const privateKey = await this.secrets.getJwtPrivateKey();
+    const accessToken = jwt.sign(payload, privateKey, {
+      algorithm: 'RS256',
       expiresIn: ACCESS_TOKEN_TTL,
     });
 
@@ -93,11 +91,10 @@ export class TokenService {
   }
 
   async verifyAccessToken(token: string): Promise<JwtPayload> {
-    const secret =
-      process.env.JWT_SECRET ?? 'billinx-dev-secret-key-change-in-production';
+    const publicKey = await this.secrets.getJwtPublicKey();
 
     try {
-      return jwt.verify(token, secret) as JwtPayload;
+      return jwt.verify(token, publicKey, { algorithms: ['RS256'] }) as JwtPayload;
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
         throw new UnauthorizedException('Access token expired');
