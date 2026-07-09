@@ -17,7 +17,10 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:integration": "jest --config ./test/jest-integration.json --forceExit",
+    "db:migrate:deploy": "DATABASE_URL=${MIGRATION_DATABASE_URL:-$DATABASE_URL} npx prisma migrate deploy",
+    "db:migrate:dev": "DATABASE_URL=${MIGRATION_DATABASE_URL:-$DATABASE_URL} npx prisma migrate dev"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.1045.0",

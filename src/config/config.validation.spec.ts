@@ -15,12 +15,14 @@ const BASE_PRODUCTION = {
   AWS_REGION: 'af-south-1',
   AWS_ACCESS_KEY_ID: 'AKIAIOSFODNN7EXAMPLE',
   AWS_SECRET_ACCESS_KEY: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+  MIGRATION_DATABASE_URL: 'postgresql://billinx_owner:secret@localhost/billinx',
 };
 
 const BASE_DEVELOPMENT = {
   ...BASE_COMMON,
   NODE_ENV: 'development',
-  JWT_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----',
+  JWT_PRIVATE_KEY:
+    '-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----',
 };
 
 describe('validateEnvironment', () => {
@@ -51,6 +53,11 @@ describe('validateEnvironment', () => {
   it('(AC5a) throws when JWT_PRIVATE_KEY is absent in development', () => {
     process.env = { ...BASE_COMMON, NODE_ENV: 'development' };
     expect(() => validateEnvironment()).toThrow('JWT_PRIVATE_KEY');
+  });
+
+  it('(AC1) throws on startup when MIGRATION_DATABASE_URL is absent in production', () => {
+    process.env = { ...BASE_PRODUCTION, MIGRATION_DATABASE_URL: '' };
+    expect(() => validateEnvironment()).toThrow('MIGRATION_DATABASE_URL');
   });
 
   // ── Success paths ──────────────────────────────────────────────────────────
