@@ -1,13 +1,48 @@
 /// <reference types="jest" />
 
+import * as crypto from 'crypto';
 import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
 import { UnauthorizedException } from '@nestjs/common';
 import { TokenService } from './token.service';
 
-const JWT_SECRET = 'test-jwt-secret';
 const USER_ID = 'user-001';
 const TENANT_ID = 'tenant-001';
+
+// Generate a single RSA key pair for the full test run.  2048-bit is
+// cryptographically correct; using it here (vs 4096-bit) keeps the
+// beforeAll runtime under ~300 ms.
+let testPrivateKeyPem: string;
+let testPublicKeyPem: string;
+let attackerPrivateKeyPem: string; // separate key — used for forgery tests
+
+beforeAll(() => {
+  const kp = crypto.generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+  testPrivateKeyPem = kp.privateKey;
+  testPublicKeyPem = kp.publicKey;
+
+  const attacker = crypto.generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+  attackerPrivateKeyPem = attacker.privateKey;
+});
+
+function makeSecrets(overrides: Partial<{
+  getJwtPrivateKey: () => Promise<string>;
+  getJwtPublicKey: () => Promise<string>;
+}> = {}) {
+  return {
+    getJwtPrivateKey: jest.fn().mockResolvedValue(testPrivateKeyPem),
+    getJwtPublicKey: jest.fn().mockResolvedValue(testPublicKeyPem),
+    ...overrides,
+  };
+}
 
 function makePrisma(overrides: Record<string, any> = {}) {
   const tx = {
@@ -28,22 +63,18 @@ function makePrisma(overrides: Record<string, any> = {}) {
 describe('TokenService', () => {
   let service: TokenService;
   let prisma: ReturnType<typeof makePrisma>;
-  const ORIGINAL_ENV = process.env;
+  let secrets: ReturnType<typeof makeSecrets>;
 
   beforeEach(() => {
-    process.env = { ...ORIGINAL_ENV, JWT_SECRET };
     prisma = makePrisma();
-    service = new TokenService(prisma as any, {} as any);
-  });
-
-  afterEach(() => {
-    process.env = ORIGINAL_ENV;
+    secrets = makeSecrets();
+    service = new TokenService(prisma as any, secrets as any);
   });
 
   // ── issueTokenPair ────────────────────────────────────────────────────────
 
   describe('issueTokenPair', () => {
-    it('issues a signed access token and a prefixed refresh token, and persists a hash of the refresh token', async () => {
+    it('issues an RS256-signed access token and a prefixed refresh token, and persists a hash of the refresh token', async () => {
       const result = await service.issueTokenPair(
         USER_ID,
         TENANT_ID,
@@ -57,9 +88,11 @@ describe('TokenService', () => {
         true,
       );
 
+      // Verify that the token is RS256 (asymmetric) and carries the right payload.
       const decoded = jwt.verify(
         result.tokenResponse.accessToken,
-        JWT_SECRET,
+        testPublicKeyPem,
+        { algorithms: ['RS256'] },
       ) as any;
       expect(decoded.sub).toBe(USER_ID);
       expect(decoded.tenantId).toBe(TENANT_ID);
@@ -67,15 +100,19 @@ describe('TokenService', () => {
       expect(decoded.tier).toBe('STANDARD');
       expect(decoded.role).toBe('member');
 
+      // The token header must declare RS256.
+      const [headerB64] = result.tokenResponse.accessToken.split('.');
+      const header = JSON.parse(
+        Buffer.from(headerB64, 'base64url').toString('utf8'),
+      );
+      expect(header.alg).toBe('RS256');
+
       expect(prisma.__tx.refreshToken.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            tenantId: TENANT_ID,
-            userId: USER_ID,
-          }),
+          data: expect.objectContaining({ tenantId: TENANT_ID, userId: USER_ID }),
         }),
       );
-      // the raw refresh token itself must never be persisted, only its hash
+      // The raw refresh token must never be persisted — only its bcrypt hash.
       const persisted = prisma.__tx.refreshToken.create.mock.calls[0][0].data;
       expect(persisted.tokenHash).not.toBe(result.refreshToken);
     });
@@ -84,27 +121,29 @@ describe('TokenService', () => {
   // ── verifyAccessToken ─────────────────────────────────────────────────────
 
   describe('verifyAccessToken', () => {
-    it('returns the decoded payload for a valid token', async () => {
+    it('returns the decoded payload for a valid RS256 token', async () => {
       const token = jwt.sign(
         { sub: USER_ID, tenantId: TENANT_ID },
-        JWT_SECRET,
-        {
-          expiresIn: '15m',
-        },
+        testPrivateKeyPem,
+        { algorithm: 'RS256', expiresIn: '15m' },
       );
       const payload = await service.verifyAccessToken(token);
       expect(payload.sub).toBe(USER_ID);
     });
 
     it('throws UnauthorizedException with an "expired" message for an expired token', async () => {
-      const token = jwt.sign({ sub: USER_ID }, JWT_SECRET, { expiresIn: -10 });
+      const token = jwt.sign({ sub: USER_ID }, testPrivateKeyPem, {
+        algorithm: 'RS256',
+        expiresIn: -10,
+      });
       await expect(service.verifyAccessToken(token)).rejects.toThrow(
         'Access token expired',
       );
     });
 
-    it('throws UnauthorizedException for a token signed with the wrong secret', async () => {
-      const token = jwt.sign({ sub: USER_ID }, 'wrong-secret', {
+    it('throws UnauthorizedException for a token signed with a different RS256 private key', async () => {
+      const token = jwt.sign({ sub: USER_ID }, attackerPrivateKeyPem, {
+        algorithm: 'RS256',
         expiresIn: '15m',
       });
       await expect(service.verifyAccessToken(token)).rejects.toThrow(
@@ -115,6 +154,40 @@ describe('TokenService', () => {
     it('throws UnauthorizedException for a malformed token', async () => {
       await expect(service.verifyAccessToken('not-a-jwt')).rejects.toThrow(
         'Invalid access token',
+      );
+    });
+
+    // ── AC5b: HS256 tokens must be rejected ───────────────────────────────
+
+    it('(AC5b) rejects a token signed with a symmetric HS256 secret', async () => {
+      const hs256Token = jwt.sign(
+        { sub: USER_ID, tenantId: TENANT_ID, environment: 'PRODUCTION', tier: 'STANDARD', role: 'member' },
+        'some-symmetric-secret',
+        { expiresIn: '15m' },
+        // jsonwebtoken defaults to HS256 when given a string secret
+      );
+      await expect(service.verifyAccessToken(hs256Token)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    // ── AC5c: forged admin token with wrong key must be rejected ──────────
+
+    it('(AC5c) rejects a forged admin token signed with an attacker-controlled RSA key', async () => {
+      const forgedToken = jwt.sign(
+        {
+          sub: 'attacker-user-id',
+          tenantId: 'victim-tenant-id',
+          role: 'admin',
+          environment: 'PRODUCTION',
+          tier: 'ENTERPRISE',
+        },
+        attackerPrivateKeyPem,
+        { algorithm: 'RS256', expiresIn: '15m' },
+      );
+      // The server's public key will not match the attacker's private key.
+      await expect(service.verifyAccessToken(forgedToken)).rejects.toThrow(
+        UnauthorizedException,
       );
     });
   });

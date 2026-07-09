@@ -11,7 +11,7 @@ const PRODUCTION_REQUIRED_VARS: string[] = [
   'AWS_SECRET_ACCESS_KEY',
 ];
 
-const DEVELOPMENT_REQUIRED_VARS: string[] = ['JWT_SECRET'];
+const DEVELOPMENT_REQUIRED_VARS: string[] = ['JWT_PRIVATE_KEY'];
 
 export function validateEnvironment(): void {
   const missing: string[] = [];
