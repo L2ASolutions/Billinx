@@ -102,6 +102,54 @@ jobs:
       - name: npm audit (HIGH and CRITICAL only)
         run: npm audit --audit-level=high
 
+  # ── RLS isolation integration test ────────────────────────────────────────
+  rls-isolation:
+    name: RLS Isolation Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: billinx
+          POSTGRES_PASSWORD: billinx_secret
+          POSTGRES_DB: billinx
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://billinx:billinx_secret@localhost:5432/billinx
+      MIGRATION_DATABASE_URL: postgresql://billinx:billinx_secret@localhost:5432/billinx
+      # billinx_app dev password is set in the migration (safe for CI ephemeral DB)
+      APP_DATABASE_URL: postgresql://billinx_app:billinx_app_dev_CHANGE_IN_PROD@localhost:5432/billinx
+      NODE_ENV: test
+      JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
+      JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply migrations (owner role)
+        run: npm run db:migrate:deploy
+
+      - name: Run RLS isolation integration test
+        run: npm run test:integration
+
   # ── Docker build check ─────────────────────────────────────────────────────
   docker-build:
     name: Docker Build Check
