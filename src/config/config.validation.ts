@@ -13,6 +13,9 @@ const PRODUCTION_REQUIRED_VARS: string[] = [
   // SET LOCAL row_security = OFF (superuser-only in Postgres).
   // DATABASE_URL should connect as the non-owner billinx_app role in production.
   'MIGRATION_DATABASE_URL',
+  // Comma-separated list of allowed CORS origins (e.g. "https://app.billinx.ng").
+  // Without this, the app boots with an empty CORS allowlist, blocking all browser clients.
+  'ALLOWED_ORIGINS',
 ];
 
 const DEVELOPMENT_REQUIRED_VARS: string[] = ['JWT_PRIVATE_KEY'];

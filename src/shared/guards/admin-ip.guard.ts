@@ -27,7 +27,14 @@ export class AdminIpGuard implements CanActivate {
   }
 
   canActivate(context: ExecutionContext): boolean {
-    if (!this.allowlist) return true;
+    if (!this.allowlist) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new ForbiddenException(
+          'Admin routes are disabled: ADMIN_ALLOWED_IPS is not configured',
+        );
+      }
+      return true;
+    }
 
     const req = context.switchToHttp().getRequest<Request>();
     const clientIp =
