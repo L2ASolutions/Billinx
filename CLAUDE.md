@@ -154,6 +154,12 @@ billinx/
 - `POST/GET /v1/incoming-invoices`, `GET .../stats`, `GET .../:id`
 - `PATCH :id/validate`, `PATCH :id/approve`, `PATCH :id/reject`, `PATCH :id/mark-paid`
 - `POST :id/send-receipt`, `POST/GET/DELETE :id/attachment`
+- **File upload security (enforced on `POST :id/attachment`):**
+  - Stream-level size limit: `FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } })` prevents Multer from buffering the full body before rejecting oversized uploads.
+  - Controller-layer size check: `ParseFilePipe` + `MaxFileSizeValidator` (10 MB, `errorHttpStatusCode: 400`) runs before the service handler is reached — belt-and-suspenders, unit-testable.
+  - Magic-byte MIME verification: `file-type@16` reads the actual bytes and confirms the file is PDF/JPEG/PNG; rejects if the detected type is not in the allowed set, or if it disagrees with the client-supplied `Content-Type`. The verified MIME type (not the client-supplied value) is stored in the database.
+  - Allowed types: `application/pdf`, `image/jpeg`, `image/png`.
+  - S3/object-storage migration is pending AWS setup (planned as a follow-up — currently stored as `attachmentData` BYTEA in Postgres).
 
 ### vat (`src/modules/vat/`)
 - VAT Return Assistant backend: `GET /v1/vat/summary`, `.../summary/annual`, `.../entries`
