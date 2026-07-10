@@ -51,10 +51,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!isAuthenticated) return null;
 
-  const fullName = profile?.fullName
-    ?? (profile?.firstName && profile?.lastName ? `${profile.firstName} ${profile.lastName}` : undefined);
-  const role = profile?.roles?.[0];
-
   return (
     <UserProfileProvider
       profile={profile}
@@ -63,8 +59,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     >
       <div className="flex min-h-screen bg-surface">
         <Sidebar
-          fullName={fullName}
-          role={role}
           invoiceBadge={sentPendingBadge}
           receivedBadge={receivedBadge}
           mobileOpen={mobileSidebarOpen}
