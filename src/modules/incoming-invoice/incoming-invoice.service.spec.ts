@@ -9,9 +9,9 @@ import { ActivityService } from '../activity/services/activity.service';
 import { EmailService } from '../../shared/email/email.service';
 
 jest.mock('file-type', () => ({
-  fromBuffer: jest.fn(),
-}));
-import { fromBuffer } from 'file-type';
+  fileTypeFromBuffer: jest.fn(),
+}), { virtual: true });
+import { fileTypeFromBuffer } from 'file-type';
 
 // ── Mock request context ──────────────────────────────────────────────────────
 
@@ -295,7 +295,7 @@ describe('IncomingInvoiceService', () => {
     });
 
     it('accepts a valid PDF (magic bytes match declared mimetype)', async () => {
-      (fromBuffer as jest.Mock).mockResolvedValue({ mime: 'application/pdf', ext: 'pdf' });
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: 'application/pdf', ext: 'pdf' });
       const result = await service.uploadAttachment(INVOICE_ID, TENANT_ID, makeFile());
       expect(result.attachmentMime).toBe('application/pdf');
       expect(prisma.incomingInvoice.update).toHaveBeenCalledWith(
@@ -304,7 +304,7 @@ describe('IncomingInvoiceService', () => {
     });
 
     it('accepts a valid JPEG', async () => {
-      (fromBuffer as jest.Mock).mockResolvedValue({ mime: 'image/jpeg', ext: 'jpg' });
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: 'image/jpeg', ext: 'jpg' });
       const file = makeFile({ mimetype: 'image/jpeg', originalname: 'photo.jpg' });
       prisma.incomingInvoice.update = jest.fn().mockResolvedValue({ ...mockUpdate, attachmentMime: 'image/jpeg', attachmentName: 'photo.jpg' });
       const result = await service.uploadAttachment(INVOICE_ID, TENANT_ID, file);
@@ -312,7 +312,7 @@ describe('IncomingInvoiceService', () => {
     });
 
     it('accepts a valid PNG', async () => {
-      (fromBuffer as jest.Mock).mockResolvedValue({ mime: 'image/png', ext: 'png' });
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: 'image/png', ext: 'png' });
       const file = makeFile({ mimetype: 'image/png', originalname: 'image.png' });
       prisma.incomingInvoice.update = jest.fn().mockResolvedValue({ ...mockUpdate, attachmentMime: 'image/png', attachmentName: 'image.png' });
       const result = await service.uploadAttachment(INVOICE_ID, TENANT_ID, file);
@@ -320,7 +320,7 @@ describe('IncomingInvoiceService', () => {
     });
 
     it('rejects an .exe renamed to .pdf (magic bytes → EXE, claimed → PDF)', async () => {
-      (fromBuffer as jest.Mock).mockResolvedValue({ mime: 'application/x-msdownload', ext: 'exe' });
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: 'application/x-msdownload', ext: 'exe' });
       const file = makeFile({ mimetype: 'application/pdf', originalname: 'document.pdf' });
       await expect(service.uploadAttachment(INVOICE_ID, TENANT_ID, file)).rejects.toThrow(
         new BadRequestException('Unsupported file type. Only PDF, JPEG, and PNG files are accepted.'),
@@ -330,7 +330,7 @@ describe('IncomingInvoiceService', () => {
 
     it('rejects an unsupported type (.docx) even when claimed MIME matches', async () => {
       const docxMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      (fromBuffer as jest.Mock).mockResolvedValue({ mime: docxMime, ext: 'docx' });
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: docxMime, ext: 'docx' });
       const file = makeFile({ mimetype: docxMime, originalname: 'report.docx' });
       await expect(service.uploadAttachment(INVOICE_ID, TENANT_ID, file)).rejects.toThrow(
         new BadRequestException('Unsupported file type. Only PDF, JPEG, and PNG files are accepted.'),
@@ -339,14 +339,14 @@ describe('IncomingInvoiceService', () => {
     });
 
     it('rejects when magic bytes are unrecognized (fromBuffer returns undefined)', async () => {
-      (fromBuffer as jest.Mock).mockResolvedValue(undefined);
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue(undefined);
       await expect(service.uploadAttachment(INVOICE_ID, TENANT_ID, makeFile())).rejects.toThrow(
         new BadRequestException('Unsupported file type. Only PDF, JPEG, and PNG files are accepted.'),
       );
     });
 
     it('rejects when detected MIME does not match declared MIME (mismatch attack)', async () => {
-      (fromBuffer as jest.Mock).mockResolvedValue({ mime: 'image/jpeg', ext: 'jpg' });
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: 'image/jpeg', ext: 'jpg' });
       const file = makeFile({ mimetype: 'application/pdf', originalname: 'sneaky.pdf' });
       await expect(service.uploadAttachment(INVOICE_ID, TENANT_ID, file)).rejects.toThrow(
         new BadRequestException('File content does not match the declared content type.'),
@@ -354,7 +354,7 @@ describe('IncomingInvoiceService', () => {
     });
 
     it('stores detected MIME type, not the client-supplied mimetype', async () => {
-      (fromBuffer as jest.Mock).mockResolvedValue({ mime: 'image/jpeg', ext: 'jpg' });
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: 'image/jpeg', ext: 'jpg' });
       const file = makeFile({ mimetype: 'image/jpg', originalname: 'photo.jpg' });
       prisma.incomingInvoice.update = jest.fn().mockResolvedValue({ ...mockUpdate, attachmentMime: 'image/jpeg' });
       await service.uploadAttachment(INVOICE_ID, TENANT_ID, file);
