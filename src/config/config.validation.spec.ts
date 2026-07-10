@@ -16,6 +16,7 @@ const BASE_PRODUCTION = {
   AWS_ACCESS_KEY_ID: 'AKIAIOSFODNN7EXAMPLE',
   AWS_SECRET_ACCESS_KEY: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
   MIGRATION_DATABASE_URL: 'postgresql://billinx_owner:secret@localhost/billinx',
+  ALLOWED_ORIGINS: 'https://app.billinx.ng',
 };
 
 const BASE_DEVELOPMENT = {
@@ -58,6 +59,11 @@ describe('validateEnvironment', () => {
   it('(AC1) throws on startup when MIGRATION_DATABASE_URL is absent in production', () => {
     process.env = { ...BASE_PRODUCTION, MIGRATION_DATABASE_URL: '' };
     expect(() => validateEnvironment()).toThrow('MIGRATION_DATABASE_URL');
+  });
+
+  it('throws on startup when ALLOWED_ORIGINS is absent in production', () => {
+    process.env = { ...BASE_PRODUCTION, ALLOWED_ORIGINS: '' };
+    expect(() => validateEnvironment()).toThrow('ALLOWED_ORIGINS');
   });
 
   // ── Success paths ──────────────────────────────────────────────────────────

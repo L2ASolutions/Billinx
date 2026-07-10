@@ -14,21 +14,34 @@ function makeContext(
 }
 
 describe('AdminIpGuard', () => {
-  const ORIGINAL_ENV = process.env.ADMIN_ALLOWED_IPS;
+  const ORIGINAL_IPS = process.env.ADMIN_ALLOWED_IPS;
+  const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
 
   afterEach(() => {
-    if (ORIGINAL_ENV === undefined) {
+    if (ORIGINAL_IPS === undefined) {
       delete process.env.ADMIN_ALLOWED_IPS;
     } else {
-      process.env.ADMIN_ALLOWED_IPS = ORIGINAL_ENV;
+      process.env.ADMIN_ALLOWED_IPS = ORIGINAL_IPS;
     }
+    process.env.NODE_ENV = ORIGINAL_NODE_ENV;
   });
 
-  it('fails open (allows any IP) when ADMIN_ALLOWED_IPS is not set', () => {
+  it('allows any IP in development when ADMIN_ALLOWED_IPS is not set', () => {
     delete process.env.ADMIN_ALLOWED_IPS;
+    process.env.NODE_ENV = 'development';
     const guard = new AdminIpGuard();
 
     expect(guard.canActivate(makeContext({}, '203.0.113.5'))).toBe(true);
+  });
+
+  it('throws ForbiddenException in production when ADMIN_ALLOWED_IPS is not set', () => {
+    delete process.env.ADMIN_ALLOWED_IPS;
+    process.env.NODE_ENV = 'production';
+    const guard = new AdminIpGuard();
+
+    expect(() => guard.canActivate(makeContext({}, '203.0.113.5'))).toThrow(
+      ForbiddenException,
+    );
   });
 
   describe('with an allowlist configured', () => {
