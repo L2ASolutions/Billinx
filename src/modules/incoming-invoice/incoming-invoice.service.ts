@@ -7,7 +7,7 @@ import {
   ForbiddenException,
   Optional,
 } from '@nestjs/common';
-import { fromBuffer } from 'file-type';
+import { fileTypeFromBuffer } from 'file-type';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ActivityService } from '../activity/services/activity.service';
@@ -175,7 +175,7 @@ export class IncomingInvoiceService {
 
     const ALLOWED_MIMES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
 
-    const detected = await fromBuffer(file.buffer);
+    const detected = await fileTypeFromBuffer(file.buffer);
     if (!detected || !ALLOWED_MIMES.has(detected.mime)) {
       throw new BadRequestException(
         'Unsupported file type. Only PDF, JPEG, and PNG files are accepted.',
