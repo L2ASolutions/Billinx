@@ -26,6 +26,7 @@ import { checkRole } from '../../../shared/utils/role-checker';
 import { SubmissionService } from '../../submission/services/submission.service';
 import { EmailService } from '../../../shared/email/email.service';
 import { InventoryService } from '../../inventory/inventory.service';
+import { InvoiceValidationService } from './invoice-validation.service';
 
 export interface CreateInvoiceResult {
   invoice: InvoiceResponse;
@@ -47,6 +48,7 @@ export class InvoiceService {
     private readonly eventEmitter: EventEmitter2,
     private readonly xmlBuilder: XmlInvoiceBuilder,
     private readonly emailService: EmailService,
+    private readonly validationService: InvoiceValidationService,
     @Optional() private readonly inventoryService?: InventoryService,
   ) {}
 
@@ -102,31 +104,19 @@ export class InvoiceService {
       tenant.interswitchServiceId ?? 'SVC00001',
     );
 
-    if (
-      (request.invoiceTypeCode === '380' ||
-        request.invoiceTypeCode === '384') &&
-      !request.originalIrn
-    ) {
-      throw new BadRequestException(
-        'Credit notes and debit notes must reference an original IRN',
-      );
-    }
-
-    // Validate required string fields before the Prisma call so callers receive
-    // a clear 400 BadRequest rather than a PrismaClientValidationError (which
-    // would surface as a 500 and pollutes the system-error log).
-    if (!request.seller?.tin) {
-      throw new BadRequestException('seller.tin is required');
-    }
-    if (!request.seller?.partyName) {
-      throw new BadRequestException('seller.partyName is required');
-    }
-    if (!request.buyer?.partyName) {
-      throw new BadRequestException('buyer.partyName is required');
-    }
-    if (!request.issueDate) {
-      throw new BadRequestException('issueDate is required');
-    }
+    this.validationService.validateInvoiceFields(
+      {
+        invoiceTypeCode: request.invoiceTypeCode,
+        invoiceKind: request.invoiceKind,
+        seller: request.seller,
+        buyer: request.buyer,
+        issueDate: request.issueDate,
+        originalIrn: request.originalIrn,
+        lineItems: request.lineItems,
+        totalAmount: request.legalMonetaryTotal?.payableAmount,
+      },
+      'CREATE',
+    );
 
     const invoice = await this.invoiceRepository.create({
       tenantId,
@@ -322,25 +312,20 @@ export class InvoiceService {
     const effectiveTotal =
       request.legalMonetaryTotal?.payableAmount ?? Number(invoice.totalAmount);
 
-    if (!effectiveSellerTin)
-      throw new BadRequestException('seller.tin is required');
-    if (!effectiveSellerName)
-      throw new BadRequestException('seller.partyName is required');
-    if (!effectiveBuyerName)
-      throw new BadRequestException('buyer.partyName is required');
-    if (!effectiveIssueDate)
-      throw new BadRequestException('issueDate is required');
-    if (
-      (effectiveKind === 'B2B' || effectiveKind === 'B2G') &&
-      !effectiveBuyerTin
-    )
-      throw new BadRequestException(
-        'buyer.tin is required for B2B / B2G invoices',
-      );
-    if (!effectiveLineItems.length)
-      throw new BadRequestException('At least one line item is required');
-    if (Number(effectiveTotal) <= 0)
-      throw new BadRequestException('Invoice total must be greater than zero');
+    this.validationService.validateInvoiceFields(
+      {
+        invoiceTypeCode:
+          request.invoiceTypeCode ?? (invoice as any).invoiceTypeCode,
+        invoiceKind: effectiveKind,
+        seller: { tin: effectiveSellerTin, partyName: effectiveSellerName },
+        buyer: { tin: effectiveBuyerTin, partyName: effectiveBuyerName },
+        issueDate: effectiveIssueDate,
+        originalIrn: request.originalIrn ?? (invoice as any).originalIrn,
+        lineItems: effectiveLineItems,
+        totalAmount: effectiveTotal,
+      },
+      'SUBMIT',
+    );
 
     // Apply any field updates the user made before submitting.
     await this.prisma.asAdmin(async (tx) => {
@@ -438,81 +423,19 @@ export class InvoiceService {
   }
 
   async validateInvoice(request: any): Promise<ValidationResponse> {
-    const errors: any[] = [];
-    const warnings: any[] = [];
-
-    if (!request.seller?.tin) {
-      errors.push({
-        field: 'seller.tin',
-        code: 'MISSING_SELLER_TIN',
-        message: 'Seller TIN is required',
-        severity: 'ERROR',
-      });
-    }
-
-    if (!request.seller?.partyName) {
-      errors.push({
-        field: 'seller.partyName',
-        code: 'MISSING_SELLER_NAME',
-        message: 'Seller name is required',
-        severity: 'ERROR',
-      });
-    }
-
-    if (!request.buyer?.partyName) {
-      errors.push({
-        field: 'buyer.partyName',
-        code: 'MISSING_BUYER_NAME',
-        message: 'Buyer name is required',
-        severity: 'ERROR',
-      });
-    }
-
-    if (!request.issueDate) {
-      errors.push({
-        field: 'issueDate',
-        code: 'MISSING_ISSUE_DATE',
-        message: 'Invoice issue date is required',
-        severity: 'ERROR',
-      });
-    }
-
-    if (!request.lineItems || request.lineItems.length === 0) {
-      errors.push({
-        field: 'lineItems',
-        code: 'MISSING_LINE_ITEMS',
-        message: 'Invoice must have at least one line item',
-        severity: 'ERROR',
-      });
-    }
-
-    if (request.lineItems) {
-      request.lineItems.forEach((item: any, index: number) => {
-        if (!item.hsnCode) {
-          warnings.push({
-            field: `lineItems[${index}].hsnCode`,
-            code: 'MISSING_HSN_CODE',
-            message: 'HSN code recommended for goods-based line items',
-            severity: 'WARNING',
-          });
-        }
-      });
-    }
-
-    if (
-      (request.invoiceTypeCode === '380' ||
-        request.invoiceTypeCode === '384') &&
-      !request.originalIrn
-    ) {
-      errors.push({
-        field: 'originalIrn',
-        code: 'MISSING_ORIGINAL_IRN',
-        message: 'Credit notes and debit notes must reference an original IRN',
-        severity: 'ERROR',
-      });
-    }
-
-    return { valid: errors.length === 0, errors, warnings };
+    return this.validationService.validateInvoiceFields(
+      {
+        invoiceTypeCode: request.invoiceTypeCode,
+        invoiceKind: request.invoiceKind,
+        seller: request.seller,
+        buyer: request.buyer,
+        issueDate: request.issueDate,
+        originalIrn: request.originalIrn,
+        lineItems: request.lineItems,
+        totalAmount: request.legalMonetaryTotal?.payableAmount,
+      },
+      'VALIDATE',
+    );
   }
 
   async getInvoice(id: string, tenantId: string): Promise<InvoiceResponse> {
