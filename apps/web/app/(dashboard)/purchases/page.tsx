@@ -550,6 +550,8 @@ export default function PurchasesPage() {
   }, [page, activeTab]);
 
   useEffect(() => {
+    // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 

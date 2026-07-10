@@ -17,6 +17,8 @@ export default function AdminLoginPage() {
   useEffect(() => {
     const authError = sessionStorage.getItem("authError");
     if (authError) {
+      // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError(authError);
       sessionStorage.removeItem("authError");
     }

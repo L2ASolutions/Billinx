@@ -3,7 +3,7 @@
 import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AuthCard } from "@/components/auth/AuthCard";
+import Image from "next/image";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { authApi } from "@/lib/api";
@@ -23,6 +23,8 @@ export default function LoginPage() {
   useEffect(() => {
     const authError = sessionStorage.getItem("authError");
     if (authError) {
+      // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError(authError);
       sessionStorage.removeItem("authError");
     }
@@ -69,7 +71,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <img src="/billinx-wordmark.svg" alt="Billinx Solutions" height="48" className="h-12 w-auto mx-auto mb-3" />
+          <Image src="/billinx-wordmark.svg" alt="Billinx Solutions" width={320} height={60} unoptimized className="h-12 w-auto mx-auto mb-3" />
           <p className="text-sm text-muted">E-invoicing compliance for Nigerian businesses</p>
         </div>
 

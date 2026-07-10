@@ -12,26 +12,6 @@ import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const STATUS_COLORS: Record<string, string> = {
-  ACCEPTED:          "bg-green-50 text-green-700 border-green/20",
-  REJECTED:          "bg-red-50 text-red-600 border-red-200",
-  DRAFT:             "bg-gray-100 text-gray-600 border-gray-200",
-  QUEUED:            "bg-blue-50 text-blue-600 border-blue-200",
-  SUBMITTING:        "bg-amber-50 text-amber-700 border-amber-200",
-  SUBMITTED:         "bg-blue-50 text-blue-700 border-blue-200",
-  VALIDATION_FAILED: "bg-red-50 text-red-600 border-red-200",
-  SUBMISSION_FAILED: "bg-red-50 text-red-600 border-red-200",
-  DEAD_LETTERED:     "bg-red-100 text-red-700 border-red-300",
-  CANCELLED:         "bg-gray-100 text-gray-500 border-gray-200",
-};
-
-const PAYMENT_STATUS_COLORS: Record<string, string> = {
-  PAID:    "bg-green-50 text-green-700",
-  PARTIAL: "bg-blue-50 text-blue-600",
-  UNPAID:  "bg-amber-50 text-amber-700",
-  OVERDUE: "bg-red-50 text-red-600",
-};
-
 const PROVIDERS = ["MANUAL", "PAYSTACK", "FLUTTERWAVE", "BANK_TRANSFER"] as const;
 
 const PROVIDER_BADGE: Record<string, string> = {
@@ -98,6 +78,7 @@ interface InvoiceDetail {
   buyerName: string;
   buyerTin?: string;
   buyerAddress?: string;
+  buyerEmail?: string;
   issueDate: string;
   createdAt: string;
   updatedAt: string;
@@ -320,7 +301,13 @@ function RejectedBanner({ invoice, onCorrect }: { invoice: InvoiceDetail; onCorr
 // ── Overdue banner ────────────────────────────────────────────────────────────
 
 function OverdueBanner({ dueDate }: { dueDate?: string }) {
+  // Date.now() in render is flagged as impure by react-hooks/purity, but this is a
+  // read-only "days overdue as of now" display calculation with no state/effects of
+  // its own — an SSR/client hydration mismatch here would at most show a stale day
+  // count for one render, not a functional bug. Accepted trade-off vs. threading
+  // "now" through props/state for a purely cosmetic banner.
   const daysOverdue = dueDate
+    // eslint-disable-next-line react-hooks/purity
     ? Math.floor((Date.now() - new Date(dueDate).getTime()) / 86400000)
     : 0;
   return (
@@ -830,7 +817,7 @@ export default function InvoiceDetailPage() {
   const isRejected = ["REJECTED", "SUBMISSION_FAILED", "DEAD_LETTERED", "VALIDATION_FAILED"].includes(invoice.status);
   const canCancel = ["DRAFT", "QUEUED", "VALIDATION_FAILED", "ACCEPTED"].includes(invoice.status);
   const canRecordPayment = isAccepted && invoice.paymentStatus !== "PAID";
-  const canSendReminder = isAccepted && invoice.paymentStatus !== "PAID" && !!(invoice as any).buyerEmail;
+  const canSendReminder = isAccepted && invoice.paymentStatus !== "PAID" && !!invoice.buyerEmail;
   const amountOutstanding = invoice.totalAmount - (invoice.amountPaid ?? 0);
   const collectedPct = invoice.totalAmount > 0
     ? Math.round(((invoice.amountPaid ?? 0) / invoice.totalAmount) * 100)

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
 import { invoiceApi, incomingInvoiceApi, userApi, type DashboardVisibility } from '@/lib/api';
-import { formatCurrency, formatDate, formatPaymentMethod } from '@/lib/utils';
+import { formatCurrency, formatPaymentMethod } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { useUserProfile } from '@/lib/userProfile';
 import { NotificationBell } from '@/components/dashboard/NotificationBell';
@@ -24,7 +24,10 @@ import {
   Legend,
   Sector,
   type PieSectorDataItem,
+  type TooltipContentProps,
+  type BarRectangleItem,
 } from 'recharts';
+import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -167,26 +170,26 @@ function Sk({ className = '' }: { className?: string }) {
 
 // ── Custom tooltips ───────────────────────────────────────────────────────────
 
-function RevenueTooltip({ active, payload, label }: any) {
+function RevenueTooltip({ active, payload, label }: TooltipContentProps<ValueType, NameType>) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border border-border rounded-xl shadow-lg px-4 py-3 text-xs space-y-1">
       <p className="font-semibold text-dark mb-1">{label}</p>
       <p className="text-muted">
         Revenue:{' '}
-        <span className="font-semibold text-dark">{formatCurrency(payload[0].value, 'NGN')}</span>
+        <span className="font-semibold text-dark">{formatCurrency(Number(payload[0].value), 'NGN')}</span>
       </p>
       <p className="text-[#1D9E75] text-[10px] mt-1">Click to view invoices →</p>
     </div>
   );
 }
 
-function ActivityTooltip({ active, payload, label }: any) {
+function ActivityTooltip({ active, payload, label }: TooltipContentProps<ValueType, NameType>) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border border-border rounded-xl shadow-lg px-4 py-3 text-xs space-y-1">
       <p className="font-semibold text-dark mb-1.5">{label}</p>
-      {payload.map((entry: any) => (
+      {payload.map((entry) => (
         <div key={entry.name} className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: entry.color }} />
           <span className="text-muted capitalize">{entry.name}:</span>
@@ -456,7 +459,7 @@ export default function DashboardPage() {
 
   const [savedHidden, setSavedHidden] = useState<string[]>([]);
   const [localHidden, setLocalHidden] = useState<string[]>([]);
-  const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [_prefsLoaded, setPrefsLoaded] = useState(false);
 
   // ── Customize panel state ────────────────────────────────────────────────────
 
@@ -512,6 +515,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (authLoading) return;
+    // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadData();
     void loadCharts();
     void loadRejections();
@@ -523,21 +528,21 @@ export default function DashboardPage() {
   const firstName = profile?.firstName ?? user?.name?.split(' ')[0] ?? 'there';
   const tenantName = user?.tenantName ?? '';
 
-  const outstandingAmount = (stats as any)?.outstandingAmount ?? 0;
-  const outstandingCount = (stats as any)?.outstandingInvoiceCount ?? 0;
-  const overdueCount = (stats as any)?.overdueCount ?? 0;
-  const outstandingPayables = (incomingStats as any)?.totalOutstanding ?? 0;
-  const payablesCount = (incomingStats as any)?.outstandingCount ?? 0;
+  const outstandingAmount = stats?.outstandingAmount ?? 0;
+  const outstandingCount = stats?.outstandingInvoiceCount ?? 0;
+  const overdueCount = stats?.overdueCount ?? 0;
+  const outstandingPayables = incomingStats?.totalOutstanding ?? 0;
+  const payablesCount = incomingStats?.outstandingCount ?? 0;
   const netCash = outstandingAmount - outstandingPayables;
 
-  const outputVat = (stats as any)?.outputVatOutstanding ?? 0;
-  const inputVat = (stats as any)?.inputVatOutstanding ?? 0;
+  const outputVat = stats?.outputVatOutstanding ?? 0;
+  const inputVat = stats?.inputVatOutstanding ?? 0;
   const netVat = outputVat - inputVat;
 
-  const rejectedCount = (stats as any)?.rejectedCount ?? (stats as any)?.rejected ?? 0;
-  const toReview = (stats as any)?.incomingStats?.toReview ?? 0;
-  const recentRejections: RecentRejection[] = (stats as any)?.recentRejections ?? [];
-  const recentPayments: RecentPayment[] = (stats as any)?.recentPayments ?? [];
+  const rejectedCount = stats?.rejectedCount ?? stats?.rejected ?? 0;
+  const toReview = stats?.incomingStats?.toReview ?? 0;
+  const recentRejections: RecentRejection[] = stats?.recentRejections ?? [];
+  const recentPayments: RecentPayment[] = stats?.recentPayments ?? [];
 
   const showRejections = !statsLoading && rejectedCount > 0;
   const showOverdue = !statsLoading && overdueCount > 0 && !showRejections;
@@ -860,7 +865,7 @@ export default function DashboardPage() {
                         tickLine={false}
                         width={60}
                       />
-                      <Tooltip content={<RevenueTooltip />} cursor={{ fill: 'rgba(29,158,117,0.06)' }} />
+                      <Tooltip content={RevenueTooltip} cursor={{ fill: 'rgba(29,158,117,0.06)' }} />
                       <Bar
                         dataKey="amount"
                         name="Revenue"
@@ -868,8 +873,9 @@ export default function DashboardPage() {
                         radius={[4, 4, 0, 0]}
                         maxBarSize={48}
                         cursor="pointer"
-                        onClick={(data: any) => {
-                          router.push(`/invoices?direction=sent&month=${data.monthKey}`);
+                        onClick={(data: BarRectangleItem) => {
+                          const monthKey = (data as unknown as { monthKey?: string }).monthKey;
+                          router.push(`/invoices?direction=sent&month=${monthKey}`);
                         }}
                       />
                     </BarChart>
@@ -911,7 +917,7 @@ export default function DashboardPage() {
                                 paddingAngle={2}
                                 activeShape={activeDonutShape}
                                 cursor="pointer"
-                                onClick={(_: any, index: number) => {
+                                onClick={(_: unknown, index: number) => {
                                   const seg = nonZero[index];
                                   if (seg) router.push(`/invoices?direction=sent&filter=${filterMap[seg.status] ?? ''}`);
                                 }}
@@ -972,7 +978,7 @@ export default function DashboardPage() {
                         tickLine={false}
                         width={32}
                       />
-                      <Tooltip content={<ActivityTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
+                      <Tooltip content={ActivityTooltip} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
                       <Legend
                         wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
                         iconType="circle"

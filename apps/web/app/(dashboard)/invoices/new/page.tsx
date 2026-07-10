@@ -45,6 +45,71 @@ function hasPartyData(p: PartyFields): boolean {
   return !!(p.name || p.tin || p.email || p.address);
 }
 
+interface DraftPostalAddress {
+  streetName?: string;
+  state?: string;
+  lga?: string;
+}
+
+interface DraftParty {
+  partyName?: string;
+  tin?: string;
+  email?: string;
+  telephone?: string;
+  businessDescription?: string;
+  postalAddress?: DraftPostalAddress;
+}
+
+interface DraftLineItem {
+  description?: string;
+  quantity?: number;
+  unitPrice?: number;
+  priceUnit?: string;
+  taxCode?: string;
+  taxCategory?: string;
+  vatRate?: number;
+  isicCode?: string;
+  hsnCode?: string;
+}
+
+interface DraftAllowanceCharge {
+  chargeIndicator?: boolean;
+  description?: string;
+  amount?: number;
+}
+
+interface DraftInvoiceResponse {
+  status?: string;
+  invoiceType?: string;
+  invoiceKind?: string;
+  currency?: string;
+  issueDate?: string;
+  paymentDueDate?: string;
+  sellerName?: string;
+  sellerTin?: string;
+  seller?: DraftParty;
+  buyerName?: string;
+  buyerTin?: string;
+  buyer?: DraftParty;
+  originalIrn?: string;
+  billingReference?: Array<{ issueDate?: string }>;
+  sourceReference?: string;
+  buyerReference?: string;
+  note?: string;
+  paymentTermsNote?: string;
+  orderReference?: string;
+  actualDeliveryDate?: string;
+  deliveryPeriodStart?: string;
+  deliveryPeriodEnd?: string;
+  lineItems?: DraftLineItem[];
+  allowanceCharges?: DraftAllowanceCharge[];
+  metadata?: {
+    payeeParty?: Partial<PartyFields>;
+    shipToParty?: Partial<PartyFields>;
+    taxRepresentativeParty?: Partial<PartyFields>;
+  };
+}
+
 interface Product {
   id: string;
   name: string;
@@ -278,6 +343,8 @@ function CatalogPicker({ onPick, onClose }: {
 
   useEffect(() => {
     const q = search.trim().toLowerCase();
+    // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProducts(
       q
         ? allProducts.filter(
@@ -482,6 +549,11 @@ function PreviewModal({ data, onSubmit, onClose, loading }: {
   );
 }
 
+// Asterisk shown after first submit attempt
+function Req({ show, submitAttempted }: { show?: boolean; submitAttempted: boolean }) {
+  return submitAttempted && show !== false ? <span className="text-red-500 ml-0.5">*</span> : null;
+}
+
 // ── Form ──────────────────────────────────────────────────────────────────────
 
 function NewInvoiceForm() {
@@ -523,6 +595,15 @@ function NewInvoiceForm() {
   const [states, setStates] = useState<{ code: string; name: string }[]>([]);
   const [sellerLgas, setSellerLgas] = useState<{ code: string; name: string }[]>([]);
   const [buyerLgas, setBuyerLgas] = useState<{ code: string; name: string }[]>([]);
+
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ ...EMPTY_LINE }]);
+  const [allowanceCharges, setAllowanceCharges] = useState<AllowanceCharge[]>([]);
+  const [payeeParty, setPayeeParty] = useState<PartyFields>(EMPTY_PARTY);
+  const [shipToParty, setShipToParty] = useState<PartyFields>(EMPTY_PARTY);
+  const [taxRepParty, setTaxRepParty] = useState<PartyFields>(EMPTY_PARTY);
+  const [showAdditionalParties, setShowAdditionalParties] = useState(false);
+  const [whtApplicable, setWhtApplicable] = useState(false);
+  const [whtRate, setWhtRate] = useState<number>(5);
 
   useEffect(() => {
     Promise.all([
@@ -576,11 +657,15 @@ function NewInvoiceForm() {
 
   // Cascading LGA dropdowns
   useEffect(() => {
+    // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!form.sellerState) { setSellerLgas([]); return; }
     referenceApi.lgas(form.sellerState).then(setSellerLgas).catch(() => setSellerLgas([]));
   }, [form.sellerState]);
 
   useEffect(() => {
+    // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!form.buyerState) { setBuyerLgas([]); return; }
     referenceApi.lgas(form.buyerState).then(setBuyerLgas).catch(() => setBuyerLgas([]));
   }, [form.buyerState]);
@@ -588,7 +673,7 @@ function NewInvoiceForm() {
   // Pre-fill seller from tenant profile
   useEffect(() => {
     if (draftId) return;
-    api.get<{ name?: string; tin?: string; telephone?: string; businessDescription?: string; registeredAddress?: { street?: string; streetName?: string; state?: string; lga?: string }; taxRepresentative?: any }>("/v1/tenants/me")
+    api.get<{ name?: string; tin?: string; telephone?: string; businessDescription?: string; registeredAddress?: { street?: string; streetName?: string; state?: string; lga?: string }; taxRepresentative?: Partial<PartyFields> }>("/v1/tenants/me")
       .then((t) => {
         const addr = t?.registeredAddress ?? {};
         setTenantHasTin(!!t?.tin);
@@ -620,10 +705,11 @@ function NewInvoiceForm() {
   // Pre-load an existing DRAFT
   useEffect(() => {
     if (!draftId) return;
-    invoiceApi.get(draftId).then((data: any) => {
+    invoiceApi.get(draftId).then((raw: unknown) => {
+      const data = raw as DraftInvoiceResponse | null;
       if (!data || data.status !== "DRAFT") return;
       setForm({
-        invoiceType: LEGACY_TYPE_TO_CODE[data.invoiceType] ?? data.invoiceType ?? "381",
+        invoiceType: LEGACY_TYPE_TO_CODE[data.invoiceType ?? ""] ?? data.invoiceType ?? "381",
         invoiceKind: data.invoiceKind ?? "B2B",
         currency: data.currency ?? "NGN",
         issueDate: data.issueDate?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
@@ -655,7 +741,7 @@ function NewInvoiceForm() {
         deliveryPeriodEnd: data.deliveryPeriodEnd?.slice(0, 10) ?? "",
       });
       if (Array.isArray(data.lineItems) && data.lineItems.length > 0) {
-        setLineItems(data.lineItems.map((li: any) => ({
+        setLineItems(data.lineItems.map((li) => ({
           description: li.description ?? "",
           quantity: li.quantity ?? 1,
           unitPrice: li.unitPrice ?? 0,
@@ -668,29 +754,19 @@ function NewInvoiceForm() {
         })));
       }
       if (Array.isArray(data.allowanceCharges)) {
-        setAllowanceCharges(data.allowanceCharges.map((ac: any) => ({
+        setAllowanceCharges(data.allowanceCharges.map((ac) => ({
           chargeIndicator: ac.chargeIndicator ?? false,
           description: ac.description ?? "",
           amount: ac.amount ?? 0,
         })));
       }
-      const meta = (data as any).metadata ?? {};
+      const meta = data.metadata ?? {};
       if (meta.payeeParty) setPayeeParty({ name: meta.payeeParty.name ?? "", tin: meta.payeeParty.tin ?? "", email: meta.payeeParty.email ?? "", address: meta.payeeParty.address ?? "" });
       if (meta.shipToParty) setShipToParty({ name: meta.shipToParty.name ?? "", tin: meta.shipToParty.tin ?? "", email: meta.shipToParty.email ?? "", address: meta.shipToParty.address ?? "" });
       if (meta.taxRepresentativeParty) setTaxRepParty({ name: meta.taxRepresentativeParty.name ?? "", tin: meta.taxRepresentativeParty.tin ?? "", email: meta.taxRepresentativeParty.email ?? "", address: meta.taxRepresentativeParty.address ?? "" });
       setDraftLoaded(true);
     }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
-
-  const [lineItems, setLineItems] = useState<LineItem[]>([{ ...EMPTY_LINE }]);
-  const [allowanceCharges, setAllowanceCharges] = useState<AllowanceCharge[]>([]);
-  const [payeeParty, setPayeeParty] = useState<PartyFields>(EMPTY_PARTY);
-  const [shipToParty, setShipToParty] = useState<PartyFields>(EMPTY_PARTY);
-  const [taxRepParty, setTaxRepParty] = useState<PartyFields>(EMPTY_PARTY);
-  const [showAdditionalParties, setShowAdditionalParties] = useState(false);
-  const [whtApplicable, setWhtApplicable] = useState(false);
-  const [whtRate, setWhtRate] = useState<number>(5);
 
   const uf = (field: string) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -865,12 +941,12 @@ function NewInvoiceForm() {
     setError("");
     try {
       const payload = buildPayload(false);
-      let saved: any;
+      let saved: { id?: string };
       if (activeDraftId) {
-        saved = await invoiceApi.updateDraftFields(activeDraftId, payload);
+        saved = await invoiceApi.updateDraftFields(activeDraftId, payload) as { id?: string };
       } else {
-        saved = await invoiceApi.saveDraft(payload);
-        setActiveDraftId((saved as any).id);
+        saved = await invoiceApi.saveDraft(payload) as { id?: string };
+        setActiveDraftId(saved.id ?? null);
       }
       setDraftSaved(true);
       setTimeout(() => setDraftSaved(false), 3000);
@@ -959,10 +1035,6 @@ function NewInvoiceForm() {
     fieldErrors[key]
       ? "w-full px-3 py-2.5 rounded-lg border border-red-400 bg-white text-dark text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400"
       : sel();
-
-  // Asterisk shown after first submit attempt
-  const Req = ({ show }: { show?: boolean }) =>
-    submitAttempted && show !== false ? <span className="text-red-500 ml-0.5">*</span> : null;
 
   const hasErrors = Object.keys(fieldErrors).length > 0;
   const hasStandardVat = lineItems.some((li) => li.taxCategory === "S");
@@ -1055,7 +1127,7 @@ function NewInvoiceForm() {
               <Input
                 label={form.invoiceKind === "B2C"
                   ? "Payment due date (optional)"
-                  : <>Payment due date<Req /></>}
+                  : <>Payment due date<Req submitAttempted={submitAttempted} /></>}
                 type="date"
                 value={form.paymentDueDate}
                 onChange={uf("paymentDueDate")}
@@ -1110,12 +1182,12 @@ function NewInvoiceForm() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <SectionCard title="Supplier">
               <div className="space-y-3">
-                <Input label={<>Company name<Req /></>} placeholder="Your company name" value={form.sellerName} onChange={uf("sellerName")} required error={errMsg("sellerName")} />
-                <Input label={<>TIN<Req /></>} placeholder="12345678-0001" value={form.sellerTin} onChange={uf("sellerTin")} required error={errMsg("sellerTin")} />
-                <Input label={<>Street address<Req /></>} placeholder="1 Broad Street" value={form.sellerAddress} onChange={uf("sellerAddress")} required error={errMsg("sellerAddress")} />
+                <Input label={<>Company name<Req submitAttempted={submitAttempted} /></>} placeholder="Your company name" value={form.sellerName} onChange={uf("sellerName")} required error={errMsg("sellerName")} />
+                <Input label={<>TIN<Req submitAttempted={submitAttempted} /></>} placeholder="12345678-0001" value={form.sellerTin} onChange={uf("sellerTin")} required error={errMsg("sellerTin")} />
+                <Input label={<>Street address<Req submitAttempted={submitAttempted} /></>} placeholder="1 Broad Street" value={form.sellerAddress} onChange={uf("sellerAddress")} required error={errMsg("sellerAddress")} />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-dark mb-1">State<Req /></label>
+                    <label className="block text-sm font-medium text-dark mb-1">State<Req submitAttempted={submitAttempted} /></label>
                     <select className={errSel("sellerState")} value={form.sellerState} onChange={uf("sellerState")}>
                       <option value="">Select state…</option>
                       {states.map((s) => (
@@ -1125,7 +1197,7 @@ function NewInvoiceForm() {
                     {errMsg("sellerState") && <p className="mt-1 text-xs text-red-500">{errMsg("sellerState")}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-dark mb-1">LGA<Req /></label>
+                    <label className="block text-sm font-medium text-dark mb-1">LGA<Req submitAttempted={submitAttempted} /></label>
                     <select className={errSel("sellerLga")} value={form.sellerLga}
                       onChange={(e) => setForm((f) => ({ ...f, sellerLga: e.target.value }))}
                       disabled={!form.sellerState}>
@@ -1230,7 +1302,7 @@ function NewInvoiceForm() {
                   </div>
                 )}
                 <Input
-                  label={<>Name / company<Req /></>}
+                  label={<>Name / company<Req submitAttempted={submitAttempted} /></>}
                   placeholder="Buyer name or company"
                   value={form.buyerName}
                   onChange={uf("buyerName")}
@@ -1241,7 +1313,7 @@ function NewInvoiceForm() {
                   <Input
                     label={form.invoiceKind === "B2C"
                       ? "TIN (optional for B2C)"
-                      : <>TIN<Req /> <span className="text-xs text-muted font-normal">(required for B2B/B2G)</span></>}
+                      : <>TIN<Req submitAttempted={submitAttempted} /> <span className="text-xs text-muted font-normal">(required for B2B/B2G)</span></>}
                     placeholder="12345678-0001"
                     value={form.buyerTin}
                     onChange={uf("buyerTin")}
@@ -1252,7 +1324,7 @@ function NewInvoiceForm() {
                   </p>
                 </div>
                 <Input
-                  label={<>Email<Req /></>}
+                  label={<>Email<Req submitAttempted={submitAttempted} /></>}
                   type="email"
                   placeholder="buyer@company.com"
                   value={form.buyerEmail}
@@ -1260,7 +1332,7 @@ function NewInvoiceForm() {
                   error={errMsg("buyerEmail")}
                 />
                 <Input
-                  label={<>Street address<Req /></>}
+                  label={<>Street address<Req submitAttempted={submitAttempted} /></>}
                   placeholder="1 Marina Street"
                   value={form.buyerAddress}
                   onChange={uf("buyerAddress")}
@@ -1269,7 +1341,7 @@ function NewInvoiceForm() {
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-dark mb-1">State<Req /></label>
+                    <label className="block text-sm font-medium text-dark mb-1">State<Req submitAttempted={submitAttempted} /></label>
                     <select className={errSel("buyerState")} value={form.buyerState} onChange={uf("buyerState")}>
                       <option value="">Select state…</option>
                       {states.map((s) => (

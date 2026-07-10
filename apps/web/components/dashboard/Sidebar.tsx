@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useInventoryEnabled } from "@/lib/userProfile";
@@ -334,7 +334,7 @@ export function Sidebar({
 
   const logo = (
     <div className="px-6 py-5 border-b border-white/10 flex-shrink-0">
-      <img src="/billinx-wordmark-dark.svg" alt="Billinx Solutions" height="36" className="h-9 w-auto" />
+      <Image src="/billinx-wordmark-dark.svg" alt="Billinx Solutions" width={320} height={60} unoptimized className="h-9 w-auto" />
       {user?.tenantName && (
         <p className="text-white/40 text-xs mt-1.5 truncate">{user.tenantName}</p>
       )}
@@ -367,7 +367,7 @@ export function Sidebar({
           {/* Drawer */}
           <div className="relative w-72 bg-dark flex flex-col h-full shadow-2xl">
             <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 flex-shrink-0">
-              <img src="/billinx-wordmark-dark.svg" alt="Billinx Solutions" height="36" className="h-9 w-auto" />
+              <Image src="/billinx-wordmark-dark.svg" alt="Billinx Solutions" width={320} height={60} unoptimized className="h-9 w-auto" />
               <button
                 onClick={onMobileClose}
                 className="text-white/40 hover:text-white transition-colors p-1"

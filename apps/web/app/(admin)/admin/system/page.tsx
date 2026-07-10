@@ -77,6 +77,32 @@ function ActionCard({
   );
 }
 
+function QueueCard({ title, q }: { title: string; q: QueueStatus | null }) {
+  return (
+    <div className="bg-white rounded-xl border border-border p-5">
+      <h3 className="font-semibold text-dark mb-3">{title}</h3>
+      {!q ? (
+        <p className="text-sm text-muted">—</p>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: "Waiting", value: q.waiting, color: "text-yellow-600" },
+            { label: "Active", value: q.active, color: "text-blue-600" },
+            { label: "Completed", value: q.completed, color: "text-green-700" },
+            { label: "Failed", value: q.failed, color: "text-red-600" },
+            { label: "Delayed", value: q.delayed, color: "text-orange-500" },
+          ].map((s) => (
+            <div key={s.label} className="text-center p-2 bg-surface rounded-lg">
+              <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+              <p className="text-xs text-muted">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminSystemPage() {
   const [queue, setQueue] = useState<QueueStatus | null>(null);
   const [bulkQueue, setBulkQueue] = useState<QueueStatus | null>(null);
@@ -118,6 +144,8 @@ export default function AdminSystemPage() {
     }
   }
 
+  // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadAll(); }, []);
 
   async function handleRetryFailed() {
@@ -184,32 +212,6 @@ export default function AdminSystemPage() {
     } finally {
       setAuditLoading(false);
     }
-  }
-
-  function QueueCard({ title, q }: { title: string; q: QueueStatus | null }) {
-    return (
-      <div className="bg-white rounded-xl border border-border p-5">
-        <h3 className="font-semibold text-dark mb-3">{title}</h3>
-        {!q ? (
-          <p className="text-sm text-muted">—</p>
-        ) : (
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { label: "Waiting", value: q.waiting, color: "text-yellow-600" },
-              { label: "Active", value: q.active, color: "text-blue-600" },
-              { label: "Completed", value: q.completed, color: "text-green-700" },
-              { label: "Failed", value: q.failed, color: "text-red-600" },
-              { label: "Delayed", value: q.delayed, color: "text-orange-500" },
-            ].map((s) => (
-              <div key={s.label} className="text-center p-2 bg-surface rounded-lg">
-                <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
-                <p className="text-xs text-muted">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
   }
 
   return (

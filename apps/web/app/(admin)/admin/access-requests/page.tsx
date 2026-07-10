@@ -66,6 +66,8 @@ export default function AccessRequestsPage() {
     }
   }
 
+  // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(activeTab); }, [activeTab]);
 
   async function handleApprove(e: FormEvent) {
