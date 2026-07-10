@@ -1,0 +1,32 @@
+# TruffleHog suppression rationale for Billinx.
+#
+# This file does not configure TruffleHog detectors (TruffleHog's --config flag
+# covers custom detector rules, not per-commit exclusions). It exists to document
+# the suppression decision and provide an audit trail for reviewers.
+#
+# Known false positive
+# ────────────────────
+# Commits 1299ecef76561b40d4a1b33f79740f015d6c577f and
+#         3c11a7419e688131709657e0fca41ffa548aff3c
+# contain a DEV_RSA_PRIVATE_KEY / DEV_RSA_PUBLIC_KEY constant in
+# src/infrastructure/secrets/secrets.service.ts that resembles a PEM block but
+# is an inert placeholder. Confirmed via `openssl rsa -check`: only 3 lines of
+# base64 body — not a parseable RSA-2048 key. Removed in e4e9248f (2026-05-17).
+# No rotation required; no real key material was ever committed.
+#
+# Suppression strategy
+# ────────────────────
+# --only-verified is passed via extra_args in .github/workflows/pr-checks.yml.
+# TruffleHog attempts to verify each detected credential against its issuing
+# service. The placeholder cannot verify against any real service, so it is
+# filtered out automatically without a per-commit exclusion list.
+#
+# This means CI will surface only credentials that TruffleHog can confirm are
+# live — a high-signal, low-noise posture for a private production repo.
+#
+# Pending
+# ───────
+# Full git-history scrub via `git filter-repo --path-glob ...` to remove these
+# commits' content from history entirely. Until then, --only-verified keeps CI
+# green without masking real credentials. Requires engineering sign-off (rewrite
+# changes all downstream commit SHAs).
