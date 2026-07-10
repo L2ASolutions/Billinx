@@ -1,9 +1,15 @@
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // ESLint is run separately in CI (pr-checks.yml). Skipping here avoids a
-  // circular-plugin JSON error from the eslint-config-next peer resolution
-  // and keeps production builds fast.
-  eslint: { ignoreDuringBuilds: true },
+  // apps/web has its own package-lock.json alongside the repo root's, which
+  // makes Turbopack's root inference ambiguous — pin it explicitly.
+  turbopack: {
+    root: __dirname,
+  },
 
   // The /v1/:path* rewrite is kept only for backward-compat (e.g. direct curl
   // calls to localhost:3001/v1/...).  All in-app fetch calls go through the
