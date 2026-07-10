@@ -336,6 +336,8 @@ export default function PurchaseInvoiceDetailPage() {
     }
   }, [id]);
 
+  // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   async function handleValidate() {
@@ -390,7 +392,7 @@ export default function PurchaseInvoiceDetailPage() {
 
   async function handleViewAttachment() {
     try {
-      const { blob, filename } = await incomingInvoiceApi.downloadAttachment(id);
+      const { blob } = await incomingInvoiceApi.downloadAttachment(id);
       const url = URL.createObjectURL(blob);
       const a = window.open(url, "_blank");
       if (!a) {

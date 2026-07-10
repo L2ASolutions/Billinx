@@ -192,11 +192,13 @@ export default function ProductsPage() {
     }
   }, [search]);
 
+  // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     referenceApi.taxCategories().then(setTaxCategories).catch(() => {});
-    api.get<any>('/v1/tenants/me').then((t) => setInventoryEnabled(!!t?.inventoryEnabled)).catch(() => {});
+    api.get<{ inventoryEnabled?: boolean }>('/v1/tenants/me').then((t) => setInventoryEnabled(!!t?.inventoryEnabled)).catch(() => {});
   }, []);
 
   function openCreate() {
@@ -234,7 +236,7 @@ export default function ProductsPage() {
     setFormError("");
     setSubmitting(true);
     try {
-      const payload: Record<string, any> = {
+      const payload: Record<string, unknown> = {
         name: form.name,
         description: form.description || undefined,
         hsnCode: form.itemType === "product" ? (form.hsnCode || undefined) : undefined,

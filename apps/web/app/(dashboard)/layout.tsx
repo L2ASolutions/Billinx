@@ -28,13 +28,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       .then((data) => setProfile(data as UserProfile))
       .catch(() => {});
     invoiceApi.stats()
-      .then((s: any) => setSentPendingBadge(s.firsAwaiting ?? s.pending ?? 0))
+      .then((raw: unknown) => {
+        const s = raw as { firsAwaiting?: number; pending?: number };
+        setSentPendingBadge(s.firsAwaiting ?? s.pending ?? 0);
+      })
       .catch(() => {});
     incomingInvoiceApi.stats()
-      .then((s: any) => setReceivedBadge(s.received ?? 0))
+      .then((s) => setReceivedBadge(s.received ?? 0))
       .catch(() => {});
-    api.get<any>('/v1/tenants/me')
-      .then((t: any) => setInventoryEnabled(!!t?.inventoryEnabled))
+    api.get<{ inventoryEnabled?: boolean }>('/v1/tenants/me')
+      .then((t) => setInventoryEnabled(!!t?.inventoryEnabled))
       .catch(() => {});
   }, [isAuthenticated]);
 

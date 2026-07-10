@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
+import Image from "next/image";
 
 interface AuthCardProps {
   title: string;
@@ -14,7 +15,7 @@ export function AuthCard({ title, subtitle, children }: AuthCardProps) {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <img src="/billinx-wordmark.svg" alt="Billinx Solutions" height="48" className="h-12 w-auto mx-auto mb-3" />
+          <Image src="/billinx-wordmark.svg" alt="Billinx Solutions" width={320} height={60} unoptimized className="h-12 w-auto mx-auto mb-3" />
           <p className="text-sm text-muted">E-invoicing compliance for Nigerian businesses</p>
         </div>
 

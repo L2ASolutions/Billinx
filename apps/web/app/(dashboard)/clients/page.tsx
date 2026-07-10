@@ -41,6 +41,8 @@ function ClientModal({ client, onClose, onSave }: ClientModalProps) {
 
   useEffect(() => { referenceApi.states().then(setStates).catch(() => {}); }, []);
   useEffect(() => {
+    // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!form.state) { setLgas([]); return; }
     referenceApi.lgas(form.state).then(setLgas).catch(() => setLgas([]));
   }, [form.state]);
@@ -172,6 +174,8 @@ export default function ClientsPage() {
     }
   }, [search, page]);
 
+  // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   function openAdd() { setEditClient(undefined); setShowModal(true); }

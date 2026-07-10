@@ -72,7 +72,6 @@ export function InvoiceDocument({
 }: InvoiceDocumentProps) {
   const isAccepted = status === "ACCEPTED";
   const isRejected = ["REJECTED", "SUBMISSION_FAILED", "DEAD_LETTERED", "VALIDATION_FAILED"].includes(status);
-  const irn = firsConfirmedIrn ?? platformIrn;
   const invalidFields = rejectionCode ? (INVALID_FIELD_CODES[rejectionCode] ?? []) : [];
 
   const qrSrc = (() => {

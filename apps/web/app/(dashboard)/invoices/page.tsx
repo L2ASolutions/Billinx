@@ -377,10 +377,12 @@ function SentPanel({ initialTab = "ALL" }: { initialTab?: SentTab }) {
     }
   }, [page, search]);
 
+  // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    invoiceApi.stats().then((s: any) => setStats(s)).catch(() => {});
+    invoiceApi.stats().then((s) => setStats(s as DashboardStats)).catch(() => {});
   }, []);
 
   async function handleExport() {

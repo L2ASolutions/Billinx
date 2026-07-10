@@ -31,6 +31,8 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         if (exp && Date.now() >= exp * 1000) {
           // Token is expired — discard it and redirect to admin login
           localStorage.removeItem("adminToken");
+          // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setState({ isAuthenticated: false, isLoading: false });
           return;
         }

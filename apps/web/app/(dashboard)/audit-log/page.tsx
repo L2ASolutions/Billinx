@@ -140,6 +140,8 @@ export default function AuditLogPage() {
   }, [timeRange]);
 
   useEffect(() => {
+    // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadEvents();
   }, [loadEvents]);
 

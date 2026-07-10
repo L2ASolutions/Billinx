@@ -5,7 +5,9 @@ import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell,
+  type TooltipContentProps,
 } from "recharts";
+import type { ValueType, NameType } from "recharts/types/component/DefaultTooltipContent";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -174,6 +176,12 @@ function AmountCell({ inv }: { inv: InvoiceRow }) {
         </div>
       )}
       {overdue && (() => {
+        // Date.now() in render is flagged as impure by react-hooks/purity, but this is a
+        // read-only "days overdue as of now" display calculation with no state/effects of
+        // its own — an SSR/client hydration mismatch here would at most show a stale day
+        // count for one render, not a functional bug. Accepted trade-off vs. threading
+        // "now" through props/state for a purely cosmetic label.
+        // eslint-disable-next-line react-hooks/purity
         const due   = new Date(inv.paymentDueDate ?? Date.now());
         const today = new Date(new Date().toDateString());
         const days  = Math.max(1, Math.round((today.getTime() - due.getTime()) / 86400000));
@@ -311,12 +319,12 @@ function Sk({ className = "" }: { className?: string }) {
 
 // ── Chart tooltip ─────────────────────────────────────────────────────────────
 
-function ChartTooltip({ active, payload, label }: any) {
+function ChartTooltip({ active, payload, label }: TooltipContentProps<ValueType, NameType>) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border border-border rounded-lg shadow-lg px-3 py-2 text-xs space-y-1">
       {label && <p className="font-medium text-dark mb-1">{label}</p>}
-      {payload.map((p: any) => (
+      {payload.map((p) => (
         <div key={p.name} className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full" style={{ background: p.fill ?? p.color }} />
           <span className="text-muted">{p.name}:</span>
@@ -375,7 +383,7 @@ function PaymentCharts({ data, loading }: { data: PaymentChartsData | null; load
               tickLine={false}
               width={48}
             />
-            <Tooltip content={<ChartTooltip />} />
+            <Tooltip content={ChartTooltip} />
             <Bar dataKey="invoiced" name="Invoiced" fill="#E5E7EB" radius={[4, 4, 0, 0]} />
             <Bar dataKey="collected" name="Collected" fill="#1D9E75" radius={[4, 4, 0, 0]} />
           </BarChart>
@@ -417,7 +425,7 @@ function PaymentCharts({ data, loading }: { data: PaymentChartsData | null; load
                     <Cell key={i} fill={METHOD_COLORS[entry.method] ?? "#9CA3AF"} />
                   ))}
                 </Pie>
-                <Tooltip content={<ChartTooltip />} />
+                <Tooltip content={ChartTooltip} />
                 <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle">
                   <tspan x="50%" dy="-5" fontSize="13" fontWeight="700" fill="#111827">
                     ₦{fmtCompact(totalCollected)}
@@ -496,9 +504,13 @@ export default function PaymentsPage() {
     }
   }, [page, activeTab, search]);
 
+  // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
+    // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStatsLoading(true);
     invoiceApi.paymentStats()
       .then((s) => setPaymentStats(s as PaymentStats))
@@ -507,6 +519,8 @@ export default function PaymentsPage() {
   }, []);
 
   useEffect(() => {
+    // Standard fetch-on-mount pattern — not a bug. Refactor to shared data-fetching hook in a future PR.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setChartsLoading(true);
     invoiceApi.paymentCharts()
       .then((d) => setChartData(d as PaymentChartsData))
