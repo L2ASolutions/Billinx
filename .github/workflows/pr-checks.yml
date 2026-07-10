@@ -150,6 +150,51 @@ jobs:
       - name: Run RLS isolation integration test
         run: npm run test:integration
 
+  # ── Secret scanning: gitleaks ────────────────────────────────────────────────
+  # Scans every commit introduced by the PR for leaked credentials.
+  # .gitleaks.toml allowlists the two commits containing a known-inert RSA
+  # placeholder pending a git-history scrub — see that file for details.
+  # GITLEAKS_ENABLE_COMMENTS=false disables the gitleaks GitHub App integration
+  # (which requires a paid licence) while preserving fail-on-finding behaviour.
+  secret-scan-gitleaks:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_COMMENTS: "false"
+
+  # ── Secret scanning: TruffleHog ──────────────────────────────────────────────
+  # Second scanner for defence-in-depth: gitleaks and TruffleHog have different
+  # detection signatures so together they catch more. TruffleHog scans the full
+  # git history (base: "" = from the initial commit) with --only-verified so
+  # that the known-inert RSA placeholder in history is suppressed automatically
+  # (it cannot verify against any real service). See .trufflehog.yml for context.
+  secret-scan-trufflehog:
+    name: Secret Scan (TruffleHog)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog (full history, verified secrets only)
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ""
+          head: HEAD
+          extra_args: --only-verified
+
   # ── Docker build check ─────────────────────────────────────────────────────
   docker-build:
     name: Docker Build Check

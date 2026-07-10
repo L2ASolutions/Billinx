@@ -416,11 +416,17 @@ terraform apply
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `deploy.yml` | **Manual (`workflow_dispatch`)** — not automatic on push to `main` | Test → build Docker image → Trivy scan (CRITICAL/HIGH, blocking) → push ECR → Prisma migrate → ECS deploy → health check → auto-rollback on failure |
-| `pr-checks.yml` | Pull request | Type-check + lint + unit tests + `npm audit --audit-level=high` + Docker build check (no push) |
+| `pr-checks.yml` | Pull request | Type-check + lint + unit tests + `npm audit --audit-level=high` + Docker build check (no push) + **gitleaks secret scan** + **TruffleHog secret scan** |
+| `codeql.yml` | Push to `main` + Pull request | CodeQL static analysis (TypeScript, `security-extended` query suite) |
 
 Deployment pipeline: test → build-and-push (incl. Trivy image scan) → migrate → deploy (needs both build-and-push AND migrate). Auto-rollback: if `/health` fails after 10 retries × 15s, previous ECS task definition is restored.
 
-No CodeQL/SAST or dedicated secret-scanning (gitleaks/trufflehog) step exists in either workflow — see Open Issues.
+**Required checks before any PR can merge:** type-check, lint, unit tests, dependency audit, RLS isolation test, Docker build, gitleaks secret scan, TruffleHog secret scan, and CodeQL analysis. All must be green; none can be skipped.
+
+Secret scanning notes:
+- `gitleaks/gitleaks-action@v2` scans commits introduced by the PR; `.gitleaks.toml` allowlists two commits containing a known-inert RSA placeholder pending a git-history scrub.
+- `trufflesecurity/trufflehog@main` scans the full git history (`base: ""`) with `--only-verified`; the inert placeholder is suppressed automatically because it cannot verify against any real service. See `.trufflehog.yml` for the full rationale.
+- CodeQL runs on both PRs and every push to `main`; results appear in the GitHub Security tab.
 
 ---
 

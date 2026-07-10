@@ -1,0 +1,14 @@
+title = "Billinx gitleaks configuration"
+
+# Allowlist for known false positives in git history.
+# These commits contain a DEV_RSA_PRIVATE_KEY / DEV_RSA_PUBLIC_KEY constant in
+# src/infrastructure/secrets/secrets.service.ts that resembles a PEM block but
+# is an inert placeholder: it fails `openssl rsa -check` (only 3 lines of base64
+# body — not a parseable RSA-2048 key). Removed in e4e9248f (2026-05-17).
+# These entries can be removed once the repo history is scrubbed via git filter-repo.
+[allowlist]
+  description = "Inert RSA placeholder in history — not real key material; pending git-history scrub"
+  commits = [
+    "1299ecef76561b40d4a1b33f79740f015d6c577f",  # original inline placeholder added
+    "3c11a7419e688131709657e0fca41ffa548aff3c",  # refactored to named constant (same content)
+  ]
