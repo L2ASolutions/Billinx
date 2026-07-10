@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { useInventoryEnabled } from "@/lib/userProfile";
 import { cn } from "@/lib/utils";
@@ -120,22 +120,11 @@ const SupportIcon = () => (
   </svg>
 );
 
-const LogoutIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-    <polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
-  </svg>
-);
-
 const CloseIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
-
-function formatRole(role: string): string {
-  return role.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-}
 
 // ── Nav structure ─────────────────────────────────────────────────────────────
 
@@ -270,28 +259,18 @@ export function Sidebar({
   invoiceBadge = 0,
   receivedBadge = 0,
   overdueBadge = 0,
-  fullName,
-  role: roleProp,
   mobileOpen = false,
   onMobileClose,
 }: {
   invoiceBadge?: number;
   receivedBadge?: number;
   overdueBadge?: number;
-  fullName?: string;
-  role?: string;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [inventoryEnabled] = useInventoryEnabled();
-
-  function handleLogout() {
-    logout();
-    router.push('/login');
-  }
 
   function isActive(item: NavItem): boolean {
     if (item.exact) return pathname === item.href || pathname + (typeof window !== 'undefined' ? window.location.search : '') === item.href;
@@ -300,37 +279,7 @@ export function Sidebar({
 
   const combinedInvoiceBadge = invoiceBadge + receivedBadge;
 
-  const displayName = fullName ?? user?.name ?? '';
-  const nameParts = displayName.trim().split(/\s+/).filter(Boolean);
-  const initials = nameParts.length >= 2
-    ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
-    : (nameParts[0]?.[0]?.toUpperCase() ?? 'U');
-  const rawRole = roleProp ?? user?.role ?? '';
-  const displayRole = rawRole ? formatRole(rawRole) : '';
-
   const sections = buildNavSections(inventoryEnabled);
-
-  const userArea = (
-    <div className="flex-shrink-0 border-t border-white/10 p-4">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0" style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)' }}>
-          {initials}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-white text-sm font-bold truncate">{displayName || "—"}</p>
-          <p className="text-white/40 text-xs truncate">{displayRole}</p>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="text-white/40 hover:text-white transition-colors shrink-0"
-          title="Sign out"
-          aria-label="Sign out"
-        >
-          <LogoutIcon />
-        </button>
-      </div>
-    </div>
-  );
 
   const logo = (
     <div className="px-6 py-5 border-b border-white/10 flex-shrink-0">
@@ -352,7 +301,6 @@ export function Sidebar({
           combinedInvoiceBadge={combinedInvoiceBadge}
           overdueBadge={overdueBadge}
         />
-        {userArea}
       </aside>
 
       {/* ── Mobile drawer ─────────────────────────────────────────────────────── */}
@@ -386,7 +334,6 @@ export function Sidebar({
               overdueBadge={overdueBadge}
               onNavClick={onMobileClose}
             />
-            {userArea}
           </div>
         </div>
       )}
