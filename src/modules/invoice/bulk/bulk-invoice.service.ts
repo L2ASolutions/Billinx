@@ -15,6 +15,33 @@ const MAX_CSV_BYTES = 5 * 1024 * 1024; // 5 MB
 const BULK_RATE_LIMIT = 3;
 const BULK_RATE_WINDOW_SECS = 60;
 
+// Whitelist of CSV header names that may become object keys in parseCsv().
+// Header cells come directly from the uploaded file, so building `row` by
+// assigning row[h] = ... for every header without this check lets a malicious
+// column name (e.g. __proto__, constructor, prototype) inject/pollute
+// properties. Only these exact keys — the ones mapCsvRowToInvoice() actually
+// reads — are ever assigned; every other header is silently ignored.
+const ALLOWED_CSV_HEADERS = new Set([
+  'invoice_type_code',
+  'invoice_kind',
+  'issue_date',
+  'due_date',
+  'currency',
+  'source_reference',
+  'note',
+  'seller_tin',
+  'seller_name',
+  'buyer_tin',
+  'buyer_name',
+  'description',
+  'subtotal',
+  'vat_amount',
+  'total_amount',
+  'line_items',
+  'tax_total',
+  'legal_monetary_total',
+]);
+
 export interface BulkInvoiceResult {
   index: number;
   sourceRef?: string;
@@ -260,8 +287,11 @@ export class BulkInvoiceService {
 
     for (let i = 1; i < lines.length; i++) {
       const values = this.parseCsvRow(lines[i]);
-      const row: Record<string, string> = {};
+      // Object.create(null) as defence-in-depth: even a whitelisted-but-somehow-
+      // dangerous key can't touch Object.prototype on a null-prototype object.
+      const row: Record<string, string> = Object.create(null);
       headers.forEach((h, idx) => {
+        if (!ALLOWED_CSV_HEADERS.has(h)) return;
         row[h] = values[idx] ?? '';
       });
       invoices.push(this.mapCsvRowToInvoice(row));
