@@ -22,20 +22,23 @@ async function bootstrap() {
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
   // Build the CORS allowed-origins list.
-  // In GitHub Codespaces the frontend runs on a forwarded port URL such as
-  //   https://<CODESPACE_NAME>-3001.<GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN>
-  // We detect that automatically and add it alongside the standard origins.
-  const defaultOrigins = ['http://localhost:3001'];
-  const codespaceName = process.env.CODESPACE_NAME;
-  if (codespaceName) {
-    const domain =
-      process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN ?? 'app.github.dev';
-    defaultOrigins.push(`https://${codespaceName}-3001.${domain}`);
+  // Production: ALLOWED_ORIGINS is required — validateEnvironment() has already thrown if absent.
+  // Development: fall back to localhost:3001 and the Codespace forwarded-port URL when
+  //   NODE_ENV is explicitly 'development' and ALLOWED_ORIGINS is not set.
+  let allowedOrigins: string[];
+  if (process.env.ALLOWED_ORIGINS) {
+    allowedOrigins = process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim());
+  } else if (process.env.NODE_ENV === 'development') {
+    allowedOrigins = ['http://localhost:3001'];
+    const codespaceName = process.env.CODESPACE_NAME;
+    if (codespaceName) {
+      const domain =
+        process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN ?? 'app.github.dev';
+      allowedOrigins.push(`https://${codespaceName}-3001.${domain}`);
+    }
+  } else {
+    allowedOrigins = [];
   }
-
-  const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
-    : defaultOrigins;
 
   app.enableCors({
     origin: allowedOrigins,
@@ -109,14 +112,12 @@ async function bootstrap() {
     });
   }
 
-  // BUG-018: Warn loudly on startup when admin IP allowlist is not configured.
-  // AdminIpGuard already logs this warning at construction time, but it can
-  // scroll past during module initialisation. Repeat it here so it's the last
-  // thing operators see before the service goes live.
   if (!process.env.ADMIN_ALLOWED_IPS) {
     logger.warn(
-      '⚠️  ADMIN_ALLOWED_IPS is not set — all /v1/admin routes are reachable from any IP. ' +
-        'Set this env var in production to a comma-separated list of allowed CIDRs (e.g. "10.0.0.0/8,203.0.113.5").',
+      process.env.NODE_ENV === 'production'
+        ? '⚠️  ADMIN_ALLOWED_IPS is not set — all /v1/admin routes will return 403. ' +
+          'Set this env var to a comma-separated CIDR allowlist (e.g. "10.0.0.0/8,203.0.113.5").'
+        : '⚠️  ADMIN_ALLOWED_IPS is not set — admin routes allow any IP (development mode).',
     );
   }
 
