@@ -13,6 +13,7 @@ import { BulkInvoiceService } from './bulk/bulk-invoice.service';
 import { CreditNoteService } from './credit-note.service';
 import { VatReturnService } from './vat-return.service';
 import { InvoiceService } from './services/invoice.service';
+import { InvoiceValidationService } from './services/invoice-validation.service';
 import { PaymentService } from './services/payment.service';
 import { InvoiceRepository } from './repositories/invoice.repository';
 import { IrnService } from './services/irn.service';
@@ -53,6 +54,7 @@ import { NotificationModule } from '../notification/notification.module';
   ],
   providers: [
     InvoiceService,
+    InvoiceValidationService,
     CreditNoteService,
     VatReturnService,
     PaymentService,

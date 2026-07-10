@@ -539,6 +539,7 @@ describe('Source-reference deduplication', () => {
       { emit: jest.fn() } as any,
       {} as any,
       { sendInvoiceToBuyer: jest.fn() } as any,
+      { validateInvoiceFields: jest.fn() } as any,
     );
   }
 
