@@ -12,6 +12,8 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
   Req,
   Res,
   StreamableFile,
@@ -150,7 +152,7 @@ export class IncomingInvoiceController {
 
   @Post(':id/attachment')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload a document attachment to an incoming invoice' })
   @ApiResponse({ status: 200, description: 'Attachment stored' })
@@ -158,7 +160,14 @@ export class IncomingInvoiceController {
   async uploadAttachment(
     @Param('id') id: string,
     @Req() req: Request,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 })],
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        fileIsRequired: true,
+      }),
+    )
+    file: Express.Multer.File,
   ) {
     const ctx = this.getCtx(req);
     return this.incomingInvoiceService.uploadAttachment(id, ctx.tenantId, file);
