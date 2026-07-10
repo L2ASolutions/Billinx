@@ -7,6 +7,7 @@ import {
   ForbiddenException,
   Optional,
 } from '@nestjs/common';
+import { fromBuffer } from 'file-type';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ActivityService } from '../activity/services/activity.service';
@@ -172,12 +173,21 @@ export class IncomingInvoiceService {
   ): Promise<{ attachmentName: string; attachmentMime: string; attachmentSize: number; uploadedAt: string }> {
     await this.requireInvoice(id, tenantId);
 
-    const ALLOWED = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-    if (!ALLOWED.includes(file.mimetype)) {
-      throw new BadRequestException('Only PDF and image files are accepted');
+    const ALLOWED_MIMES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+
+    const detected = await fromBuffer(file.buffer);
+    if (!detected || !ALLOWED_MIMES.has(detected.mime)) {
+      throw new BadRequestException(
+        'Unsupported file type. Only PDF, JPEG, and PNG files are accepted.',
+      );
     }
-    if (file.size > 10 * 1024 * 1024) {
-      throw new BadRequestException('File must be under 10MB');
+
+    // Normalise image/jpg (non-standard alias) before comparing to detected type.
+    const clientMime = file.mimetype === 'image/jpg' ? 'image/jpeg' : file.mimetype;
+    if (detected.mime !== clientMime) {
+      throw new BadRequestException(
+        'File content does not match the declared content type.',
+      );
     }
 
     const updated = await (this.prisma as any).incomingInvoice.update({
@@ -185,7 +195,7 @@ export class IncomingInvoiceService {
       data: {
         attachmentData: file.buffer,
         attachmentName: file.originalname,
-        attachmentMime: file.mimetype,
+        attachmentMime: detected.mime,
         attachmentSize: file.size,
       },
       select: { attachmentName: true, attachmentMime: true, attachmentSize: true, updatedAt: true },
