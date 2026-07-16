@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 60" width="320" height="60">
+  <!-- Mark -->
+  <rect x="0" y="8" width="64" height="36" rx="18" fill="#1D9E75"/>
+  <line x1="13" y1="22" x2="45" y2="22" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M39 16 L46 22 L39 28" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="45" y1="32" x2="13" y2="32" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+  <path d="M19 26 L12 32 L19 38" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+  <!-- Wordmark: light weight "Billin" + bold green "x" (white on dark) -->
+  <text x="80" y="40" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="32" font-weight="300" fill="white" letter-spacing="0.01em">
+    <tspan>Billin</tspan><tspan font-weight="700" fill="#1D9E75">x</tspan>
+  </text>
+  <!-- SOLUTIONS sub-label -->
+  <text x="81" y="54" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="10" font-weight="500" fill="#4B5563" letter-spacing="0.2em">SOLUTIONS</text>
+</svg>

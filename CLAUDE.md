@@ -190,6 +190,14 @@ billinx/
 - Tenant-configurable payment reminder rules: `GET/POST /v1/reminder-rules`, `PATCH/DELETE .../:id`
 - Distinct from the invoice-level "Send Reminder" button (`POST /v1/invoices/dashboard/:id/reminder`), which lives in the `invoice` module
 
+### apps/marketing (public landing page, added 2026-07-16)
+- Not a `src/modules/` backend module — a separate top-level app, `apps/marketing/`, the public Billinx marketing/waitlist site. Runs on **port 3002** (backend: 3000, `apps/web` dashboard: 3001, marketing: 3002).
+- Standalone Next.js 16 app (matches `apps/web`'s `next@16.2.10`), own `package.json`/`npm install`, same ad-hoc pattern as `apps/web` — **this repo is not a pnpm/Turborepo workspace**, so there is no `pnpm-workspace.yaml` or `turbo.json` tying the three apps together; each is built independently (`npm run build` from its own directory).
+- Single scrolling page (`app/page.tsx`) assembled from section components in `apps/marketing/components/`: `Nav`, `Hero`, `ProblemSolution`, `Features`, `HowItWorks`, `ComplianceTrust`, `WaitlistCTA`, `Footer`.
+- Waitlist capture is **frontend-only for now** — `WaitlistCTA` validates the email client-side and writes to `localStorage` (key `billinx_waitlist_submissions`); no backend endpoint exists yet to receive signups. The "127 businesses already on the waitlist" counter is a static placeholder, not derived from real data.
+- Shares `apps/web`'s Tailwind brand tokens (`green`/`dark`/`surface`/`border`/`muted` in `tailwind.config.ts`, copied at scaffold time) plus a few page-specific literals (`#16a34a` CTA green, `#0f3460` gradient secondary) that are **not** in the shared token set — intentionally a slightly different, brighter green than the dashboard app's `#1D9E75` brand green, per this task's explicit spec.
+- Uses `framer-motion` for scroll-triggered fade-ins (`FadeIn` component) and `@heroicons/react` for icons; wordmark SVGs copied from `apps/web/public/`.
+
 ---
 
 **Note on architecture drift:** CLAUDE.md previously listed `compliance/` and `validation/` as separate top-level module directories. They do not exist as separate modules.
@@ -653,6 +661,7 @@ Secret scanning notes:
 - Excel exports: invoice list, submissions history, audit log
 - Top nav user avatar dropdown (2026-07-10): dashboard header's top-right now has a `UserAvatarMenu` (initials circle, same size/style as the sidebar's former bottom avatar) — click opens a small dropdown with full name (bold), role (grey), a divider, and Sign out (reusing the same `logout()` from `useAuth()`). Closes on outside click; on screens <768px the dropdown shows the avatar only, name/role text hidden. The sidebar's old bottom-left user profile section (name/role/logout) was removed in the same change since this replaces it — see Open Issue #13 for a real bug found along the way (JWT never carries a `name` claim).
 - Credit note visibility fix applied
+- Public marketing landing page (2026-07-16): new standalone app `apps/marketing/` (port 3002) — 7-section scrolling page (Hero, Problem/Solution, Features, How It Works, Compliance Trust, Early Access waitlist, Footer) built with Tailwind + framer-motion, matching the shared brand tokens from `apps/web`. Waitlist form is `localStorage`-only pending a real backend endpoint — see the `apps/marketing` module note above.
 
 ### How Kay Works With Claude
 - Development driven by Claude Code prompts generated in Claude chat sessions, executed in the Codespace
