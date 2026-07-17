@@ -2,6 +2,9 @@
 
 import { FadeIn } from "./FadeIn";
 
+const APP_LOGIN_URL =
+  process.env.NEXT_PUBLIC_APP_LOGIN_URL || "http://localhost:3001/login";
+
 const trustItems = [
   "FIRS Approved",
   "NRS Compliant",
@@ -94,6 +97,15 @@ export function Hero() {
               See How It Works
             </a>
           </div>
+
+          <a
+            href={APP_LOGIN_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 inline-block text-sm text-white/60 transition-colors hover:text-white"
+          >
+            Already have an account? Login →
+          </a>
 
           <p className="mt-8 text-sm text-white/50">
             {trustItems.join(" · ")}
