@@ -11,15 +11,15 @@ import { FadeIn } from "./FadeIn";
 const painPoints = [
   {
     icon: ClockIcon,
-    text: "Manual FIRS submissions waste hours every month",
+    text: "Spending hours on manual FIRS submissions every month",
   },
   {
     icon: ExclamationTriangleIcon,
-    text: "Errors in VAT calculations lead to penalties",
+    text: "VAT calculation errors putting you at risk of penalties",
   },
   {
     icon: EyeSlashIcon,
-    text: "Non-compliant invoices get rejected and delay payment",
+    text: "Non-compliant invoices getting rejected by the NRS",
   },
 ];
 
@@ -29,7 +29,7 @@ export function ProblemSolution() {
       <div className="mx-auto max-w-7xl px-6">
         <FadeIn className="text-center">
           <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
-            Invoice compliance is complex
+            Is your business facing invoicing challenges?
           </h2>
         </FadeIn>
 
@@ -51,7 +51,7 @@ export function ProblemSolution() {
         <FadeIn delay={0.35} className="mt-14 flex flex-col items-center gap-4">
           <ArrowDownIcon className="h-6 w-6 text-gray-400" aria-hidden="true" />
           <p className="text-2xl font-semibold text-gray-900 sm:text-3xl">
-            Billinx simplifies all of this
+            Billinx solves all of these challenges for you
           </p>
         </FadeIn>
       </div>
