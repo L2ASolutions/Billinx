@@ -77,8 +77,8 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="bg-white rounded-2xl border border-border shadow-card-login p-8">
-          <h1 className="text-2xl font-bold text-dark mb-1">Welcome! Sign in to Billinx Solutions</h1>
-          <p className="text-muted text-sm mb-6">Enter your details to access your account</p>
+          <h1 className="text-2xl font-bold text-dark mb-1">Welcome to Billinx Solutions</h1>
+          <p className="text-muted text-sm mb-6">Sign in to access your account</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
