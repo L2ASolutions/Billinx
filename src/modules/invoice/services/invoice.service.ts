@@ -195,21 +195,26 @@ export class InvoiceService {
         }),
       ),
       invoiceKind: request.invoiceKind ?? null,
-      issueTime: request.issueTime ?? null,
+      // Captured now rather than trusting a client-supplied timestamp — this
+      // call queues the invoice for FIRS submission immediately after create,
+      // so "now" is the actual submission moment, not draft-creation time.
+      issueTime: request.issueTime ?? this.captureCurrentTime(),
       paymentStatus: request.paymentStatus ?? null,
       originalIrn: request.originalIrn ?? null,
       status: 'DRAFT',
-      ...(request.whtApplicable ? (() => {
-        const rate = request.whtRate ?? 5;
-        const payable = request.legalMonetaryTotal?.payableAmount ?? 0;
-        const whtAmt = parseFloat((payable * rate / 100).toFixed(2));
-        return {
-          whtApplicable: true,
-          whtRate: rate,
-          whtAmount: whtAmt,
-          expectedCash: parseFloat((payable - whtAmt).toFixed(2)),
-        };
-      })() : { whtApplicable: false }),
+      ...(request.whtApplicable
+        ? (() => {
+            const rate = request.whtRate ?? 5;
+            const payable = request.legalMonetaryTotal?.payableAmount ?? 0;
+            const whtAmt = parseFloat(((payable * rate) / 100).toFixed(2));
+            return {
+              whtApplicable: true,
+              whtRate: rate,
+              whtAmount: whtAmt,
+              expectedCash: parseFloat((payable - whtAmt).toFixed(2)),
+            };
+          })()
+        : { whtApplicable: false }),
     });
 
     await this.invoiceRepository.addStateHistory({
@@ -303,10 +308,8 @@ export class InvoiceService {
     const effectiveSellerName = request.seller?.partyName ?? invoice.sellerName;
     const effectiveBuyerName = request.buyer?.partyName ?? invoice.buyerName;
     const effectiveIssueDate = request.issueDate ?? invoice.issueDate;
-    const effectiveKind =
-      request.invoiceKind ?? (invoice as any).invoiceKind;
-    const effectiveBuyerTin =
-      request.buyer?.tin ?? (invoice as any).buyerTin;
+    const effectiveKind = request.invoiceKind ?? (invoice as any).invoiceKind;
+    const effectiveBuyerTin = request.buyer?.tin ?? (invoice as any).buyerTin;
     const effectiveLineItems: any[] =
       request.lineItems ?? (invoice.lineItems as any[]) ?? [];
     const effectiveTotal =
@@ -347,16 +350,18 @@ export class InvoiceService {
             : (invoice as any).paymentDueDate,
           currency: request.currency ?? invoice.currency,
           invoiceKind: request.invoiceKind ?? (invoice as any).invoiceKind,
+          // Always re-stamped here — this is the moment the draft actually
+          // gets queued for NRS submission, not whenever the draft was
+          // originally created (which may have been hours/days earlier).
+          issueTime: request.issueTime ?? this.captureCurrentTime(),
           subtotal:
-            request.legalMonetaryTotal?.lineExtensionAmount ??
-            invoice.subtotal,
-          vatAmount:
-            request.taxTotal?.length
-              ? (request.taxTotal as any[]).reduce(
-                  (s: number, t: any) => s + (t.taxAmount ?? 0),
-                  0,
-                )
-              : invoice.vatAmount,
+            request.legalMonetaryTotal?.lineExtensionAmount ?? invoice.subtotal,
+          vatAmount: request.taxTotal?.length
+            ? (request.taxTotal as any[]).reduce(
+                (s: number, t: any) => s + (t.taxAmount ?? 0),
+                0,
+              )
+            : invoice.vatAmount,
           totalAmount:
             request.legalMonetaryTotal?.payableAmount ?? invoice.totalAmount,
           lineItems: request.lineItems
@@ -368,8 +373,7 @@ export class InvoiceService {
           legalMonetaryTotal: request.legalMonetaryTotal
             ? JSON.parse(JSON.stringify(request.legalMonetaryTotal))
             : invoice.legalMonetaryTotal,
-          originalIrn:
-            request.originalIrn ?? (invoice as any).originalIrn,
+          originalIrn: request.originalIrn ?? (invoice as any).originalIrn,
           sourceReference:
             request.sourceReference ?? (invoice as any).sourceReference,
           metadata: JSON.parse(
@@ -408,12 +412,7 @@ export class InvoiceService {
       : (tenantData?.appAdapterKey ?? 'mock');
 
     this.submissionService
-      .queueInvoice(
-        invoiceId,
-        tenantId,
-        invoice.platformIrn,
-        adapterKey as any,
-      )
+      .queueInvoice(invoiceId, tenantId, invoice.platformIrn, adapterKey as any)
       .catch((err) =>
         this.logger.error(`Failed to queue draft invoice: ${err.message}`),
       );
@@ -557,14 +556,25 @@ export class InvoiceService {
     return { total, accepted, rejected, draft };
   }
 
-  private static readonly VISIBILITY_DEFAULTS: Record<string, Record<string, boolean>> = {
+  private static readonly VISIBILITY_DEFAULTS: Record<
+    string,
+    Record<string, boolean>
+  > = {
     VIEWER: {
-      receivables: false, vat_strip: false, revenue_chart: false,
-      pipeline_chart: true, activity_chart: true, needs_attention: true,
+      receivables: false,
+      vat_strip: false,
+      revenue_chart: false,
+      pipeline_chart: true,
+      activity_chart: true,
+      needs_attention: true,
     },
     ACCOUNTANT: {
-      receivables: true, vat_strip: true, revenue_chart: true,
-      pipeline_chart: true, activity_chart: true, needs_attention: true,
+      receivables: true,
+      vat_strip: true,
+      revenue_chart: true,
+      pipeline_chart: true,
+      activity_chart: true,
+      needs_attention: true,
     },
   };
 
@@ -625,7 +635,14 @@ export class InvoiceService {
       const rejectedAll = await tx.invoice.count({
         where: {
           tenantId,
-          status: { in: ['REJECTED', 'SUBMISSION_FAILED', 'DEAD_LETTERED', 'VALIDATION_FAILED'] as any },
+          status: {
+            in: [
+              'REJECTED',
+              'SUBMISSION_FAILED',
+              'DEAD_LETTERED',
+              'VALIDATION_FAILED',
+            ] as any,
+          },
         },
       });
       const pending = await tx.invoice.count({
@@ -736,37 +753,68 @@ export class InvoiceService {
           },
         },
       });
-      const incomingTotal = await (tx as any).incomingInvoice.count({ where: { tenantId } });
-      const incomingToReview = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'RECEIVED' } });
-      const incomingApproved = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'APPROVED' } });
-      const incomingPaid = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'PAID' } });
+      const incomingTotal = await (tx as any).incomingInvoice.count({
+        where: { tenantId },
+      });
+      const incomingToReview = await (tx as any).incomingInvoice.count({
+        where: { tenantId, status: 'RECEIVED' },
+      });
+      const incomingApproved = await (tx as any).incomingInvoice.count({
+        where: { tenantId, status: 'APPROVED' },
+      });
+      const incomingPaid = await (tx as any).incomingInvoice.count({
+        where: { tenantId, status: 'PAID' },
+      });
       const tenantRow = await tx.tenant.findUnique({
         where: { id: tenantId },
         select: { dashboardVisibility: true },
       });
       const userRoles = userId
-        ? await tx.userRole.findMany({ where: { userId, tenantId }, select: { role: true } })
+        ? await tx.userRole.findMany({
+            where: { userId, tenantId },
+            select: { role: true },
+          })
         : [];
       return [
-        total, accepted, rejected, rejectedAll, pending, firsAwaiting, draft, overdue,
-        amountAgg, recentInvoices,
-        outstandingAgg, overdueCount,
+        total,
+        accepted,
+        rejected,
+        rejectedAll,
+        pending,
+        firsAwaiting,
+        draft,
+        overdue,
+        amountAgg,
+        recentInvoices,
+        outstandingAgg,
+        overdueCount,
         collectedThisMonth,
-        outputVatAgg, inputVatAgg, whtExpectedAgg,
-        whtCreditsAgg, pendingWhtCount,
+        outputVatAgg,
+        inputVatAgg,
+        whtExpectedAgg,
+        whtCreditsAgg,
+        pendingWhtCount,
         recentPayments,
-        stuckCount, recentRejectedInvoices,
-        incomingTotal, incomingToReview, incomingApproved, incomingPaid,
-        tenantRow, userRoles,
+        stuckCount,
+        recentRejectedInvoices,
+        incomingTotal,
+        incomingToReview,
+        incomingApproved,
+        incomingPaid,
+        tenantRow,
+        userRoles,
       ] as const;
     });
 
     const outputVatOutstanding = Number(outputVatAgg._sum.vatAmount ?? 0);
     const inputVatOutstanding = Number(inputVatAgg._sum.vatAmount ?? 0);
-    const totalWhtExpected = Number((whtExpectedAgg._sum as any).whtAmount ?? 0);
+    const totalWhtExpected = Number(
+      (whtExpectedAgg._sum as any).whtAmount ?? 0,
+    );
     const outstandingAmount = Number(outstandingAgg._sum.totalAmount ?? 0);
-    const availableWhtCredits = Number((whtCreditsAgg._sum as any).whtDeducted ?? 0);
-    const submissionAcceptanceRate = total > 0 ? Math.round((accepted / total) * 1000) / 10 : 0;
+    const availableWhtCredits = Number(whtCreditsAgg._sum.whtDeducted ?? 0);
+    const submissionAcceptanceRate =
+      total > 0 ? Math.round((accepted / total) * 1000) / 10 : 0;
     const lowStockCount = this.inventoryService
       ? await this.inventoryService.getLowStockCount(tenantId)
       : 0;
@@ -774,10 +822,25 @@ export class InvoiceService {
     const actorRole = (userRoles[0]?.role as string | undefined) ?? 'VIEWER';
     const myVisibility = (() => {
       if (['OWNER', 'ADMIN'].includes(actorRole)) {
-        return { receivables: true, vat_strip: true, revenue_chart: true, pipeline_chart: true, activity_chart: true, needs_attention: true };
+        return {
+          receivables: true,
+          vat_strip: true,
+          revenue_chart: true,
+          pipeline_chart: true,
+          activity_chart: true,
+          needs_attention: true,
+        };
       }
-      const stored = ((tenantRow?.dashboardVisibility ?? {}) as Record<string, Record<string, boolean>>)[actorRole] ?? {};
-      const defaults = InvoiceService.VISIBILITY_DEFAULTS[actorRole] ?? InvoiceService.VISIBILITY_DEFAULTS['VIEWER'];
+      const stored =
+        (
+          (tenantRow?.dashboardVisibility ?? {}) as Record<
+            string,
+            Record<string, boolean>
+          >
+        )[actorRole] ?? {};
+      const defaults =
+        InvoiceService.VISIBILITY_DEFAULTS[actorRole] ??
+        InvoiceService.VISIBILITY_DEFAULTS['VIEWER'];
       return { ...defaults, ...stored };
     })();
 
@@ -856,23 +919,31 @@ export class InvoiceService {
       const totalBilled = Number(billedAgg._sum.totalAmount ?? 0);
       const totalCollected = Number(collectedAgg._sum.amount ?? 0);
       const totalOutstanding = Math.max(0, totalBilled - totalCollected);
-      const collectionRate = totalBilled > 0
-        ? Math.round((totalCollected / totalBilled) * 100)
-        : 0;
+      const collectionRate =
+        totalBilled > 0 ? Math.round((totalCollected / totalBilled) * 100) : 0;
 
-      const [paidInFull, partiallyPaid, overdue, accepted, overdueInvoices] = await Promise.all([
-        tx.invoice.count({ where: { tenantId, status: 'ACCEPTED', paymentStatus: 'PAID' } }),
-        tx.invoice.count({ where: { tenantId, status: 'ACCEPTED', paymentStatus: 'PARTIAL' } }),
-        tx.invoice.count({ where: { tenantId, status: 'ACCEPTED', isOverdue: true } }),
-        tx.invoice.count({ where: { tenantId, status: 'ACCEPTED' } }),
-        tx.invoice.findMany({
-          where: { tenantId, status: 'ACCEPTED', isOverdue: true },
-          select: { totalAmount: true, amountPaid: true },
-        }),
-      ]);
+      const [paidInFull, partiallyPaid, overdue, accepted, overdueInvoices] =
+        await Promise.all([
+          tx.invoice.count({
+            where: { tenantId, status: 'ACCEPTED', paymentStatus: 'PAID' },
+          }),
+          tx.invoice.count({
+            where: { tenantId, status: 'ACCEPTED', paymentStatus: 'PARTIAL' },
+          }),
+          tx.invoice.count({
+            where: { tenantId, status: 'ACCEPTED', isOverdue: true },
+          }),
+          tx.invoice.count({ where: { tenantId, status: 'ACCEPTED' } }),
+          tx.invoice.findMany({
+            where: { tenantId, status: 'ACCEPTED', isOverdue: true },
+            select: { totalAmount: true, amountPaid: true },
+          }),
+        ]);
       const unpaidNotDue = accepted - paidInFull - partiallyPaid - overdue;
       const overdueAmount = overdueInvoices.reduce(
-        (sum, inv) => sum + Math.max(0, Number(inv.totalAmount) - Number(inv.amountPaid ?? 0)),
+        (sum, inv) =>
+          sum +
+          Math.max(0, Number(inv.totalAmount) - Number(inv.amountPaid ?? 0)),
         0,
       );
 
@@ -881,7 +952,12 @@ export class InvoiceService {
         where: { tenantId },
         _sum: { amount: true },
       });
-      const knownProviders = ['BANK_TRANSFER', 'PAYSTACK', 'FLUTTERWAVE', 'MANUAL'];
+      const knownProviders = [
+        'BANK_TRANSFER',
+        'PAYSTACK',
+        'FLUTTERWAVE',
+        'MANUAL',
+      ];
       const providerMap: Record<string, number> = {};
       for (const row of providerRows as any[]) {
         providerMap[row.provider] = Number(row._sum.amount ?? 0);
@@ -915,24 +991,37 @@ export class InvoiceService {
       MANUAL: 'Manual',
     };
 
-    const collectionTrend: Array<{ month: string; invoiced: number; collected: number }> = [];
+    const collectionTrend: Array<{
+      month: string;
+      invoiced: number;
+      collected: number;
+    }> = [];
 
     for (let i = 5; i >= 0; i--) {
       const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-      const label = start.toLocaleString('en-NG', { month: 'short', year: 'numeric' });
-
-      const [invoicedAgg, collectedAgg] = await this.prisma.asAdmin(async (tx) => {
-        const ia = await (tx as any).invoice.aggregate({
-          where: { tenantId, status: 'ACCEPTED', issueDate: { gte: start, lt: end } },
-          _sum: { totalAmount: true },
-        });
-        const ca = await (tx as any).paymentRecord.aggregate({
-          where: { tenantId, paidAt: { gte: start, lt: end } },
-          _sum: { amount: true },
-        });
-        return [ia, ca];
+      const label = start.toLocaleString('en-NG', {
+        month: 'short',
+        year: 'numeric',
       });
+
+      const [invoicedAgg, collectedAgg] = await this.prisma.asAdmin(
+        async (tx) => {
+          const ia = await (tx as any).invoice.aggregate({
+            where: {
+              tenantId,
+              status: 'ACCEPTED',
+              issueDate: { gte: start, lt: end },
+            },
+            _sum: { totalAmount: true },
+          });
+          const ca = await (tx as any).paymentRecord.aggregate({
+            where: { tenantId, paidAt: { gte: start, lt: end } },
+            _sum: { amount: true },
+          });
+          return [ia, ca];
+        },
+      );
 
       collectionTrend.push({
         month: label,
@@ -1021,11 +1110,11 @@ export class InvoiceService {
   private mapInvoiceTypeCode(code: string): string {
     const map: Record<string, string> = {
       // Corrected FIRS codes (from reference data seed)
-      '381': 'STANDARD',     // Commercial Invoice
-      '380': 'CREDIT_NOTE',  // Credit Note
-      '384': 'DEBIT_NOTE',   // Debit Note
-      '390': 'PROFORMA',     // Proforma Invoice
-      '385': 'STANDARD',     // Self Billed Invoice → STANDARD
+      '381': 'STANDARD', // Commercial Invoice
+      '380': 'CREDIT_NOTE', // Credit Note
+      '384': 'DEBIT_NOTE', // Debit Note
+      '390': 'PROFORMA', // Proforma Invoice
+      '385': 'STANDARD', // Self Billed Invoice → STANDARD
       // Legacy aliases
       '383': 'DEBIT_NOTE',
       '325': 'PROFORMA',
@@ -1036,6 +1125,10 @@ export class InvoiceService {
       PROFORMA: 'PROFORMA',
     };
     return map[code] ?? 'STANDARD';
+  }
+
+  private captureCurrentTime(): string {
+    return new Date().toTimeString().split(' ')[0]; // HH:mm:ss
   }
 
   private mapToResponse(invoice: any): InvoiceResponse {
@@ -1059,7 +1152,8 @@ export class InvoiceService {
       firsConfirmedIrn: invoice.firsConfirmedIrn ?? undefined,
       sourceReference: invoice.sourceReference ?? undefined,
       invoiceTypeCode: invoice.invoiceTypeCode,
-      invoiceType: typeNameMap[invoice.invoiceTypeCode] ?? invoice.invoiceTypeCode,
+      invoiceType:
+        typeNameMap[invoice.invoiceTypeCode] ?? invoice.invoiceTypeCode,
       invoiceKind: invoice.invoiceKind ?? undefined,
       status: invoice.status,
       sellerTin: invoice.sellerTin,
@@ -1078,7 +1172,7 @@ export class InvoiceService {
       paymentDueDate:
         invoice.paymentDueDate instanceof Date
           ? invoice.paymentDueDate.toISOString()
-          : invoice.paymentDueDate ?? undefined,
+          : (invoice.paymentDueDate ?? undefined),
       isOverdue: invoice.isOverdue ?? false,
       lineItems: invoice.lineItems as any[],
       taxTotal: invoice.taxTotal as any[],
@@ -1091,22 +1185,22 @@ export class InvoiceService {
       orderReference: invoice.orderReference ?? undefined,
       paymentTermsNote: invoice.paymentTermsNote ?? undefined,
       actualDeliveryDate: invoice.actualDeliveryDate
-        ? (invoice.actualDeliveryDate instanceof Date
-            ? invoice.actualDeliveryDate.toISOString()
-            : invoice.actualDeliveryDate)
+        ? invoice.actualDeliveryDate instanceof Date
+          ? invoice.actualDeliveryDate.toISOString()
+          : invoice.actualDeliveryDate
         : undefined,
       deliveryPeriodStart: invoice.deliveryPeriodStart
-        ? (invoice.deliveryPeriodStart instanceof Date
-            ? invoice.deliveryPeriodStart.toISOString()
-            : invoice.deliveryPeriodStart)
+        ? invoice.deliveryPeriodStart instanceof Date
+          ? invoice.deliveryPeriodStart.toISOString()
+          : invoice.deliveryPeriodStart
         : undefined,
       deliveryPeriodEnd: invoice.deliveryPeriodEnd
-        ? (invoice.deliveryPeriodEnd instanceof Date
-            ? invoice.deliveryPeriodEnd.toISOString()
-            : invoice.deliveryPeriodEnd)
+        ? invoice.deliveryPeriodEnd instanceof Date
+          ? invoice.deliveryPeriodEnd.toISOString()
+          : invoice.deliveryPeriodEnd
         : undefined,
-      seller: (invoice.metadata as any)?.sellerParty ?? undefined,
-      buyer: (invoice.metadata as any)?.buyerParty ?? undefined,
+      seller: invoice.metadata?.sellerParty ?? undefined,
+      buyer: invoice.metadata?.buyerParty ?? undefined,
       qrCodeBase64: invoice.qrCodeBase64 ?? undefined,
       stateHistory: invoice.stateHistory
         ? (invoice.stateHistory as any[]).map((h) => ({
@@ -1137,8 +1231,10 @@ export class InvoiceService {
       cancelledAt: invoice.cancelledAt?.toISOString(),
       whtApplicable: invoice.whtApplicable ?? false,
       whtRate: invoice.whtRate != null ? Number(invoice.whtRate) : undefined,
-      whtAmount: invoice.whtAmount != null ? Number(invoice.whtAmount) : undefined,
-      expectedCash: invoice.expectedCash != null ? Number(invoice.expectedCash) : undefined,
+      whtAmount:
+        invoice.whtAmount != null ? Number(invoice.whtAmount) : undefined,
+      expectedCash:
+        invoice.expectedCash != null ? Number(invoice.expectedCash) : undefined,
       creditNotes: invoice.creditNotes
         ? (invoice.creditNotes as any[]).map((cn) => ({
             id: cn.id,
@@ -1407,8 +1503,7 @@ export class InvoiceService {
       Number(invoice.totalAmount) - Number(invoice.amountPaid ?? 0),
     );
 
-    const billinxUrl =
-      process.env.BILLINX_URL ?? 'http://localhost:3001';
+    const billinxUrl = process.env.BILLINX_URL ?? 'http://localhost:3001';
 
     return {
       id: invoice.id,
@@ -1504,7 +1599,9 @@ export class InvoiceService {
       paymentStatus: null,
       lineItems: JSON.parse(JSON.stringify(original.lineItems ?? [])),
       taxTotal: JSON.parse(JSON.stringify(original.taxTotal ?? [])),
-      legalMonetaryTotal: JSON.parse(JSON.stringify(original.legalMonetaryTotal ?? {})),
+      legalMonetaryTotal: JSON.parse(
+        JSON.stringify(original.legalMonetaryTotal ?? {}),
+      ),
       allowanceCharges: original.allowanceCharges
         ? JSON.parse(JSON.stringify(original.allowanceCharges))
         : null,
@@ -1551,6 +1648,10 @@ export class InvoiceService {
 
   // ── Sample invoice ────────────────────────────────────────────────────────
 
+  // Static demo payload for docs/UI examples only — never persisted or
+  // submitted to NRS, so it's exempt from the "invoice_kind must never be
+  // silently defaulted" rule enforced elsewhere (InvoiceValidationService,
+  // InterswitchAdapter).
   getSampleInvoice() {
     return {
       invoiceNumber: 'INV-2026-SAMPLE',
@@ -1735,13 +1836,24 @@ export class InvoiceService {
     const now = new Date();
     const months = 6;
 
-    const revenueTrend: Array<{ month: string; monthKey: string; amount: number }> = [];
-    const sentVsReceived: Array<{ month: string; sent: number; received: number }> = [];
+    const revenueTrend: Array<{
+      month: string;
+      monthKey: string;
+      amount: number;
+    }> = [];
+    const sentVsReceived: Array<{
+      month: string;
+      sent: number;
+      received: number;
+    }> = [];
 
     for (let i = months - 1; i >= 0; i--) {
       const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-      const label = start.toLocaleString('en-NG', { month: 'short', year: 'numeric' });
+      const label = start.toLocaleString('en-NG', {
+        month: 'short',
+        year: 'numeric',
+      });
       const monthKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
 
       const [revenueAgg, sentCount, receivedCount] = await this.prisma.asAdmin(
@@ -1777,16 +1889,23 @@ export class InvoiceService {
         monthKey,
         amount: Number(revenueAgg._sum.totalAmount ?? 0),
       });
-      sentVsReceived.push({ month: label, sent: sentCount, received: receivedCount });
+      sentVsReceived.push({
+        month: label,
+        sent: sentCount,
+        received: receivedCount,
+      });
     }
 
-    const allInvoices: { status: string; paymentStatus: string | null; isOverdue: boolean }[] =
-      await this.prisma.asAdmin((tx) =>
-        (tx as any).invoice.findMany({
-          where: { tenantId },
-          select: { status: true, paymentStatus: true, isOverdue: true },
-        }),
-      );
+    const allInvoices: {
+      status: string;
+      paymentStatus: string | null;
+      isOverdue: boolean;
+    }[] = await this.prisma.asAdmin((tx) =>
+      (tx as any).invoice.findMany({
+        where: { tenantId },
+        select: { status: true, paymentStatus: true, isOverdue: true },
+      }),
+    );
 
     const breakdown = {
       Paid: 0,
@@ -1830,30 +1949,43 @@ export class InvoiceService {
   async getDashboardRejections(tenantId: string) {
     const rejectedStatuses = ['REJECTED', 'SUBMISSION_FAILED', 'DEAD_LETTERED'];
 
-    const rejectedInvoices: { id: string; submissionAttempts: { errorCode: string | null; errorMessage: string | null }[] }[] =
-      await this.prisma.asAdmin((tx) =>
-        (tx as any).invoice.findMany({
-          where: {
-            tenantId,
-            status: { in: rejectedStatuses as any },
+    const rejectedInvoices: {
+      id: string;
+      submissionAttempts: {
+        errorCode: string | null;
+        errorMessage: string | null;
+      }[];
+    }[] = await this.prisma.asAdmin((tx) =>
+      (tx as any).invoice.findMany({
+        where: {
+          tenantId,
+          status: { in: rejectedStatuses as any },
+        },
+        select: {
+          id: true,
+          submissionAttempts: {
+            where: { failedAt: { not: null } },
+            orderBy: { failedAt: 'desc' as const },
+            take: 1,
+            select: { errorCode: true, errorMessage: true },
           },
-          select: {
-            id: true,
-            submissionAttempts: {
-              where: { failedAt: { not: null } },
-              orderBy: { failedAt: 'desc' as const },
-              take: 1,
-              select: { errorCode: true, errorMessage: true },
-            },
-          },
-        }),
-      );
+        },
+      }),
+    );
 
     if (rejectedInvoices.length === 0) {
       return { totalRejected: 0, allResolved: true, reasons: [] };
     }
 
-    const reasonMap = new Map<string, { errorCode: string; errorMessage: string; count: number; invoiceIds: string[] }>();
+    const reasonMap = new Map<
+      string,
+      {
+        errorCode: string;
+        errorMessage: string;
+        count: number;
+        invoiceIds: string[];
+      }
+    >();
 
     for (const inv of rejectedInvoices) {
       const attempt = inv.submissionAttempts[0];
@@ -1861,16 +1993,27 @@ export class InvoiceService {
       const errorMessage = attempt?.errorMessage ?? 'Submission failed';
 
       if (!reasonMap.has(errorCode)) {
-        reasonMap.set(errorCode, { errorCode, errorMessage, count: 0, invoiceIds: [] });
+        reasonMap.set(errorCode, {
+          errorCode,
+          errorMessage,
+          count: 0,
+          invoiceIds: [],
+        });
       }
       const entry = reasonMap.get(errorCode)!;
       entry.count++;
       entry.invoiceIds.push(inv.id);
     }
 
-    const reasons = Array.from(reasonMap.values()).sort((a, b) => b.count - a.count);
+    const reasons = Array.from(reasonMap.values()).sort(
+      (a, b) => b.count - a.count,
+    );
 
-    return { totalRejected: rejectedInvoices.length, allResolved: false, reasons };
+    return {
+      totalRejected: rejectedInvoices.length,
+      allResolved: false,
+      reasons,
+    };
   }
 
   async sendManualReminder(

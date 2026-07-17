@@ -26,6 +26,50 @@ const PAYMENT_MEANS_CODES: Record<string, string> = {
   DIRECT_DEBIT: '49',
 };
 
+// Interswitch's NRS docs give these five exact-case strings — mixed case for
+// Withholding_Tax/Stamp_Duty is intentional, not a typo.
+const VALID_TAX_CATEGORIES = new Set([
+  'STANDARD_VAT',
+  'ZERO_VAT',
+  'EXEMPTED',
+  'Withholding_Tax',
+  'Stamp_Duty',
+]);
+
+// Only the codes explicitly confirmed against the Interswitch NRS schema doc.
+// The doc lists these as examples ("valid codes include: EA, KGM, LTR") —
+// expand this set once the full NRS unit-code list is confirmed.
+const VALID_PRICE_UNITS = new Set(['EA', 'KGM', 'LTR']);
+
+const CREDIT_OR_DEBIT_NOTE_TYPES = new Set(['CREDIT_NOTE', 'DEBIT_NOTE']);
+const VALID_INVOICE_KINDS = new Set(['B2B', 'B2C', 'B2G']);
+const BUSINESS_ID_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const LEGAL_MONETARY_TOTAL_FIELDS = [
+  'line_extension_amount',
+  'tax_exclusive_amount',
+  'tax_inclusive_amount',
+  'payable_amount',
+] as const;
+
+const OAUTH_TOKEN_TTL_MS = 3600 * 1000;
+const OAUTH_TOKEN_REFRESH_MARGIN_MS = 60 * 1000;
+
+// Thrown for payload-shape/business-rule problems caught before (or instead
+// of) ever calling NRS — always maps to a non-retryable SubmissionResult with
+// a specific errorCode, distinct from mapError()'s handling of NRS's own
+// HTTP-level responses.
+class NrsValidationError extends Error {
+  constructor(
+    public readonly errorCode: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'NrsValidationError';
+  }
+}
+
 interface NrsSuccessResponse {
   code: number;
   message: string;
@@ -44,6 +88,15 @@ interface NrsErrorResponse {
   details?: string;
 }
 
+// Interswitch's token-response field naming isn't pinned down beyond the
+// endpoint path and ClientId/ClientSecret request body in the shared docs —
+// this checks the common OAuth Client Credentials response shapes.
+interface NrsTokenResponse {
+  data?: { Token?: string; access_token?: string };
+  Token?: string;
+  access_token?: string;
+}
+
 @Injectable()
 export class InterswitchAdapter implements AppAdapter {
   readonly adapterKey = 'interswitch';
@@ -56,6 +109,14 @@ export class InterswitchAdapter implements AppAdapter {
   private readonly productionBaseUrl =
     process.env.INTERSWITCH_PROD_URL ?? 'https://api.interswitchgroup.com';
 
+  // Per-tenant OAuth token cache. Each tenant has its own Interswitch
+  // Client ID/Secret (registered separately with the NRS Access Point
+  // Provider), so tokens cannot be shared across tenants.
+  private readonly tokenCache = new Map<
+    string,
+    { token: string; expiresAt: number }
+  >();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly credentialService: CredentialService,
@@ -66,48 +127,53 @@ export class InterswitchAdapter implements AppAdapter {
     const tenant = await this.loadTenant(request.tenantId);
 
     if (
-      !tenant.nrsApiKey ||
-      !tenant.nrsApiKeyIv ||
-      !tenant.nrsApiSecret ||
-      !tenant.nrsApiSecretIv
+      !tenant.interswitchBusinessId ||
+      !BUSINESS_ID_UUID_RE.test(tenant.interswitchBusinessId)
     ) {
       return {
         success: false,
-        errorCode: 'MISSING_CREDENTIALS',
-        errorMessage: 'NRS API credentials not configured for this tenant',
+        errorCode: 'MISSING_BUSINESS_ID',
+        errorMessage:
+          'NRS business_id not configured for this tenant — contact your administrator',
         retryable: false,
       };
     }
 
-    const masterKey = await this.secretsService.getMasterEncryptionKey();
-    const apiKey = this.credentialService.decrypt(
-      Buffer.from(tenant.nrsApiKey),
-      Buffer.from(tenant.nrsApiKeyIv),
-      masterKey,
-      request.tenantId,
-    );
-    const apiSecret = this.credentialService.decrypt(
-      Buffer.from(tenant.nrsApiSecret),
-      Buffer.from(tenant.nrsApiSecretIv),
-      masterKey,
-      request.tenantId,
-    );
+    if (
+      !tenant.interswitchClientId ||
+      !tenant.interswitchClientSecret ||
+      !tenant.interswitchSecretIv
+    ) {
+      return {
+        success: false,
+        errorCode: 'MISSING_CREDENTIALS',
+        errorMessage: 'NRS OAuth credentials not configured for this tenant',
+        retryable: false,
+      };
+    }
 
     const baseUrl =
       tenant.environment === 'PRODUCTION'
         ? this.productionBaseUrl
         : this.sandboxBaseUrl;
-    const invoice = (request.payload as any).invoice;
-    const payload = this.buildPayload(invoice, tenant);
-    const startMs = Date.now();
 
     try {
-      const result = await this.postInvoice(
-        baseUrl,
-        apiKey,
-        apiSecret,
-        payload,
+      const clientSecret = await this.getDecryptedClientSecret(
+        tenant,
+        request.tenantId,
       );
+      const token = await this.getAccessToken(
+        request.tenantId,
+        baseUrl,
+        tenant.interswitchClientId,
+        clientSecret,
+      );
+
+      const invoice = (request.payload as any).invoice;
+      const payload = await this.buildPayload(invoice, tenant);
+      const startMs = Date.now();
+
+      const result = await this.postInvoice(baseUrl, token, payload);
       this.logger.log(
         `Invoice ${request.platformIrn} accepted by NRS. IRN: ${result.data.IRN}`,
       );
@@ -123,6 +189,14 @@ export class InterswitchAdapter implements AppAdapter {
         },
       };
     } catch (err: any) {
+      if (err instanceof NrsValidationError) {
+        return {
+          success: false,
+          errorCode: err.errorCode,
+          errorMessage: err.message,
+          retryable: false,
+        };
+      }
       return this.mapError(err);
     }
   }
@@ -143,32 +217,17 @@ export class InterswitchAdapter implements AppAdapter {
 
     const tenant = await this.loadTenant(tenantId);
     if (
-      !tenant.nrsApiKey ||
-      !tenant.nrsApiKeyIv ||
-      !tenant.nrsApiSecret ||
-      !tenant.nrsApiSecretIv
+      !tenant.interswitchClientId ||
+      !tenant.interswitchClientSecret ||
+      !tenant.interswitchSecretIv
     ) {
       return {
         success: false,
         errorCode: 'MISSING_CREDENTIALS',
-        errorMessage: 'NRS credentials not configured for this tenant',
+        errorMessage: 'NRS OAuth credentials not configured for this tenant',
         retryable: false,
       };
     }
-
-    const masterKey = await this.secretsService.getMasterEncryptionKey();
-    const apiKey = this.credentialService.decrypt(
-      Buffer.from(tenant.nrsApiKey),
-      Buffer.from(tenant.nrsApiKeyIv),
-      masterKey,
-      tenantId,
-    );
-    const apiSecret = this.credentialService.decrypt(
-      Buffer.from(tenant.nrsApiSecret),
-      Buffer.from(tenant.nrsApiSecretIv),
-      masterKey,
-      tenantId,
-    );
 
     const baseUrl =
       tenant.environment === 'PRODUCTION'
@@ -179,13 +238,23 @@ export class InterswitchAdapter implements AppAdapter {
     const timeout = setTimeout(() => controller.abort(), 30_000);
 
     try {
+      const clientSecret = await this.getDecryptedClientSecret(
+        tenant,
+        tenantId,
+      );
+      const token = await this.getAccessToken(
+        tenantId,
+        baseUrl,
+        tenant.interswitchClientId,
+        clientSecret,
+      );
+
       const response = await fetch(
         `${baseUrl}/Api/SwitchTax/transmit/${encodeURIComponent(platformIrn)}`,
         {
           method: 'GET',
           headers: {
-            'x-api-key': apiKey,
-            'x-api-secret': apiSecret,
+            Authorization: `Bearer ${token}`,
           },
           signal: controller.signal,
         },
@@ -245,30 +314,15 @@ export class InterswitchAdapter implements AppAdapter {
   ): Promise<void> {
     const tenant = await this.loadTenant(tenantId);
     if (
-      !tenant.nrsApiKey ||
-      !tenant.nrsApiKeyIv ||
-      !tenant.nrsApiSecret ||
-      !tenant.nrsApiSecretIv
+      !tenant.interswitchClientId ||
+      !tenant.interswitchClientSecret ||
+      !tenant.interswitchSecretIv
     ) {
       this.logger.warn(
-        `Cannot update payment status for IRN ${irn}: NRS credentials not configured`,
+        `Cannot update payment status for IRN ${irn}: NRS OAuth credentials not configured`,
       );
       return;
     }
-
-    const masterKey = await this.secretsService.getMasterEncryptionKey();
-    const apiKey = this.credentialService.decrypt(
-      Buffer.from(tenant.nrsApiKey),
-      Buffer.from(tenant.nrsApiKeyIv),
-      masterKey,
-      tenantId,
-    );
-    const apiSecret = this.credentialService.decrypt(
-      Buffer.from(tenant.nrsApiSecret),
-      Buffer.from(tenant.nrsApiSecretIv),
-      masterKey,
-      tenantId,
-    );
 
     const baseUrl =
       tenant.environment === 'PRODUCTION'
@@ -279,12 +333,22 @@ export class InterswitchAdapter implements AppAdapter {
     const timeout = setTimeout(() => controller.abort(), 30_000);
 
     try {
+      const clientSecret = await this.getDecryptedClientSecret(
+        tenant,
+        tenantId,
+      );
+      const token = await this.getAccessToken(
+        tenantId,
+        baseUrl,
+        tenant.interswitchClientId,
+        clientSecret,
+      );
+
       const response = await fetch(`${baseUrl}/Api/SwitchTax/UpdateStatus`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'x-api-secret': apiSecret,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           irn,
@@ -314,6 +378,10 @@ export class InterswitchAdapter implements AppAdapter {
   }
 
   async ping(): Promise<boolean> {
+    // Tenant-agnostic reachability probe — there is no specific tenant here
+    // to fetch a per-tenant OAuth token for, so this remains an unauthenticated
+    // connectivity check (unchanged from the static-header scheme, which also
+    // sent no per-tenant credentials on this call).
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
     try {
@@ -334,12 +402,83 @@ export class InterswitchAdapter implements AppAdapter {
     }
   }
 
+  // ─── OAuth 2.0 Client Credentials ───────────────────────────────────────────
+
+  private async getAccessToken(
+    tenantId: string,
+    baseUrl: string,
+    clientId: string,
+    clientSecret: string,
+  ): Promise<string> {
+    const cached = this.tokenCache.get(tenantId);
+    if (
+      cached &&
+      Date.now() < cached.expiresAt - OAUTH_TOKEN_REFRESH_MARGIN_MS
+    ) {
+      return cached.token;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/Api/SwitchTax/Token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ClientId: clientId,
+          ClientSecret: clientSecret,
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const body = await response.text();
+    let parsed: NrsTokenResponse = {};
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      /* raw body */
+    }
+
+    if (!response.ok) {
+      throw Object.assign(
+        new Error(
+          `NRS token request failed: ${response.status} ${body.slice(0, 200)}`,
+        ),
+        { statusCode: response.status, body: parsed },
+      );
+    }
+
+    const token =
+      parsed.data?.Token ??
+      parsed.data?.access_token ??
+      parsed.Token ??
+      parsed.access_token;
+
+    if (!token) {
+      throw Object.assign(
+        new Error('NRS token response did not include a token'),
+        { statusCode: response.status, body: parsed },
+      );
+    }
+
+    this.tokenCache.set(tenantId, {
+      token,
+      expiresAt: Date.now() + OAUTH_TOKEN_TTL_MS,
+    });
+
+    return token;
+  }
+
   // ─── Invoice submission ───────────────────────────────────────────────────
 
   private async postInvoice(
     baseUrl: string,
-    apiKey: string,
-    apiSecret: string,
+    token: string,
     payload: Record<string, unknown>,
   ): Promise<NrsSuccessResponse> {
     const controller = new AbortController();
@@ -351,8 +490,7 @@ export class InterswitchAdapter implements AppAdapter {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'x-api-secret': apiSecret,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
         signal: controller.signal,
@@ -382,7 +520,10 @@ export class InterswitchAdapter implements AppAdapter {
 
   // ─── Payload builder ──────────────────────────────────────────────────────
 
-  private buildPayload(invoice: any, tenant: any): Record<string, unknown> {
+  private async buildPayload(
+    invoice: any,
+    tenant: any,
+  ): Promise<Record<string, unknown>> {
     const serviceId = tenant.interswitchServiceId ?? 'BILLINX';
     const invoiceNo =
       invoice.sourceReference ?? invoice.id.substring(0, 8).toUpperCase();
@@ -393,19 +534,44 @@ export class InterswitchAdapter implements AppAdapter {
     const sellerParty = invoice.metadata?.sellerParty ?? {};
     const tenantAddress = tenant.registeredAddress ?? {};
 
+    const mappedTypeCode = INVOICE_TYPE_CODES[invoice.invoiceTypeCode];
+    if (!mappedTypeCode) {
+      throw new NrsValidationError(
+        'INVALID_INVOICE_TYPE_CODE',
+        `Unrecognized invoice type code: ${invoice.invoiceTypeCode}`,
+      );
+    }
+
+    if (!invoice.invoiceKind || !VALID_INVOICE_KINDS.has(invoice.invoiceKind)) {
+      throw new NrsValidationError(
+        'MISSING_INVOICE_KIND',
+        'invoice_kind is required and must be one of B2B, B2C, B2G',
+      );
+    }
+
+    const legalMonetaryTotal = this.mapLegalMonetaryTotal(
+      invoice.legalMonetaryTotal,
+    );
+    for (const field of LEGAL_MONETARY_TOTAL_FIELDS) {
+      const value = Number((legalMonetaryTotal as any)[field]);
+      if (!value || value <= 0) {
+        throw new NrsValidationError(
+          'INVALID_LEGAL_MONETARY_TOTAL',
+          `legal_monetary_total.${field} must be present and greater than zero`,
+        );
+      }
+    }
+
     const payload: Record<string, unknown> = {
       business_id: tenant.interswitchBusinessId,
       irn,
-      invoice_kind: invoice.invoiceKind ?? 'B2B',
+      invoice_kind: invoice.invoiceKind,
       issue_date: this.toISODate(invoice.issueDate),
       due_date: invoice.dueDate
         ? this.toISODate(invoice.dueDate)
         : this.toISODate(invoice.issueDate),
       issue_time: invoice.issueTime ?? this.currentTime(),
-      invoice_type_code:
-        INVOICE_TYPE_CODES[invoice.invoiceTypeCode] ??
-        invoice.invoiceTypeCode ??
-        '381',
+      invoice_type_code: mappedTypeCode,
       payment_status: invoice.paymentStatus ?? 'PENDING',
       tax_point_date: invoice.taxPointDate
         ? this.toISODate(invoice.taxPointDate)
@@ -446,9 +612,7 @@ export class InterswitchAdapter implements AppAdapter {
       },
       invoice_line: this.mapLineItems(invoice.lineItems ?? []),
       tax_total: this.mapTaxTotal(invoice.taxTotal ?? []),
-      legal_monetary_total: this.mapLegalMonetaryTotal(
-        invoice.legalMonetaryTotal,
-      ),
+      legal_monetary_total: legalMonetaryTotal,
     };
 
     // Optional scalar fields
@@ -467,10 +631,15 @@ export class InterswitchAdapter implements AppAdapter {
       (payload as any).payment_terms_note = invoice.paymentTermsNote;
 
     // Payment means — use stored if present, otherwise build a default from provider
-    if (invoice.paymentMeans && Array.isArray(invoice.paymentMeans) && invoice.paymentMeans.length > 0) {
+    if (
+      invoice.paymentMeans &&
+      Array.isArray(invoice.paymentMeans) &&
+      invoice.paymentMeans.length > 0
+    ) {
       (payload as any).payment_means = invoice.paymentMeans;
     } else {
-      const providerCode = PAYMENT_MEANS_CODES[invoice.paymentProvider ?? ''] ?? '30';
+      const providerCode =
+        PAYMENT_MEANS_CODES[invoice.paymentProvider ?? ''] ?? '30';
       (payload as any).payment_means = [
         {
           payment_means_code: providerCode,
@@ -484,8 +653,44 @@ export class InterswitchAdapter implements AppAdapter {
       (payload as any).allowance_charge = invoice.allowanceCharges;
     if (invoice.invoiceDeliveryPeriod)
       (payload as any).invoice_delivery_period = invoice.invoiceDeliveryPeriod;
-    if (invoice.billingReference)
+
+    // billing_reference — for credit/debit notes this is always derived from
+    // originalIrn (not passed through from whatever was stored on the
+    // invoice), so it always reflects the actual original invoice's issue date.
+    if (CREDIT_OR_DEBIT_NOTE_TYPES.has(invoice.invoiceTypeCode)) {
+      if (!invoice.originalIrn) {
+        throw new NrsValidationError(
+          'MISSING_ORIGINAL_IRN',
+          'Credit notes and debit notes must reference an original IRN',
+        );
+      }
+      const original = await this.prisma.asAdmin((tx) =>
+        tx.invoice.findFirst({
+          where: {
+            tenantId: tenant.id,
+            OR: [
+              { platformIrn: invoice.originalIrn },
+              { firsConfirmedIrn: invoice.originalIrn },
+            ],
+          },
+          select: { issueDate: true },
+        }),
+      );
+      if (!original) {
+        throw new NrsValidationError(
+          'ORIGINAL_INVOICE_NOT_FOUND',
+          `Original invoice ${invoice.originalIrn} referenced by billing_reference was not found`,
+        );
+      }
+      (payload as any).billing_reference = [
+        {
+          irn: invoice.originalIrn,
+          issue_date: this.toISODate(original.issueDate),
+        },
+      ];
+    } else if (invoice.billingReference) {
       (payload as any).billing_reference = invoice.billingReference;
+    }
 
     // Buyer (accounting_customer_party)
     if (invoice.buyerTin) {
@@ -512,34 +717,92 @@ export class InterswitchAdapter implements AppAdapter {
   }
 
   private mapLineItems(lineItems: any[]): unknown[] {
-    return lineItems.map((item) => ({
-      hsn_code: item.hsnCode ?? item.hsn_code,
-      product_category:
-        item.productCategory ?? item.product_category ?? item.item?.name,
-      invoiced_quantity: item.invoicedQuantity ?? item.invoiced_quantity,
-      line_extension_amount:
-        item.lineExtensionAmount ?? item.line_extension_amount,
-      discount_rate: item.discountRate ?? item.discount_rate ?? 0,
-      discount_amount: item.discountAmount ?? item.discount_amount ?? 0,
-      fee_rate: item.feeRate ?? item.fee_rate ?? 0,
-      fee_amount: item.feeAmount ?? item.fee_amount ?? 0,
-      item: {
-        name: item.item?.name ?? item.itemName,
-        description: item.item?.description ?? undefined,
-        sellers_item_identification:
-          item.item?.sellersItemIdentification ??
-          item.item?.sellers_item_identification ??
-          item.hsnCode ??
-          item.hsn_code,
-      },
-      price: {
-        price_amount: item.price?.priceAmount ?? item.price?.price_amount,
-        base_quantity:
-          item.price?.baseQuantity ?? item.price?.base_quantity ?? 1,
-        price_unit:
-          item.price?.priceUnit ?? item.price?.price_unit ?? 'NGN per 1',
-      },
-    }));
+    return lineItems.map((item) => {
+      const itemType = (item.itemType ?? item.item_type ?? 'PRODUCT')
+        .toString()
+        .toUpperCase();
+      const isService = itemType === 'SERVICE';
+
+      const classification = isService
+        ? {
+            isic_code: item.isicCode ?? item.isic_code,
+            service_category: item.serviceCategory ?? item.service_category,
+          }
+        : {
+            hsn_code: item.hsnCode ?? item.hsn_code,
+            product_category:
+              item.productCategory ?? item.product_category ?? item.item?.name,
+          };
+
+      if (isService) {
+        if (!classification.isic_code || !classification.service_category) {
+          throw new NrsValidationError(
+            'MISSING_SERVICE_CLASSIFICATION',
+            'SERVICE line items require both isic_code and service_category',
+          );
+        }
+      } else if (!classification.hsn_code || !classification.product_category) {
+        throw new NrsValidationError(
+          'MISSING_PRODUCT_CLASSIFICATION',
+          'PRODUCT line items require both hsn_code and product_category',
+        );
+      }
+
+      const priceUnit = this.resolvePriceUnit(
+        item.price?.priceUnit ?? item.price?.price_unit,
+      );
+      const quantity = item.invoicedQuantity ?? item.invoiced_quantity;
+      const priceAmount = item.price?.priceAmount ?? item.price?.price_amount;
+
+      return {
+        ...classification,
+        invoiced_quantity: quantity,
+        line_extension_amount:
+          item.lineExtensionAmount ?? item.line_extension_amount,
+        discount_rate: item.discountRate ?? item.discount_rate ?? 0,
+        discount_amount: item.discountAmount ?? item.discount_amount ?? 0,
+        fee_rate: item.feeRate ?? item.fee_rate ?? 0,
+        fee_amount: item.feeAmount ?? item.fee_amount ?? 0,
+        item: {
+          name: item.item?.name ?? item.itemName,
+          description:
+            item.item?.description ??
+            this.formatDefaultDescription(quantity, priceUnit, priceAmount),
+          sellers_item_identification:
+            item.item?.sellersItemIdentification ??
+            item.item?.sellers_item_identification ??
+            classification.hsn_code ??
+            classification.isic_code,
+        },
+        price: {
+          price_amount: priceAmount,
+          base_quantity:
+            item.price?.baseQuantity ?? item.price?.base_quantity ?? 1,
+          price_unit: priceUnit,
+        },
+      };
+    });
+  }
+
+  private resolvePriceUnit(unit?: string): string {
+    const resolved = (unit ?? 'EA').toString().toUpperCase();
+    if (!VALID_PRICE_UNITS.has(resolved)) {
+      throw new NrsValidationError(
+        'INVALID_PRICE_UNIT',
+        `Unrecognized price_unit: ${resolved}`,
+      );
+    }
+    return resolved;
+  }
+
+  private formatDefaultDescription(
+    quantity: number | undefined,
+    priceUnit: string,
+    priceAmount: number | undefined,
+  ): string {
+    const q = Number(quantity ?? 0).toFixed(2);
+    const p = Number(priceAmount ?? 0).toFixed(2);
+    return `${q} ${priceUnit} at ${p} each`;
   }
 
   private mapTaxTotal(taxTotal: any[]): unknown[] {
@@ -574,13 +837,39 @@ export class InterswitchAdapter implements AppAdapter {
   private normaliseTaxCategoryId(id: string): string {
     if (!id) return 'STANDARD_VAT';
     const upper = id.toUpperCase();
-    // Legacy aliases
-    if (upper === 'VAT' || upper === 'S') return 'STANDARD_VAT';
-    if (upper === 'Z' || upper === 'ZERO' || upper === 'ZERO_RATED')
-      return 'ZERO_VAT';
-    if (upper === 'WHT') return 'WITHHOLDING_TAX';
-    if (upper === 'EXEMPT' || upper === 'NOT_APPLICABLE') return 'EXEMPTED';
-    return upper;
+
+    // Legacy aliases — map loose/legacy input onto the exact-case NRS values.
+    let normalised: string;
+    if (upper === 'VAT' || upper === 'S' || upper === 'STANDARD_VAT') {
+      normalised = 'STANDARD_VAT';
+    } else if (
+      upper === 'Z' ||
+      upper === 'ZERO' ||
+      upper === 'ZERO_RATED' ||
+      upper === 'ZERO_VAT'
+    ) {
+      normalised = 'ZERO_VAT';
+    } else if (upper === 'WHT' || upper === 'WITHHOLDING_TAX') {
+      normalised = 'Withholding_Tax';
+    } else if (
+      upper === 'EXEMPT' ||
+      upper === 'NOT_APPLICABLE' ||
+      upper === 'EXEMPTED'
+    ) {
+      normalised = 'EXEMPTED';
+    } else if (upper === 'STAMP_DUTY' || upper === 'STAMP' || upper === 'SD') {
+      normalised = 'Stamp_Duty';
+    } else if (VALID_TAX_CATEGORIES.has(id)) {
+      // Already exact-case-correct as supplied (e.g. 'Withholding_Tax' itself).
+      normalised = id;
+    } else {
+      throw new NrsValidationError(
+        'INVALID_TAX_CATEGORY',
+        `Unrecognized tax category id: ${id}`,
+      );
+    }
+
+    return normalised;
   }
 
   // ─── Error mapping ────────────────────────────────────────────────────────
@@ -601,7 +890,7 @@ export class InterswitchAdapter implements AppAdapter {
       };
     }
 
-    // 401 — invalid static credentials (not retryable — credentials don't expire)
+    // 401 — invalid OAuth credentials or expired/rejected token
     if (status === 401) {
       return {
         success: false,
@@ -722,6 +1011,19 @@ export class InterswitchAdapter implements AppAdapter {
     return this.prisma.asAdmin(async (tx) => {
       return tx.tenant.findUniqueOrThrow({ where: { id: tenantId } });
     });
+  }
+
+  private async getDecryptedClientSecret(
+    tenant: any,
+    tenantId: string,
+  ): Promise<string> {
+    const masterKey = await this.secretsService.getMasterEncryptionKey();
+    return this.credentialService.decrypt(
+      Buffer.from(tenant.interswitchClientSecret),
+      Buffer.from(tenant.interswitchSecretIv),
+      masterKey,
+      tenantId,
+    );
   }
 
   private toISODate(d: Date | string): string {
