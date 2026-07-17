@@ -29,7 +29,7 @@ export function ProblemSolution() {
       <div className="mx-auto max-w-7xl px-6">
         <FadeIn className="text-center">
           <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
-            Invoicing in Nigeria is broken
+            Invoice compliance is complex
           </h2>
         </FadeIn>
 
