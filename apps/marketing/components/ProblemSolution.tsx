@@ -19,7 +19,7 @@ const painPoints = [
   },
   {
     icon: EyeSlashIcon,
-    text: "Chasing payments with no visibility",
+    text: "Non-compliant invoices get rejected and delay payment",
   },
 ];
 
@@ -51,8 +51,7 @@ export function ProblemSolution() {
         <FadeIn delay={0.35} className="mt-14 flex flex-col items-center gap-4">
           <ArrowDownIcon className="h-6 w-6 text-gray-400" aria-hidden="true" />
           <p className="text-2xl font-semibold text-gray-900 sm:text-3xl">
-            Billinx fixes all of this —{" "}
-            <span className="text-[#16a34a]">automatically</span>
+            Billinx simplifies all of this
           </p>
         </FadeIn>
       </div>
