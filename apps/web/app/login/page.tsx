@@ -77,8 +77,8 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="bg-white rounded-2xl border border-border shadow-card-login p-8">
-          <h1 className="text-2xl font-semibold text-dark mb-1">Welcome</h1>
-          <p className="text-muted text-sm mb-6">Sign in to access your account</p>
+          <h1 className="text-2xl font-semibold text-dark mb-1">Sign in to your account</h1>
+          <p className="text-muted text-sm mb-6">Or request access to get started</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
