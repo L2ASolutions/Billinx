@@ -12,3 +12,5 @@ npm run start
 ```
 
 Runs on port **3002** (backend: 3000, apps/web: 3001, marketing: 3002).
+
+Set `NEXT_PUBLIC_APP_LOGIN_URL` to the live app login URL when deploying to production, e.g. `https://app.billinx.com/login`.

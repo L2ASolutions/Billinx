@@ -11,6 +11,9 @@ const links = [
   { label: "Early Access", href: "#early-access" },
 ];
 
+const APP_LOGIN_URL =
+  process.env.NEXT_PUBLIC_APP_LOGIN_URL || "http://localhost:3001/login";
+
 export function Nav() {
   const [open, setOpen] = useState(false);
 
@@ -39,6 +42,14 @@ export function Nav() {
               {link.label}
             </a>
           ))}
+          <a
+            href={APP_LOGIN_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold text-white transition-colors hover:border-white hover:bg-white/5"
+          >
+            Login / Sign Up
+          </a>
           <a
             href="#early-access"
             className="rounded-lg bg-[#16a34a] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#15803d]"
@@ -71,6 +82,14 @@ export function Nav() {
                 {link.label}
               </a>
             ))}
+            <a
+              href={APP_LOGIN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 rounded-lg border border-white/30 px-4 py-3 text-center text-base font-semibold text-white transition-colors hover:border-white hover:bg-white/5"
+            >
+              Login / Sign Up
+            </a>
             <a
               href="#early-access"
               onClick={() => setOpen(false)}
