@@ -13,6 +13,7 @@ jest.mock('exceljs', () => {
 
 import { InvoiceDashboardController } from './invoice-dashboard.controller';
 import { PaymentService } from './services/payment.service';
+import { InvoicePdfService } from './services/invoice-pdf.service';
 
 function makeReq(ctx: Record<string, any> = {}): any {
   return {
@@ -27,7 +28,12 @@ function makeReq(ctx: Record<string, any> = {}): any {
 }
 
 function makeRes(): any {
-  return { status: jest.fn(), setHeader: jest.fn(), end: jest.fn() };
+  return {
+    status: jest.fn(),
+    setHeader: jest.fn(),
+    end: jest.fn(),
+    send: jest.fn(),
+  };
 }
 
 describe('InvoiceDashboardController', () => {
@@ -36,6 +42,7 @@ describe('InvoiceDashboardController', () => {
   let paymentService: jest.Mocked<
     Pick<PaymentService, 'recordPayment' | 'listPayments'>
   >;
+  let invoicePdfService: jest.Mocked<Pick<InvoicePdfService, 'generatePdf'>>;
 
   beforeEach(() => {
     invoiceService = {
@@ -68,9 +75,16 @@ describe('InvoiceDashboardController', () => {
       recordPayment: jest.fn().mockResolvedValue({ id: 'pay-1' }),
       listPayments: jest.fn().mockResolvedValue([]),
     };
+    invoicePdfService = {
+      generatePdf: jest.fn().mockResolvedValue({
+        buffer: Buffer.from('%PDF-fake'),
+        filename: 'invoice-inv-1.pdf',
+      }),
+    };
     controller = new InvoiceDashboardController(
       invoiceService,
       paymentService as unknown as PaymentService,
+      invoicePdfService as unknown as InvoicePdfService,
     );
   });
 
@@ -228,6 +242,25 @@ describe('InvoiceDashboardController', () => {
       'inv-1',
       'tenant-1',
     );
+  });
+
+  it('getDashboardInvoicePdf delegates to InvoicePdfService and streams the buffer', async () => {
+    const res = makeRes();
+    await controller.getDashboardInvoicePdf('inv-1', makeReq(), res);
+
+    expect(invoicePdfService.generatePdf).toHaveBeenCalledWith(
+      'inv-1',
+      'tenant-1',
+    );
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Type',
+      'application/pdf',
+    );
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Disposition',
+      'attachment; filename="invoice-inv-1.pdf"',
+    );
+    expect(res.send).toHaveBeenCalledWith(Buffer.from('%PDF-fake'));
   });
 
   it('getDashboardInvoiceStatus delegates to the service', async () => {

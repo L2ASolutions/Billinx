@@ -217,6 +217,7 @@ export const invoiceApi = {
   paymentCharts: () =>
     api.get<unknown>('/v1/invoices/dashboard/payment-charts'),
   getXml: (id: string) => requestBlob(`/v1/invoices/dashboard/${id}/xml`),
+  getPdf: (id: string) => requestBlob(`/v1/invoices/dashboard/${id}/pdf`),
   getStatus: (id: string) =>
     api.get<unknown>(`/v1/invoices/dashboard/${id}/status`),
   // Submit an existing DRAFT invoice without creating a duplicate.

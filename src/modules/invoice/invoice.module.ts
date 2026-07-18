@@ -19,6 +19,7 @@ import { InvoiceRepository } from './repositories/invoice.repository';
 import { IrnService } from './services/irn.service';
 import { StateMachineService } from './services/state-machine.service';
 import { XmlInvoiceBuilder } from './services/xml-invoice.builder';
+import { InvoicePdfService } from './services/invoice-pdf.service';
 import { SecretsService } from '../../infrastructure/secrets/secrets.service';
 import { ApiKeyService } from '../identity/services/api-key.service';
 import { TokenService } from '../identity/services/token.service';
@@ -63,6 +64,7 @@ import { NotificationModule } from '../notification/notification.module';
     IrnService,
     StateMachineService,
     XmlInvoiceBuilder,
+    InvoicePdfService,
     SecretsService,
     ApiKeyService,
     TokenService,

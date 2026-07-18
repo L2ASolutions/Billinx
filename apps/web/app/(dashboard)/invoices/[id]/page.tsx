@@ -526,7 +526,7 @@ export default function InvoiceDetailPage() {
   const [cancelling, setCancelling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
-  const [xmlDownloading, setXmlDownloading] = useState(false);
+  const [pdfDownloading, setPdfDownloading] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
 
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
@@ -628,19 +628,19 @@ export default function InvoiceDetailPage() {
   }
 
   async function handleDownloadPdf() {
-    setXmlDownloading(true);
+    setPdfDownloading(true);
     try {
-      const { blob, filename } = await invoiceApi.getXml(id);
+      const { blob, filename } = await invoiceApi.getPdf(id);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = filename || `invoice-${id}.xml`;
+      a.download = filename || `invoice-${id}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Download failed");
     } finally {
-      setXmlDownloading(false);
+      setPdfDownloading(false);
     }
   }
 
@@ -864,7 +864,7 @@ export default function InvoiceDetailPage() {
               <Button variant="secondary" size="sm" onClick={copyPaymentLink}>
                 {payLinkCopied ? "Copied!" : "Copy payment link"}
               </Button>
-              <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadPdf}>
+              <Button variant="secondary" size="sm" loading={pdfDownloading} onClick={handleDownloadPdf}>
                 Download PDF
               </Button>
               <Button variant="secondary" size="sm" loading={duplicating} onClick={handleDuplicate}>
@@ -1176,7 +1176,7 @@ export default function InvoiceDetailPage() {
             <Button variant="secondary" size="sm" loading={duplicating} onClick={handleDuplicate}>
               Duplicate
             </Button>
-            <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadPdf}>
+            <Button variant="secondary" size="sm" loading={pdfDownloading} onClick={handleDownloadPdf}>
               Download PDF
             </Button>
             {canRecordPayment && (
@@ -1188,7 +1188,7 @@ export default function InvoiceDetailPage() {
         )}
         {isRejected && (
           <>
-            <Button variant="secondary" size="sm" loading={xmlDownloading} onClick={handleDownloadPdf}>
+            <Button variant="secondary" size="sm" loading={pdfDownloading} onClick={handleDownloadPdf}>
               Download rejection report
             </Button>
             <Button size="sm" onClick={handleCreateCorrected}>
