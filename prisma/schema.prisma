@@ -70,6 +70,7 @@ model ApiKey {
   keyPrefix    String
   environment  TenantEnvironment
   name         String
+  scopes       String[]          @default(["*"])
   lastUsedAt   DateTime?
   lastUsedIp   String?
   requestCount Int               @default(0)

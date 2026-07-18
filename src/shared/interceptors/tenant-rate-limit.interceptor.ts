@@ -39,15 +39,21 @@ export class TenantRateLimitInterceptor implements NestInterceptor {
     if (!ctx?.tenantId) return next.handle();
 
     const isJwtUser = ctx.actorType === 'user';
+    const isApiKey = ctx.actorType === 'apikey';
     const tier: string = ctx.tier ?? 'STANDARD';
     const limit = isJwtUser
       ? JWT_LIMIT
       : (TIER_LIMITS[tier] ?? TIER_LIMITS.STANDARD);
     const hourBucket = Math.floor(Date.now() / (WINDOW_SECS * 1000));
-    // Separate Redis keys so JWT dashboard calls never consume API key quota
+    // Separate Redis keys so JWT dashboard calls never consume API key quota.
+    // Each API key gets its own bucket (keyed by keyId, not tenantId) — up to
+    // the tenant's tier limit each — so a noisy or leaked key can't throttle
+    // every other integration under the same tenant.
     const key = isJwtUser
       ? `rl:dashboard:tenant:${ctx.tenantId}:${hourBucket}`
-      : `rl:api:tenant:${ctx.tenantId}:${hourBucket}`;
+      : isApiKey
+        ? `rl:api:key:${ctx.actor.replace('apikey:', '')}:${hourBucket}`
+        : `rl:api:tenant:${ctx.tenantId}:${hourBucket}`;
 
     const { allowed, remaining, retryAfter } =
       await this.redisService.checkRateLimit(key, limit, WINDOW_SECS);

@@ -26,6 +26,8 @@ import { Request } from 'express';
 import { BulkInvoiceService } from './bulk-invoice.service';
 import { ApiKeyGuard } from '../../identity/guards/api-key.guard';
 import { JwtGuard } from '../../identity/guards/jwt.guard';
+import { ScopeGuard } from '../../../shared/guards/scope.guard';
+import { RequireScope } from '../../../shared/decorators/require-scope.decorator';
 
 @ApiTags('Invoices')
 @Controller('v1/invoices/bulk')
@@ -38,19 +40,25 @@ export class BulkInvoiceController {
 
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('submissions:write')
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Submit up to 500 invoices in a single bulk request',
     description:
       'Validates each invoice independently. Valid invoices are queued immediately. ' +
-      'Returns per-invoice result. Rate limited: 3 requests per minute per tenant.',
+      'Returns per-invoice result. Rate limited: 3 requests per minute per tenant. Requires the ' +
+      '`submissions:write` API key scope.',
   })
   @ApiResponse({
     status: 202,
     description: 'Submit up to 500 invoices in a single bulk request',
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the submissions:write scope',
+  })
   @ApiResponse({ status: 400, description: 'Invalid request body' })
   async bulkSubmit(@Body() body: Record<string, any>, @Req() req: Request) {
     const ctx = this.getCtx(req);
@@ -70,7 +78,8 @@ export class BulkInvoiceController {
 
   @Post('csv')
   @HttpCode(HttpStatus.ACCEPTED)
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('submissions:write')
   @ApiBearerAuth()
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -87,7 +96,7 @@ export class BulkInvoiceController {
       'Required CSV columns: seller_tin, seller_name, buyer_name, issue_date, subtotal, vat_amount, total_amount. ' +
       'Optional: buyer_tin, invoice_type_code, invoice_kind, currency, due_date, source_reference, note, ' +
       'description, line_items (JSON), tax_total (JSON), legal_monetary_total (JSON). ' +
-      'Returns same summary format as the JSON bulk endpoint.',
+      'Returns same summary format as the JSON bulk endpoint. Requires the `submissions:write` API key scope.',
   })
   @UseInterceptors(
     FileInterceptor('file', {
@@ -109,6 +118,10 @@ export class BulkInvoiceController {
     description: 'Submit invoices via CSV file upload (max 5 MB, 500 rows)',
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the submissions:write scope',
+  })
   @ApiResponse({ status: 400, description: 'Invalid request body' })
   async bulkSubmitCsv(@UploadedFile() file: any, @Req() req: Request) {
     if (!file) {
@@ -127,7 +140,8 @@ export class BulkInvoiceController {
   }
 
   @Get(':batchId/status')
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('submissions:read')
   @ApiBearerAuth()
   @ApiParam({
     name: 'batchId',
@@ -135,12 +149,17 @@ export class BulkInvoiceController {
   })
   @ApiOperation({
     summary: 'Get processing progress for a bulk submission batch',
+    description: 'Requires the `submissions:read` API key scope.',
   })
   @ApiResponse({
     status: 200,
     description: 'Get processing progress for a bulk submission batch',
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the submissions:read scope',
+  })
   @ApiResponse({ status: 404, description: 'Resource not found' })
   async getBatchStatus(@Param('batchId') batchId: string, @Req() req: Request) {
     const ctx = this.getCtx(req);

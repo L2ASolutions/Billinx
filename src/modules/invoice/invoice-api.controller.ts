@@ -31,6 +31,8 @@ import { Request, Response } from 'express';
 import { InvoiceService } from './services/invoice.service';
 import { PaymentService } from './services/payment.service';
 import { ApiKeyGuard } from '../identity/guards/api-key.guard';
+import { ScopeGuard } from '../../shared/guards/scope.guard';
+import { RequireScope } from '../../shared/decorators/require-scope.decorator';
 import {
   InvoiceFilterParams,
   InvoiceStatus,
@@ -87,7 +89,8 @@ export class InvoiceApiController {
   // ---------------------------------------------------------------------------
 
   @Post()
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('invoices:write')
   @ApiOperation({
     summary: 'Submit invoice for FIRS compliance',
     description:
@@ -95,7 +98,8 @@ export class InvoiceApiController {
       'for asynchronous submission to the NRS platform via the configured adapter (Interswitch in ' +
       'production, Mock in development). Returns immediately with the created invoice — poll ' +
       '`GET /v1/invoices/:id/status` or subscribe to the `invoice.accepted`/`invoice.rejected` webhook ' +
-      'for the final FIRS outcome. Idempotent on repeated calls with the same `Idempotency-Key` header.',
+      'for the final FIRS outcome. Idempotent on repeated calls with the same `Idempotency-Key` header. ' +
+      'Requires the `invoices:write` API key scope.',
   })
   @ApiBody({
     description: 'NRS-compliant invoice payload',
@@ -127,6 +131,10 @@ export class InvoiceApiController {
     description: 'Invoice failed FIRS/NRS field validation',
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the invoices:write scope',
+  })
   async createInvoice(
     @Body() body: Record<string, any>,
     @Req() req: Request,
@@ -151,19 +159,25 @@ export class InvoiceApiController {
 
   @Post('validate')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('invoices:write')
   @ApiOperation({
     summary: 'Validate invoice without submitting to FIRS',
     description:
       'Runs the same FIRS/NRS field validation rules as submission, but collects every error into ' +
       'a single response instead of throwing on the first one — intended for pre-flight checks before ' +
-      'a real submission. Never creates an invoice or touches the network.',
+      'a real submission. Never creates an invoice or touches the network. Requires the ' +
+      '`invoices:write` API key scope (grouped with other write-verb routes, though it performs no writes).',
   })
   @ApiResponse({
     status: 200,
     description: 'Validation result with a list of any field errors found',
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the invoices:write scope',
+  })
   async validateInvoice(@Body() body: Record<string, any>) {
     return this.invoiceService.validateInvoice(body);
   }
@@ -173,12 +187,13 @@ export class InvoiceApiController {
   // ---------------------------------------------------------------------------
 
   @Post('from-xml')
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('invoices:write')
   @ApiOperation({
     summary: 'Create invoice from NRS-compliant XML body',
     description:
       'Same behaviour as `POST /v1/invoices`, but accepts a UBL/NRS XML document instead of JSON — ' +
-      'for ERP integrations that already produce XML invoices.',
+      'for ERP integrations that already produce XML invoices. Requires the `invoices:write` API key scope.',
   })
   @ApiConsumes('application/xml')
   @ApiResponse({
@@ -191,6 +206,10 @@ export class InvoiceApiController {
       'Body was not a well-formed, non-empty XML string, or failed validation',
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the invoices:write scope',
+  })
   async createInvoiceFromXml(
     @Body() body: unknown,
     @Req() req: Request,
@@ -223,11 +242,13 @@ export class InvoiceApiController {
   // ---------------------------------------------------------------------------
 
   @Get()
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('invoices:read')
   @ApiOperation({
     summary: 'List invoices for authenticated tenant',
     description:
-      "Paginated, filterable list of invoices belonging to the calling API key's tenant.",
+      "Paginated, filterable list of invoices belonging to the calling API key's tenant. Requires the " +
+      '`invoices:read` API key scope.',
   })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'invoiceTypeCode', required: false })
@@ -239,6 +260,10 @@ export class InvoiceApiController {
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Paginated list of invoices' })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the invoices:read scope',
+  })
   async listInvoices(
     @Req() req: Request,
     @Query('status') status?: InvoiceStatus,
@@ -265,28 +290,35 @@ export class InvoiceApiController {
   }
 
   @Get('stats')
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('invoices:read')
   @ApiOperation({
     summary: 'Get invoice statistics for tenant',
     description:
-      'Aggregate counts by status/kind for the calling tenant, used for ERP dashboards.',
+      'Aggregate counts by status/kind for the calling tenant, used for ERP dashboards. Requires the ' +
+      '`invoices:read` API key scope.',
   })
   @ApiResponse({ status: 200, description: 'Invoice statistics' })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the invoices:read scope',
+  })
   async getInvoiceStats(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getInvoiceStats(ctx.tenantId);
   }
 
   @Get('check')
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('invoices:read')
   @ApiOperation({
     summary:
       'Check if invoice exists by sourceReference — for ERP recovery after power failure',
     description:
       'Lets an ERP that lost track of whether a submission actually reached Billinx (e.g. after a ' +
       'crash mid-request) recover the invoice by the client-supplied `sourceReference` instead of ' +
-      're-submitting and risking a duplicate.',
+      're-submitting and risking a duplicate. Requires the `invoices:read` API key scope.',
   })
   @ApiQuery({ name: 'sourceReference', required: true })
   @ApiResponse({
@@ -298,6 +330,10 @@ export class InvoiceApiController {
     description: 'sourceReference query param missing',
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the invoices:read scope',
+  })
   @ApiResponse({
     status: 404,
     description: 'No invoice found for the given sourceReference',
@@ -321,12 +357,13 @@ export class InvoiceApiController {
   // ---------------------------------------------------------------------------
 
   @Get(':id')
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('invoices:read')
   @ApiOperation({
     summary: 'Get invoice by ID (JSON or XML via Accept header)',
     description:
       'Returns the invoice as JSON by default; send `Accept: application/xml` to instead receive the ' +
-      'NRS-compliant XML representation.',
+      'NRS-compliant XML representation. Requires the `invoices:read` API key scope.',
   })
   @ApiParam({ name: 'id', description: 'Invoice ID' })
   @ApiHeader({
@@ -337,6 +374,10 @@ export class InvoiceApiController {
   @ApiProduces('application/json', 'application/xml')
   @ApiResponse({ status: 200, description: 'Invoice found' })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the invoices:read scope',
+  })
   @ApiResponse({
     status: 404,
     description: 'Invoice not found for this tenant',
@@ -357,17 +398,23 @@ export class InvoiceApiController {
   }
 
   @Get(':id/xml')
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('invoices:read')
   @ApiOperation({
     summary: 'Get invoice as NRS-compliant XML',
     description:
-      'Kept alongside the newer PDF export for API/ERP consumers that depend on the XML representation.',
+      'Kept alongside the newer PDF export for API/ERP consumers that depend on the XML representation. ' +
+      'Requires the `invoices:read` API key scope.',
   })
   @ApiParam({ name: 'id', description: 'Invoice ID' })
   @Header('Content-Type', 'application/xml')
   @ApiProduces('application/xml')
   @ApiResponse({ status: 200, description: 'NRS-compliant XML document' })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the invoices:read scope',
+  })
   @ApiResponse({
     status: 404,
     description: 'Invoice not found for this tenant',
@@ -378,15 +425,21 @@ export class InvoiceApiController {
   }
 
   @Get(':id/status')
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('invoices:read')
   @ApiOperation({
     summary: 'Get invoice lifecycle status and history',
     description:
-      'Returns the current state-machine status plus the full InvoiceStateHistory audit trail.',
+      'Returns the current state-machine status plus the full InvoiceStateHistory audit trail. ' +
+      'Requires the `invoices:read` API key scope.',
   })
   @ApiParam({ name: 'id', description: 'Invoice ID' })
   @ApiResponse({ status: 200, description: 'Current status and state history' })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the invoices:read scope',
+  })
   @ApiResponse({
     status: 404,
     description: 'Invoice not found for this tenant',
@@ -398,11 +451,13 @@ export class InvoiceApiController {
 
   @Patch(':id/cancel')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('invoices:write')
   @ApiOperation({
     summary: 'Cancel an accepted invoice',
     description:
-      'Requests cancellation of a previously-accepted invoice via the NRS platform.',
+      'Requests cancellation of a previously-accepted invoice via the NRS platform. Requires the ' +
+      '`invoices:write` API key scope.',
   })
   @ApiParam({ name: 'id', description: 'Invoice ID' })
   @ApiResponse({ status: 200, description: 'Cancellation requested/applied' })
@@ -411,6 +466,10 @@ export class InvoiceApiController {
     description: 'Invoice is not in a cancellable state',
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the invoices:write scope',
+  })
   @ApiResponse({
     status: 404,
     description: 'Invoice not found for this tenant',
@@ -435,11 +494,13 @@ export class InvoiceApiController {
 
   @Post(':id/payments')
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('invoices:write')
   @ApiOperation({
     summary: 'Record a payment against an accepted invoice',
     description:
-      'Records a full or partial payment and enqueues an NRS UpdateStatus job to reflect it upstream.',
+      'Records a full or partial payment and enqueues an NRS UpdateStatus job to reflect it upstream. ' +
+      'Requires the `invoices:write` API key scope.',
   })
   @ApiParam({ name: 'id', description: 'Invoice ID' })
   @ApiResponse({ status: 201, description: 'Payment recorded' })
@@ -448,6 +509,10 @@ export class InvoiceApiController {
     description: 'Invalid payment payload, or invoice not in ACCEPTED state',
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the invoices:write scope',
+  })
   @ApiResponse({
     status: 404,
     description: 'Invoice not found for this tenant',
@@ -469,15 +534,21 @@ export class InvoiceApiController {
   }
 
   @Get(':id/payments')
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('invoices:read')
   @ApiOperation({
     summary: 'List payment records for an invoice',
     description:
-      'Returns every recorded payment (full or partial) against the given invoice.',
+      'Returns every recorded payment (full or partial) against the given invoice. Requires the ' +
+      '`invoices:read` API key scope.',
   })
   @ApiParam({ name: 'id', description: 'Invoice ID' })
   @ApiResponse({ status: 200, description: 'List of payment records' })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the invoices:read scope',
+  })
   @ApiResponse({
     status: 404,
     description: 'Invoice not found for this tenant',

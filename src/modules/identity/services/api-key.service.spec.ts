@@ -109,6 +109,35 @@ describe('ApiKeyService', () => {
       const created = prisma.__tx.apiKey.create.mock.calls[0][0].data;
       expect(created.expiresAt).toEqual(new Date('2027-01-01T00:00:00.000Z'));
     });
+
+    it('defaults to full access (["*"]) when no scopes are provided', async () => {
+      await service.createApiKey(TENANT_ID, {
+        name: 'Test Key',
+        environment: 'PRODUCTION',
+      });
+      const created = prisma.__tx.apiKey.create.mock.calls[0][0].data;
+      expect(created.scopes).toEqual(['*']);
+    });
+
+    it('defaults to full access (["*"]) when scopes is an empty array', async () => {
+      await service.createApiKey(TENANT_ID, {
+        name: 'Test Key',
+        environment: 'PRODUCTION',
+        scopes: [],
+      });
+      const created = prisma.__tx.apiKey.create.mock.calls[0][0].data;
+      expect(created.scopes).toEqual(['*']);
+    });
+
+    it('stores the caller-supplied scopes when explicitly provided', async () => {
+      await service.createApiKey(TENANT_ID, {
+        name: 'Test Key',
+        environment: 'PRODUCTION',
+        scopes: ['invoices:read', 'products:read'],
+      });
+      const created = prisma.__tx.apiKey.create.mock.calls[0][0].data;
+      expect(created.scopes).toEqual(['invoices:read', 'products:read']);
+    });
   });
 
   // ── verifyApiKey ──────────────────────────────────────────────────────────
@@ -160,7 +189,7 @@ describe('ApiKeyService', () => {
       );
     });
 
-    it('returns tenantId/keyId/environment on a valid, active match', async () => {
+    it('returns tenantId/keyId/environment/scopes on a valid, active match', async () => {
       const rawKey = 'blx_live_abcdefghijklmnopqrstuvwx';
       const hash = await bcrypt.hash(rawKey, 12);
       prisma.__tx.apiKey.findMany.mockResolvedValue([
@@ -169,6 +198,7 @@ describe('ApiKeyService', () => {
           tenantId: TENANT_ID,
           keyHash: hash,
           environment: 'PRODUCTION',
+          scopes: ['invoices:read'],
           tenant: { id: TENANT_ID, isActive: true, rateLimitTier: 'STANDARD' },
         },
       ]);
@@ -177,6 +207,7 @@ describe('ApiKeyService', () => {
         tenantId: TENANT_ID,
         keyId: 'key-1',
         environment: 'PRODUCTION',
+        scopes: ['invoices:read'],
       });
     });
 
@@ -262,6 +293,7 @@ describe('ApiKeyService', () => {
         environment: 'PRODUCTION',
         name: 'Test Key',
         expiresAt: null,
+        scopes: ['*'],
       });
       prisma.asAdmin.mockImplementation((fn: any) => fn(prisma.__tx));
       prisma.__tx.apiKey.create.mockResolvedValue({
@@ -269,6 +301,7 @@ describe('ApiKeyService', () => {
         name: 'Test Key',
         environment: 'PRODUCTION',
         expiresAt: null,
+        scopes: ['*'],
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
       });
 
@@ -276,6 +309,38 @@ describe('ApiKeyService', () => {
 
       expect(result.id).toBe('key-new');
       expect(result.key).toMatch(/^blx_live_/);
+    });
+
+    it("carries the existing key's scopes forward onto the rotated key", async () => {
+      prisma.__tx.apiKey.findFirst.mockResolvedValue({
+        id: 'key-old',
+        tenantId: TENANT_ID,
+        isRevoked: false,
+        environment: 'PRODUCTION',
+        name: 'Read-only Key',
+        expiresAt: null,
+        scopes: ['invoices:read', 'reports:read'],
+      });
+      prisma.asAdmin.mockImplementation((fn: any) => fn(prisma.__tx));
+      prisma.__tx.apiKey.create.mockResolvedValue({
+        id: 'key-new',
+        name: 'Read-only Key',
+        environment: 'PRODUCTION',
+        expiresAt: null,
+        scopes: ['invoices:read', 'reports:read'],
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      });
+
+      const result = await service.rotateApiKey(TENANT_ID, 'key-old');
+
+      expect(prisma.__tx.apiKey.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            scopes: ['invoices:read', 'reports:read'],
+          }),
+        }),
+      );
+      expect(result.scopes).toEqual(['invoices:read', 'reports:read']);
     });
   });
 
@@ -287,6 +352,15 @@ describe('ApiKeyService', () => {
       expect(prisma.__tx.apiKey.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { tenantId: TENANT_ID, isRevoked: false },
+        }),
+      );
+    });
+
+    it('includes scopes in the selected fields', async () => {
+      await service.listApiKeys(TENANT_ID);
+      expect(prisma.__tx.apiKey.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({ scopes: true }),
         }),
       );
     });
