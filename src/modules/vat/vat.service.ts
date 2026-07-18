@@ -136,7 +136,7 @@ export class VatService {
           where: {
             tenantId,
             status: 'ACCEPTED',
-            OR: [{ paymentStatus: null }, { paymentStatus: { not: 'PAID' } }],
+            paymentStatus: { not: 'PAID' },
           },
           _sum: { vatAmount: true },
         });

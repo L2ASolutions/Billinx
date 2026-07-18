@@ -52,7 +52,9 @@ export class VatReturnController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'VIEWER')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get VAT return summary and schedule previews for a filing period' })
+  @ApiOperation({
+    summary: 'Get VAT return summary and schedule previews for a filing period',
+  })
   @ApiQuery({ name: 'startDate', required: true, example: '2026-01-01' })
   @ApiQuery({ name: 'endDate', required: true, example: '2026-03-31' })
   async getSummary(
@@ -69,7 +71,9 @@ export class VatReturnController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Download pre-filled VAT 002 Excel file for a filing period' })
+  @ApiOperation({
+    summary: 'Download pre-filled VAT 002 Excel file for a filing period',
+  })
   @ApiQuery({ name: 'startDate', required: true, example: '2026-01-01' })
   @ApiQuery({ name: 'endDate', required: true, example: '2026-03-31' })
   async exportExcel(
@@ -80,7 +84,11 @@ export class VatReturnController {
   ) {
     const [start, end] = this.parseDates(startDate, endDate);
     const ctx = this.getCtx(req);
-    const data = await this.vatReturnService.getVatReturnData(ctx.tenantId, start, end);
+    const data = await this.vatReturnService.getVatReturnData(
+      ctx.tenantId,
+      start,
+      end,
+    );
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'Billinx';

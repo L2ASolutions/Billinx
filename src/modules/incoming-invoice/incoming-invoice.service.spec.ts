@@ -1,16 +1,26 @@
 /// <reference types="jest" />
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException, BadRequestException, ForbiddenException, MaxFileSizeValidator } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  MaxFileSizeValidator,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { IncomingInvoiceService } from './incoming-invoice.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ActivityService } from '../activity/services/activity.service';
 import { EmailService } from '../../shared/email/email.service';
 
-jest.mock('file-type', () => ({
-  fileTypeFromBuffer: jest.fn(),
-}), { virtual: true });
+jest.mock(
+  'file-type',
+  () => ({
+    fileTypeFromBuffer: jest.fn(),
+  }),
+  { virtual: true },
+);
 import { fileTypeFromBuffer } from 'file-type';
 
 // ── Mock request context ──────────────────────────────────────────────────────
@@ -28,7 +38,9 @@ jest.mock('../../shared/context/request-context', () => ({
 const TENANT_ID = 'tenant-001';
 const INVOICE_ID = 'invoice-001';
 
-function makeFile(overrides: Partial<Express.Multer.File> = {}): Express.Multer.File {
+function makeFile(
+  overrides: Partial<Express.Multer.File> = {},
+): Express.Multer.File {
   return {
     fieldname: 'file',
     originalname: 'document.pdf',
@@ -92,9 +104,11 @@ function makePrisma(overrides: Record<string, any> = {}): any {
       findMany: jest.fn().mockResolvedValue([record]),
       count: jest.fn().mockResolvedValue(1),
       create: jest.fn().mockResolvedValue(record),
-      update: jest.fn().mockImplementation(({ data }: any) =>
-        Promise.resolve({ ...record, ...data, items: [] }),
-      ),
+      update: jest
+        .fn()
+        .mockImplementation(({ data }: any) =>
+          Promise.resolve({ ...record, ...data, items: [] }),
+        ),
     },
     asAdmin: jest.fn().mockResolvedValue([{ role: 'OWNER' }]),
     ...overrides,
@@ -159,7 +173,9 @@ describe('IncomingInvoiceService', () => {
     it('applies status filter', async () => {
       await service.list(TENANT_ID, { status: 'RECEIVED' });
       expect(prisma.incomingInvoice.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ status: 'RECEIVED' }) }),
+        expect.objectContaining({
+          where: expect.objectContaining({ status: 'RECEIVED' }),
+        }),
       );
     });
   });
@@ -168,7 +184,9 @@ describe('IncomingInvoiceService', () => {
 
   describe('validate', () => {
     it('transitions RECEIVED → VALIDATED', async () => {
-      prisma.incomingInvoice.findFirst.mockResolvedValue(makeInvoiceRecord({ status: 'RECEIVED' }));
+      prisma.incomingInvoice.findFirst.mockResolvedValue(
+        makeInvoiceRecord({ status: 'RECEIVED' }),
+      );
       const result = await service.validate(INVOICE_ID, TENANT_ID);
       expect(result.status).toBe('VALIDATED');
       expect(activityTrack).toHaveBeenCalledWith(
@@ -177,7 +195,9 @@ describe('IncomingInvoiceService', () => {
     });
 
     it('throws 400 if invoice is not in RECEIVED status', async () => {
-      prisma.incomingInvoice.findFirst.mockResolvedValue(makeInvoiceRecord({ status: 'APPROVED' }));
+      prisma.incomingInvoice.findFirst.mockResolvedValue(
+        makeInvoiceRecord({ status: 'APPROVED' }),
+      );
       await expect(service.validate(INVOICE_ID, TENANT_ID)).rejects.toThrow(
         BadRequestException,
       );
@@ -204,7 +224,9 @@ describe('IncomingInvoiceService', () => {
 
   describe('approve', () => {
     it('transitions VALIDATED → APPROVED for OWNER', async () => {
-      prisma.incomingInvoice.findFirst.mockResolvedValue(makeInvoiceRecord({ status: 'VALIDATED' }));
+      prisma.incomingInvoice.findFirst.mockResolvedValue(
+        makeInvoiceRecord({ status: 'VALIDATED' }),
+      );
       prisma.asAdmin = jest.fn().mockResolvedValue([{ role: 'OWNER' }]);
       const result = await service.approve(INVOICE_ID, TENANT_ID);
       expect(result.status).toBe('APPROVED');
@@ -214,7 +236,9 @@ describe('IncomingInvoiceService', () => {
     });
 
     it('throws 403 if actor is not OWNER or ADMIN', async () => {
-      prisma.incomingInvoice.findFirst.mockResolvedValue(makeInvoiceRecord({ status: 'VALIDATED' }));
+      prisma.incomingInvoice.findFirst.mockResolvedValue(
+        makeInvoiceRecord({ status: 'VALIDATED' }),
+      );
       prisma.asAdmin = jest.fn().mockResolvedValue([{ role: 'VIEWER' }]);
       await expect(service.approve(INVOICE_ID, TENANT_ID)).rejects.toThrow(
         ForbiddenException,
@@ -222,7 +246,9 @@ describe('IncomingInvoiceService', () => {
     });
 
     it('throws 400 if invoice is not VALIDATED', async () => {
-      prisma.incomingInvoice.findFirst.mockResolvedValue(makeInvoiceRecord({ status: 'RECEIVED' }));
+      prisma.incomingInvoice.findFirst.mockResolvedValue(
+        makeInvoiceRecord({ status: 'RECEIVED' }),
+      );
       await expect(service.approve(INVOICE_ID, TENANT_ID)).rejects.toThrow(
         BadRequestException,
       );
@@ -233,8 +259,12 @@ describe('IncomingInvoiceService', () => {
 
   describe('reject', () => {
     it('transitions to REJECTED with reason', async () => {
-      prisma.incomingInvoice.findFirst.mockResolvedValue(makeInvoiceRecord({ status: 'RECEIVED' }));
-      const result = await service.reject(INVOICE_ID, TENANT_ID, { reason: 'Wrong amount' });
+      prisma.incomingInvoice.findFirst.mockResolvedValue(
+        makeInvoiceRecord({ status: 'RECEIVED' }),
+      );
+      const result = await service.reject(INVOICE_ID, TENANT_ID, {
+        reason: 'Wrong amount',
+      });
       expect(result.status).toBe('REJECTED');
       expect(activityTrack).toHaveBeenCalledWith(
         expect.objectContaining({ eventType: 'INCOMING_INVOICE_REJECTED' }),
@@ -242,7 +272,9 @@ describe('IncomingInvoiceService', () => {
     });
 
     it('throws 400 if invoice is already PAID', async () => {
-      prisma.incomingInvoice.findFirst.mockResolvedValue(makeInvoiceRecord({ status: 'PAID' }));
+      prisma.incomingInvoice.findFirst.mockResolvedValue(
+        makeInvoiceRecord({ status: 'PAID' }),
+      );
       await expect(
         service.reject(INVOICE_ID, TENANT_ID, { reason: 'Late' }),
       ).rejects.toThrow(BadRequestException);
@@ -253,7 +285,9 @@ describe('IncomingInvoiceService', () => {
 
   describe('markPaid', () => {
     it('transitions APPROVED → PAID', async () => {
-      prisma.incomingInvoice.findFirst.mockResolvedValue(makeInvoiceRecord({ status: 'APPROVED' }));
+      prisma.incomingInvoice.findFirst.mockResolvedValue(
+        makeInvoiceRecord({ status: 'APPROVED' }),
+      );
       const result = await service.markPaid(INVOICE_ID, TENANT_ID, {
         amount: 100000,
         reference: 'TRX-001',
@@ -267,7 +301,9 @@ describe('IncomingInvoiceService', () => {
     });
 
     it('throws 400 if invoice is not APPROVED', async () => {
-      prisma.incomingInvoice.findFirst.mockResolvedValue(makeInvoiceRecord({ status: 'VALIDATED' }));
+      prisma.incomingInvoice.findFirst.mockResolvedValue(
+        makeInvoiceRecord({ status: 'VALIDATED' }),
+      );
       await expect(
         service.markPaid(INVOICE_ID, TENANT_ID, {
           amount: 100000,
@@ -295,71 +331,153 @@ describe('IncomingInvoiceService', () => {
     });
 
     it('accepts a valid PDF (magic bytes match declared mimetype)', async () => {
-      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: 'application/pdf', ext: 'pdf' });
-      const result = await service.uploadAttachment(INVOICE_ID, TENANT_ID, makeFile());
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({
+        mime: 'application/pdf',
+        ext: 'pdf',
+      });
+      const result = await service.uploadAttachment(
+        INVOICE_ID,
+        TENANT_ID,
+        makeFile(),
+      );
       expect(result.attachmentMime).toBe('application/pdf');
       expect(prisma.incomingInvoice.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ attachmentMime: 'application/pdf' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ attachmentMime: 'application/pdf' }),
+        }),
       );
     });
 
     it('accepts a valid JPEG', async () => {
-      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: 'image/jpeg', ext: 'jpg' });
-      const file = makeFile({ mimetype: 'image/jpeg', originalname: 'photo.jpg' });
-      prisma.incomingInvoice.update = jest.fn().mockResolvedValue({ ...mockUpdate, attachmentMime: 'image/jpeg', attachmentName: 'photo.jpg' });
-      const result = await service.uploadAttachment(INVOICE_ID, TENANT_ID, file);
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({
+        mime: 'image/jpeg',
+        ext: 'jpg',
+      });
+      const file = makeFile({
+        mimetype: 'image/jpeg',
+        originalname: 'photo.jpg',
+      });
+      prisma.incomingInvoice.update = jest.fn().mockResolvedValue({
+        ...mockUpdate,
+        attachmentMime: 'image/jpeg',
+        attachmentName: 'photo.jpg',
+      });
+      const result = await service.uploadAttachment(
+        INVOICE_ID,
+        TENANT_ID,
+        file,
+      );
       expect(result.attachmentMime).toBe('image/jpeg');
     });
 
     it('accepts a valid PNG', async () => {
-      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: 'image/png', ext: 'png' });
-      const file = makeFile({ mimetype: 'image/png', originalname: 'image.png' });
-      prisma.incomingInvoice.update = jest.fn().mockResolvedValue({ ...mockUpdate, attachmentMime: 'image/png', attachmentName: 'image.png' });
-      const result = await service.uploadAttachment(INVOICE_ID, TENANT_ID, file);
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({
+        mime: 'image/png',
+        ext: 'png',
+      });
+      const file = makeFile({
+        mimetype: 'image/png',
+        originalname: 'image.png',
+      });
+      prisma.incomingInvoice.update = jest.fn().mockResolvedValue({
+        ...mockUpdate,
+        attachmentMime: 'image/png',
+        attachmentName: 'image.png',
+      });
+      const result = await service.uploadAttachment(
+        INVOICE_ID,
+        TENANT_ID,
+        file,
+      );
       expect(result.attachmentMime).toBe('image/png');
     });
 
     it('rejects an .exe renamed to .pdf (magic bytes → EXE, claimed → PDF)', async () => {
-      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: 'application/x-msdownload', ext: 'exe' });
-      const file = makeFile({ mimetype: 'application/pdf', originalname: 'document.pdf' });
-      await expect(service.uploadAttachment(INVOICE_ID, TENANT_ID, file)).rejects.toThrow(
-        new BadRequestException('Unsupported file type. Only PDF, JPEG, and PNG files are accepted.'),
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({
+        mime: 'application/x-msdownload',
+        ext: 'exe',
+      });
+      const file = makeFile({
+        mimetype: 'application/pdf',
+        originalname: 'document.pdf',
+      });
+      await expect(
+        service.uploadAttachment(INVOICE_ID, TENANT_ID, file),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'Unsupported file type. Only PDF, JPEG, and PNG files are accepted.',
+        ),
       );
       expect(prisma.incomingInvoice.update).not.toHaveBeenCalled();
     });
 
     it('rejects an unsupported type (.docx) even when claimed MIME matches', async () => {
-      const docxMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: docxMime, ext: 'docx' });
-      const file = makeFile({ mimetype: docxMime, originalname: 'report.docx' });
-      await expect(service.uploadAttachment(INVOICE_ID, TENANT_ID, file)).rejects.toThrow(
-        new BadRequestException('Unsupported file type. Only PDF, JPEG, and PNG files are accepted.'),
+      const docxMime =
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({
+        mime: docxMime,
+        ext: 'docx',
+      });
+      const file = makeFile({
+        mimetype: docxMime,
+        originalname: 'report.docx',
+      });
+      await expect(
+        service.uploadAttachment(INVOICE_ID, TENANT_ID, file),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'Unsupported file type. Only PDF, JPEG, and PNG files are accepted.',
+        ),
       );
       expect(prisma.incomingInvoice.update).not.toHaveBeenCalled();
     });
 
     it('rejects when magic bytes are unrecognized (fromBuffer returns undefined)', async () => {
       (fileTypeFromBuffer as jest.Mock).mockResolvedValue(undefined);
-      await expect(service.uploadAttachment(INVOICE_ID, TENANT_ID, makeFile())).rejects.toThrow(
-        new BadRequestException('Unsupported file type. Only PDF, JPEG, and PNG files are accepted.'),
+      await expect(
+        service.uploadAttachment(INVOICE_ID, TENANT_ID, makeFile()),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'Unsupported file type. Only PDF, JPEG, and PNG files are accepted.',
+        ),
       );
     });
 
     it('rejects when detected MIME does not match declared MIME (mismatch attack)', async () => {
-      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: 'image/jpeg', ext: 'jpg' });
-      const file = makeFile({ mimetype: 'application/pdf', originalname: 'sneaky.pdf' });
-      await expect(service.uploadAttachment(INVOICE_ID, TENANT_ID, file)).rejects.toThrow(
-        new BadRequestException('File content does not match the declared content type.'),
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({
+        mime: 'image/jpeg',
+        ext: 'jpg',
+      });
+      const file = makeFile({
+        mimetype: 'application/pdf',
+        originalname: 'sneaky.pdf',
+      });
+      await expect(
+        service.uploadAttachment(INVOICE_ID, TENANT_ID, file),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'File content does not match the declared content type.',
+        ),
       );
     });
 
     it('stores detected MIME type, not the client-supplied mimetype', async () => {
-      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({ mime: 'image/jpeg', ext: 'jpg' });
-      const file = makeFile({ mimetype: 'image/jpg', originalname: 'photo.jpg' });
-      prisma.incomingInvoice.update = jest.fn().mockResolvedValue({ ...mockUpdate, attachmentMime: 'image/jpeg' });
+      (fileTypeFromBuffer as jest.Mock).mockResolvedValue({
+        mime: 'image/jpeg',
+        ext: 'jpg',
+      });
+      const file = makeFile({
+        mimetype: 'image/jpg',
+        originalname: 'photo.jpg',
+      });
+      prisma.incomingInvoice.update = jest
+        .fn()
+        .mockResolvedValue({ ...mockUpdate, attachmentMime: 'image/jpeg' });
       await service.uploadAttachment(INVOICE_ID, TENANT_ID, file);
       expect(prisma.incomingInvoice.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ attachmentMime: 'image/jpeg' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ attachmentMime: 'image/jpeg' }),
+        }),
       );
     });
   });

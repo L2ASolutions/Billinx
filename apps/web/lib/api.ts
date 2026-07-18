@@ -209,14 +209,13 @@ export const invoiceApi = {
   cancel: (id: string, reason: string) =>
     api.patch(`/v1/invoices/dashboard/${id}/cancel`, { reason }),
   export: (params?: Record<string, string>) => {
-    const qs = params
-      ? '?' + new URLSearchParams(params).toString()
-      : '';
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return requestBlob(`/v1/invoices/dashboard/export${qs}`);
   },
   stats: () => cachedGet<unknown>('/v1/invoices/dashboard/stats'),
   paymentStats: () => api.get<unknown>('/v1/invoices/dashboard/payment-stats'),
-  paymentCharts: () => api.get<unknown>('/v1/invoices/dashboard/payment-charts'),
+  paymentCharts: () =>
+    api.get<unknown>('/v1/invoices/dashboard/payment-charts'),
   getXml: (id: string) => requestBlob(`/v1/invoices/dashboard/${id}/xml`),
   getStatus: (id: string) =>
     api.get<unknown>(`/v1/invoices/dashboard/${id}/status`),
@@ -269,20 +268,31 @@ export const invoiceApi = {
     api.get<{
       totalRejected: number;
       allResolved: boolean;
-      reasons: { errorCode: string; errorMessage: string; count: number; invoiceIds: string[] }[];
+      reasons: {
+        errorCode: string;
+        errorMessage: string;
+        count: number;
+        invoiceIds: string[];
+      }[];
     }>('/v1/invoices/dashboard/rejections'),
   createCreditNote: (id: string, data: unknown) =>
     api.post<unknown>(`/v1/invoices/${id}/credit-notes`, data),
   listCreditNotes: (startDate: string, endDate: string) =>
-    api.get<unknown>(`/v1/invoices/credit-notes?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`),
+    api.get<unknown>(
+      `/v1/invoices/credit-notes?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`,
+    ),
 };
 
 // VAT Return
 export const vatReturnApi = {
   summary: (startDate: string, endDate: string) =>
-    api.get<unknown>(`/v1/vat-return/summary?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`),
+    api.get<unknown>(
+      `/v1/vat-return/summary?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`,
+    ),
   export: (startDate: string, endDate: string) =>
-    requestBlob(`/v1/vat-return/export?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`),
+    requestBlob(
+      `/v1/vat-return/export?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`,
+    ),
 };
 
 // Payments list (tenant-wide)
@@ -309,16 +319,15 @@ export const exportApi = {
 
 export const submissionApi = {
   export: (params?: { startDate?: string; endDate?: string }) => {
-    const qs = params
-      ? '?' + new URLSearchParams(params as Record<string, string>).toString()
-      : '';
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return requestBlob(`/v1/submissions/export${qs}`);
   },
 };
 
 // Reminder Rules — backend field is `reminderMessage` (BUG-011)
 export const reminderApi = {
-  list: () => cachedGet<{ data: unknown[]; total: number }>('/v1/reminder-rules'),
+  list: () =>
+    cachedGet<{ data: unknown[]; total: number }>('/v1/reminder-rules'),
   create: (data: {
     name: string;
     triggerType: string;
@@ -371,12 +380,16 @@ export interface ActivityEvent {
 export const activityApi = {
   list: (params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return cachedGet<{ data: ActivityEvent[]; total: number }>(`/v1/activity${qs}`);
+    return cachedGet<{ data: ActivityEvent[]; total: number }>(
+      `/v1/activity${qs}`,
+    );
   },
-  exportExcel: (params?: { startDate?: string; endDate?: string; eventType?: string }) => {
-    const qs = params
-      ? '?' + new URLSearchParams(params as Record<string, string>).toString()
-      : '';
+  exportExcel: (params?: {
+    startDate?: string;
+    endDate?: string;
+    eventType?: string;
+  }) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return requestBlob(`/v1/activity/export-excel${qs}`);
   },
 };
@@ -393,9 +406,17 @@ export const userApi = {
   // BUG-009: DELETE /v1/users/:id now exists (soft-delete)
   remove: (userId: string) => api.delete(`/v1/users/${userId}`),
   getPreferences: () =>
-    api.get<{ dashboardWidgets: Record<string, boolean>; hidden: string[] }>('/v1/users/me/preferences'),
-  savePreferences: (body: { dashboardWidgets?: Record<string, boolean>; hidden?: string[] }) =>
-    api.patch<{ dashboardWidgets: Record<string, boolean>; hidden: string[] }>('/v1/users/me/preferences', body),
+    api.get<{ dashboardWidgets: Record<string, boolean>; hidden: string[] }>(
+      '/v1/users/me/preferences',
+    ),
+  savePreferences: (body: {
+    dashboardWidgets?: Record<string, boolean>;
+    hidden?: string[];
+  }) =>
+    api.patch<{ dashboardWidgets: Record<string, boolean>; hidden: string[] }>(
+      '/v1/users/me/preferences',
+      body,
+    ),
 };
 
 export interface DashboardVisibility {
@@ -409,11 +430,22 @@ export interface DashboardVisibility {
 
 export const tenantApi = {
   getMe: () => api.get<unknown>('/v1/tenants/me'),
-  updateMe: (data: Record<string, unknown>) => api.patch<unknown>('/v1/tenants/me', data),
+  updateMe: (data: Record<string, unknown>) =>
+    api.patch<unknown>('/v1/tenants/me', data),
   getDashboardVisibility: () =>
-    api.get<{ VIEWER: DashboardVisibility; ACCOUNTANT: DashboardVisibility }>('/v1/tenants/me/dashboard-visibility'),
-  updateDashboardVisibility: (role: 'VIEWER' | 'ACCOUNTANT', section: string, visible: boolean) =>
-    api.patch<unknown>('/v1/tenants/me/dashboard-visibility', { role, section, visible }),
+    api.get<{ VIEWER: DashboardVisibility; ACCOUNTANT: DashboardVisibility }>(
+      '/v1/tenants/me/dashboard-visibility',
+    ),
+  updateDashboardVisibility: (
+    role: 'VIEWER' | 'ACCOUNTANT',
+    section: string,
+    visible: boolean,
+  ) =>
+    api.patch<unknown>('/v1/tenants/me/dashboard-visibility', {
+      role,
+      section,
+      visible,
+    }),
 };
 
 // API Keys — use JWT-guarded /users/api-keys routes (BUG-004)
@@ -449,15 +481,22 @@ export const incomingInvoiceApi = {
     page?: number;
     limit?: number;
   }) => {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
-    return api.get<{ data: unknown[]; total: number; page: number; limit: number }>(
-      `/v1/incoming-invoices${qs}`,
-    );
+    const qs = params
+      ? '?' + new URLSearchParams(params as Record<string, string>).toString()
+      : '';
+    return api.get<{
+      data: unknown[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(`/v1/incoming-invoices${qs}`);
   },
   get: (id: string) => api.get<unknown>(`/v1/incoming-invoices/${id}`),
   create: (data: unknown) => api.post<unknown>('/v1/incoming-invoices', data),
-  validate: (id: string) => api.patch<unknown>(`/v1/incoming-invoices/${id}/validate`),
-  approve: (id: string) => api.patch<unknown>(`/v1/incoming-invoices/${id}/approve`),
+  validate: (id: string) =>
+    api.patch<unknown>(`/v1/incoming-invoices/${id}/validate`),
+  approve: (id: string) =>
+    api.patch<unknown>(`/v1/incoming-invoices/${id}/approve`),
   reject: (id: string, reason: string) =>
     api.patch<unknown>(`/v1/incoming-invoices/${id}/reject`, { reason }),
   markPaid: (
@@ -471,47 +510,68 @@ export const incomingInvoiceApi = {
       sendReceiptToSupplier?: boolean;
     },
   ) => api.patch<unknown>(`/v1/incoming-invoices/${id}/mark-paid`, data),
-  sendReceipt: (id: string) => api.post<{ sent: boolean; to?: string }>(`/v1/incoming-invoices/${id}/send-receipt`, {}),
+  sendReceipt: (id: string) =>
+    api.post<{ sent: boolean; to?: string }>(
+      `/v1/incoming-invoices/${id}/send-receipt`,
+      {},
+    ),
   uploadAttachment: (id: string, file: File) => {
     const fd = new FormData();
     fd.append('file', file);
-    return requestMultipart<{ attachmentName: string; attachmentMime: string; attachmentSize: number; uploadedAt: string }>(
-      `/v1/incoming-invoices/${id}/attachment`,
-      fd,
-    );
+    return requestMultipart<{
+      attachmentName: string;
+      attachmentMime: string;
+      attachmentSize: number;
+      uploadedAt: string;
+    }>(`/v1/incoming-invoices/${id}/attachment`, fd);
   },
   downloadAttachment: (id: string) =>
     requestBlob(`/v1/incoming-invoices/${id}/attachment`),
   deleteAttachment: (id: string) =>
     api.delete<{ deleted: boolean }>(`/v1/incoming-invoices/${id}/attachment`),
-  stats: () => cachedGet<{
-    total: number;
-    received: number;
-    validated: number;
-    approved: number;
-    paid: number;
-    totalOutstanding: number;
-    outstandingCount: number;
-    totalVatOutstanding: number;
-    totalWhtOutstanding?: number;
-    netPayableAfterWht?: number;
-  }>('/v1/incoming-invoices/stats'),
+  stats: () =>
+    cachedGet<{
+      total: number;
+      received: number;
+      validated: number;
+      approved: number;
+      paid: number;
+      totalOutstanding: number;
+      outstandingCount: number;
+      totalVatOutstanding: number;
+      totalWhtOutstanding?: number;
+      netPayableAfterWht?: number;
+    }>('/v1/incoming-invoices/stats'),
 };
 
 // VAT Reconciliation
 export const vatApi = {
   summary: (period: string) =>
-    cachedGet<unknown>(`/v1/vat/summary?period=${encodeURIComponent(period)}`, 30_000),
+    cachedGet<unknown>(
+      `/v1/vat/summary?period=${encodeURIComponent(period)}`,
+      30_000,
+    ),
   annualSummary: (year: number) =>
     cachedGet<unknown>(`/v1/vat/summary/annual?year=${year}`, 30_000),
-  entries: (params?: { type?: string; period?: string; status?: string; page?: number; limit?: number }) => {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+  entries: (params?: {
+    type?: string;
+    period?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const qs = params
+      ? '?' + new URLSearchParams(params as Record<string, string>).toString()
+      : '';
     return cachedGet<unknown>(`/v1/vat/entries${qs}`, 30_000);
   },
   reconcile: (entryId: string) =>
     api.patch<unknown>(`/v1/vat/entries/${entryId}/reconcile`),
   mismatches: (period: string) =>
-    cachedGet<unknown>(`/v1/vat/mismatches?period=${encodeURIComponent(period)}`, 30_000),
+    cachedGet<unknown>(
+      `/v1/vat/mismatches?period=${encodeURIComponent(period)}`,
+      30_000,
+    ),
 };
 
 // Reference data — public endpoints, no auth required, 5-minute cache
@@ -519,22 +579,35 @@ const REF = '/v1/reference';
 
 export const referenceApi = {
   invoiceTypes: () =>
-    cachedGet<{ code: string; value: string }[]>(`${REF}/invoice-types`, 300_000),
-  paymentMeans: () =>
-    cachedGet<{ code: string; value: string }[]>(`${REF}/payment-means`, 300_000),
-  taxCategories: () =>
-    cachedGet<{ code: string; value: string }[]>(`${REF}/tax-categories`, 300_000),
-  currencies: () =>
-    cachedGet<{ code: string; name: string; symbol: string; symbolNative: string }[]>(
-      `${REF}/currencies`, 300_000,
+    cachedGet<{ code: string; value: string }[]>(
+      `${REF}/invoice-types`,
+      300_000,
     ),
+  paymentMeans: () =>
+    cachedGet<{ code: string; value: string }[]>(
+      `${REF}/payment-means`,
+      300_000,
+    ),
+  taxCategories: () =>
+    cachedGet<{ code: string; value: string }[]>(
+      `${REF}/tax-categories`,
+      300_000,
+    ),
+  currencies: () =>
+    cachedGet<
+      { code: string; name: string; symbol: string; symbolNative: string }[]
+    >(`${REF}/currencies`, 300_000),
   quantityCodes: () =>
-    cachedGet<{ code: string; name: string }[]>(`${REF}/quantity-codes`, 300_000),
+    cachedGet<{ code: string; name: string }[]>(
+      `${REF}/quantity-codes`,
+      300_000,
+    ),
   states: () =>
     cachedGet<{ code: string; name: string }[]>(`${REF}/states`, 300_000),
   lgas: (stateCode: string) =>
     cachedGet<{ code: string; name: string }[]>(
-      `${REF}/lgas?stateCode=${stateCode}`, 300_000,
+      `${REF}/lgas?stateCode=${stateCode}`,
+      300_000,
     ),
   hsCodes: (search: string, limit = 10) =>
     api.get<{ data: { code: string; description: string }[]; total: number }>(
@@ -548,7 +621,10 @@ export const referenceApi = {
     const url = search
       ? `${REF}/countries?search=${encodeURIComponent(search)}`
       : `${REF}/countries`;
-    return cachedGet<{ alpha2: string; alpha3: string; name: string }[]>(url, 300_000);
+    return cachedGet<{ alpha2: string; alpha3: string; name: string }[]>(
+      url,
+      300_000,
+    );
   },
 };
 
@@ -657,9 +733,12 @@ async function publicGet<T>(path: string): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(body?.message ?? `Request failed: ${res.status}`), {
-      status: res.status,
-    });
+    throw Object.assign(
+      new Error(body?.message ?? `Request failed: ${res.status}`),
+      {
+        status: res.status,
+      },
+    );
   }
   return res.json();
 }
@@ -672,9 +751,12 @@ async function publicPost<T>(path: string, body: unknown): Promise<T> {
   });
   if (!res.ok) {
     const b = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(b?.message ?? `Request failed: ${res.status}`), {
-      status: res.status,
-    });
+    throw Object.assign(
+      new Error(b?.message ?? `Request failed: ${res.status}`),
+      {
+        status: res.status,
+      },
+    );
   }
   return res.json();
 }
@@ -688,12 +770,14 @@ export const publicPayApi = {
       { invoiceId, email },
     ),
   paystackVerify: (reference: string) =>
-    publicGet<unknown>(`/v1/payments/paystack/verify/${encodeURIComponent(reference)}`),
-  flutterwaveInit: (invoiceId: string, email: string) =>
-    publicPost<{ paymentLink: string }>(
-      '/v1/payments/flutterwave/initialize',
-      { invoiceId, email },
+    publicGet<unknown>(
+      `/v1/payments/paystack/verify/${encodeURIComponent(reference)}`,
     ),
+  flutterwaveInit: (invoiceId: string, email: string) =>
+    publicPost<{ paymentLink: string }>('/v1/payments/flutterwave/initialize', {
+      invoiceId,
+      email,
+    }),
 };
 
 export interface ClientRecord {
@@ -716,38 +800,84 @@ export interface ClientRecord {
 
 export const clientApi = {
   list: (params?: { search?: string; page?: number; limit?: number }) => {
-    const qs = params ? '?' + new URLSearchParams(
-      Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
-    ).toString() : '';
-    return api.get<{ data: ClientRecord[]; total: number; page: number; limit: number }>(`/v1/clients${qs}`);
+    const qs = params
+      ? '?' +
+        new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(params)
+              .filter(([, v]) => v !== undefined)
+              .map(([k, v]) => [k, String(v)]),
+          ),
+        ).toString()
+      : '';
+    return api.get<{
+      data: ClientRecord[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(`/v1/clients${qs}`);
   },
   frequent: () => api.get<ClientRecord[]>('/v1/clients/frequent'),
   get: (id: string) => api.get<ClientRecord>(`/v1/clients/${id}`),
-  create: (data: Partial<ClientRecord>) => api.post<ClientRecord>('/v1/clients', data),
+  create: (data: Partial<ClientRecord>) =>
+    api.post<ClientRecord>('/v1/clients', data),
   update: (id: string, data: Partial<ClientRecord>) =>
     api.patch<ClientRecord>(`/v1/clients/${id}`, data),
-  delete: (id: string) => api.delete<{ deleted: boolean; id: string }>(`/v1/clients/${id}`),
+  delete: (id: string) =>
+    api.delete<{ deleted: boolean; id: string }>(`/v1/clients/${id}`),
 };
 
 // Inventory
 export const inventoryApi = {
   list: (params?: { lowStock?: boolean; page?: number; limit?: number }) => {
-    const qs = params ? '?' + new URLSearchParams(
-      Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
-    ).toString() : '';
-    return api.get<{ data: unknown[]; total: number; page: number; limit: number }>(`/v1/inventory${qs}`);
+    const qs = params
+      ? '?' +
+        new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(params)
+              .filter(([, v]) => v !== undefined)
+              .map(([k, v]) => [k, String(v)]),
+          ),
+        ).toString()
+      : '';
+    return api.get<{
+      data: unknown[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(`/v1/inventory${qs}`);
   },
-  alerts: () => api.get<{ data: unknown[]; total: number }>('/v1/inventory/alerts'),
-  movements: (productId: string, params?: { page?: number; limit?: number }) => {
-    const qs = params ? '?' + new URLSearchParams(
-      Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
-    ).toString() : '';
-    return api.get<{ data: unknown[]; total: number; page: number; limit: number }>(`/v1/inventory/${productId}/movements${qs}`);
+  alerts: () =>
+    api.get<{ data: unknown[]; total: number }>('/v1/inventory/alerts'),
+  movements: (
+    productId: string,
+    params?: { page?: number; limit?: number },
+  ) => {
+    const qs = params
+      ? '?' +
+        new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(params)
+              .filter(([, v]) => v !== undefined)
+              .map(([k, v]) => [k, String(v)]),
+          ),
+        ).toString()
+      : '';
+    return api.get<{
+      data: unknown[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(`/v1/inventory/${productId}/movements${qs}`);
   },
-  adjust: (productId: string, data: { quantity: number; type: string; notes?: string }) =>
-    api.post<unknown>(`/v1/inventory/${productId}/adjust`, data),
+  adjust: (
+    productId: string,
+    data: { quantity: number; type: string; notes?: string },
+  ) => api.post<unknown>(`/v1/inventory/${productId}/adjust`, data),
   reorder: (productId: string) =>
-    api.post<{ sent: boolean; to: string }>(`/v1/inventory/${productId}/reorder`),
+    api.post<{ sent: boolean; to: string }>(
+      `/v1/inventory/${productId}/reorder`,
+    ),
 };
 
 export const analyticsApi = {
@@ -758,11 +888,13 @@ export const analyticsApi = {
   topSuppliers: () => api.get<unknown[]>('/v1/analytics/top-suppliers'),
   topClients: () => api.get<unknown[]>('/v1/analytics/top-clients'),
   priceTrends: (itemName: string, months = 6) =>
-    api.get<unknown[]>(`/v1/analytics/price-trends?itemName=${encodeURIComponent(itemName)}&months=${months}`),
-  revenueVsExpenses: (months = 6) =>
-    api.get<{ month: string; revenue: number; expenses: number; net: number }[]>(
-      `/v1/analytics/revenue-vs-expenses?months=${months}`,
+    api.get<unknown[]>(
+      `/v1/analytics/price-trends?itemName=${encodeURIComponent(itemName)}&months=${months}`,
     ),
+  revenueVsExpenses: (months = 6) =>
+    api.get<
+      { month: string; revenue: number; expenses: number; net: number }[]
+    >(`/v1/analytics/revenue-vs-expenses?months=${months}`),
 };
 
 export interface AppNotification {
@@ -779,6 +911,8 @@ export interface AppNotification {
 
 export const notificationApi = {
   list: () => api.get<AppNotification[]>('/v1/notifications'),
-  markRead: (id: string) => api.patch<{ ok: boolean }>(`/v1/notifications/${id}/read`, {}),
-  markAllRead: () => api.patch<{ ok: boolean }>('/v1/notifications/read-all', {}),
+  markRead: (id: string) =>
+    api.patch<{ ok: boolean }>(`/v1/notifications/${id}/read`, {}),
+  markAllRead: () =>
+    api.patch<{ ok: boolean }>('/v1/notifications/read-all', {}),
 };

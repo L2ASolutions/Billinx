@@ -5,17 +5,21 @@ import { SubmissionRequest } from '../../../../../packages/types/submission';
 
 const TENANT_ID = 'tenant-1';
 const MASTER_KEY = Buffer.from('master-key');
+const VALID_BUSINESS_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+
+// Mirrors the adapter's private OAUTH_TOKEN_TTL_MS / OAUTH_TOKEN_REFRESH_MARGIN_MS.
+const OAUTH_TOKEN_TTL_MS = 3600 * 1000;
+const OAUTH_TOKEN_REFRESH_MARGIN_MS = 60 * 1000;
 
 function makeTenantRow(overrides: Record<string, any> = {}) {
   return {
     id: TENANT_ID,
     environment: 'SANDBOX',
-    nrsApiKey: Buffer.from('enc-key'),
-    nrsApiKeyIv: Buffer.from('iv-key'),
-    nrsApiSecret: Buffer.from('enc-secret'),
-    nrsApiSecretIv: Buffer.from('iv-secret'),
+    interswitchBusinessId: VALID_BUSINESS_ID,
+    interswitchClientId: 'client-id-123',
+    interswitchClientSecret: Buffer.from('enc-secret'),
+    interswitchSecretIv: Buffer.from('iv-secret'),
     interswitchServiceId: 'SVC001',
-    interswitchBusinessId: 'BIZ-001',
     registeredAddress: {
       streetName: '1 Main St',
       cityName: 'Lagos',
@@ -84,8 +88,59 @@ function makeRequest(
   };
 }
 
+function tokenResponse(token = 'access-token-xyz') {
+  return {
+    status: 200,
+    ok: true,
+    text: async () => JSON.stringify({ data: { Token: token } }),
+  };
+}
+
+function successResponse(overrides: Record<string, any> = {}) {
+  return {
+    status: 201,
+    ok: true,
+    text: async () =>
+      JSON.stringify({
+        code: 200,
+        message: 'ok',
+        data: {
+          IRN: 'FIRS-IRN-999',
+          PostingDateTime: '2026-01-15T10:00:00Z',
+          QRCodeData: 'qr-base64-data',
+          ...overrides,
+        },
+      }),
+  };
+}
+
+// Dispatches by URL so tests don't have to reason about call ordering between
+// the OAuth token fetch and the actual NRS action call.
+function makeFetchMock(routes: {
+  token?: any;
+  postInvoice?: any;
+  transmit?: any;
+  updateStatus?: any;
+}) {
+  return jest.fn().mockImplementation((url: string) => {
+    if (url.includes('/Api/SwitchTax/Token')) {
+      return Promise.resolve(routes.token ?? tokenResponse());
+    }
+    if (url.includes('/Api/SwitchTax/postInvoice')) {
+      return Promise.resolve(routes.postInvoice ?? successResponse());
+    }
+    if (url.includes('/Api/SwitchTax/transmit/')) {
+      return Promise.resolve(routes.transmit);
+    }
+    if (url.includes('/Api/SwitchTax/UpdateStatus')) {
+      return Promise.resolve(routes.updateStatus);
+    }
+    throw new Error(`Unexpected fetch URL in test: ${url}`);
+  });
+}
+
 describe('InterswitchAdapter', () => {
-  let prisma: { asAdmin: jest.Mock; __tenant: any };
+  let prisma: { asAdmin: jest.Mock; __tenant: any; __originalInvoice: any };
   let credentialService: { decrypt: jest.Mock };
   let secretsService: { getMasterEncryptionKey: jest.Mock };
   let adapter: InterswitchAdapter;
@@ -100,15 +155,20 @@ describe('InterswitchAdapter', () => {
           tenant: {
             findUniqueOrThrow: jest.fn().mockResolvedValue(tenantRow),
           },
+          invoice: {
+            findFirst: jest
+              .fn()
+              .mockImplementation(() =>
+                Promise.resolve(prisma.__originalInvoice),
+              ),
+          },
         }),
       ),
       __tenant: tenantRow,
+      __originalInvoice: { issueDate: '2026-01-01' },
     };
     credentialService = {
-      decrypt: jest
-        .fn()
-        .mockReturnValueOnce('decrypted-api-key')
-        .mockReturnValueOnce('decrypted-api-secret'),
+      decrypt: jest.fn().mockReturnValue('decrypted-client-secret'),
     };
     secretsService = {
       getMasterEncryptionKey: jest.fn().mockResolvedValue(MASTER_KEY),
@@ -127,14 +187,63 @@ describe('InterswitchAdapter', () => {
   });
 
   describe('submit', () => {
-    it('returns MISSING_CREDENTIALS without calling the network when NRS credentials are unset', async () => {
+    it('returns MISSING_BUSINESS_ID without calling the network when business_id is unset', async () => {
       prisma.asAdmin.mockImplementation((fn: any) =>
         fn({
           tenant: {
             findUniqueOrThrow: jest
               .fn()
-              .mockResolvedValue(makeTenantRow({ nrsApiKey: null })),
+              .mockResolvedValue(
+                makeTenantRow({ interswitchBusinessId: null }),
+              ),
           },
+          invoice: { findFirst: jest.fn() },
+        }),
+      );
+      global.fetch = jest.fn();
+
+      const result = await adapter.submit(makeRequest());
+
+      expect(result).toEqual({
+        success: false,
+        errorCode: 'MISSING_BUSINESS_ID',
+        errorMessage:
+          'NRS business_id not configured for this tenant — contact your administrator',
+        retryable: false,
+      });
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('returns MISSING_BUSINESS_ID when business_id is not a UUID', async () => {
+      prisma.asAdmin.mockImplementation((fn: any) =>
+        fn({
+          tenant: {
+            findUniqueOrThrow: jest
+              .fn()
+              .mockResolvedValue(
+                makeTenantRow({ interswitchBusinessId: 'BIZ-001' }),
+              ),
+          },
+          invoice: { findFirst: jest.fn() },
+        }),
+      );
+      global.fetch = jest.fn();
+
+      const result = await adapter.submit(makeRequest());
+
+      expect(result.errorCode).toBe('MISSING_BUSINESS_ID');
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('returns MISSING_CREDENTIALS without calling the network when OAuth credentials are unset', async () => {
+      prisma.asAdmin.mockImplementation((fn: any) =>
+        fn({
+          tenant: {
+            findUniqueOrThrow: jest
+              .fn()
+              .mockResolvedValue(makeTenantRow({ interswitchClientId: null })),
+          },
+          invoice: { findFirst: jest.fn() },
         }),
       );
       global.fetch = jest.fn();
@@ -144,26 +253,14 @@ describe('InterswitchAdapter', () => {
       expect(result).toEqual({
         success: false,
         errorCode: 'MISSING_CREDENTIALS',
-        errorMessage: 'NRS API credentials not configured for this tenant',
+        errorMessage: 'NRS OAuth credentials not configured for this tenant',
         retryable: false,
       });
       expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('posts to the sandbox URL and returns a success result with the FIRS IRN/QR code on 201', async () => {
-      const fetchMock = jest.fn().mockResolvedValue({
-        status: 201,
-        text: async () =>
-          JSON.stringify({
-            code: 200,
-            message: 'ok',
-            data: {
-              IRN: 'FIRS-IRN-999',
-              PostingDateTime: '2026-01-15T10:00:00Z',
-              QRCodeData: 'qr-base64-data',
-            },
-          }),
-      });
+      const fetchMock = makeFetchMock({ postInvoice: successResponse() });
       global.fetch = fetchMock;
 
       const result = await adapter.submit(makeRequest());
@@ -171,8 +268,11 @@ describe('InterswitchAdapter', () => {
       expect(result.success).toBe(true);
       expect(result.firsConfirmedIrn).toBe('FIRS-IRN-999');
       expect(result.qrCodeBase64).toBe('qr-base64-data');
-      const [url] = fetchMock.mock.calls[0];
-      expect(url).toBe(
+
+      const postCall = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/postInvoice'),
+      );
+      expect(postCall[0]).toBe(
         'https://qa.interswitchgroup.com/Api/SwitchTax/postInvoice',
       );
     });
@@ -185,49 +285,60 @@ describe('InterswitchAdapter', () => {
               .fn()
               .mockResolvedValue(makeTenantRow({ environment: 'PRODUCTION' })),
           },
+          invoice: { findFirst: jest.fn() },
         }),
       );
-      const fetchMock = jest.fn().mockResolvedValue({
-        status: 200,
-        text: async () =>
-          JSON.stringify({
-            code: 200,
-            message: 'ok',
-            data: { IRN: 'FIRS-IRN-1', PostingDateTime: 'x', QRCodeData: 'qr' },
-          }),
+      const fetchMock = makeFetchMock({ postInvoice: successResponse() });
+      global.fetch = fetchMock;
+
+      await adapter.submit(makeRequest());
+
+      const tokenCall = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/Token'),
+      );
+      const postCall = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/postInvoice'),
+      );
+      expect(tokenCall[0]).toBe(
+        'https://api.interswitchgroup.com/Api/SwitchTax/Token',
+      );
+      expect(postCall[0]).toBe(
+        'https://api.interswitchgroup.com/Api/SwitchTax/postInvoice',
+      );
+    });
+
+    it('fetches an OAuth token with ClientId/ClientSecret and sends it as a Bearer token on postInvoice', async () => {
+      const fetchMock = makeFetchMock({
+        token: tokenResponse('the-access-token'),
+        postInvoice: successResponse(),
       });
       global.fetch = fetchMock;
 
       await adapter.submit(makeRequest());
 
-      const [url] = fetchMock.mock.calls[0];
-      expect(url).toBe(
-        'https://api.interswitchgroup.com/Api/SwitchTax/postInvoice',
+      const [tokenUrl, tokenInit] = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/Token'),
       );
+      expect(tokenUrl).toBe(
+        'https://qa.interswitchgroup.com/Api/SwitchTax/Token',
+      );
+      expect(JSON.parse(tokenInit.body)).toEqual({
+        ClientId: 'client-id-123',
+        ClientSecret: 'decrypted-client-secret',
+      });
+
+      const [, postInit] = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/postInvoice'),
+      );
+      expect(postInit.headers.Authorization).toBe('Bearer the-access-token');
     });
 
-    it('decrypts stored credentials using the requesting tenantId', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        status: 200,
-        text: async () =>
-          JSON.stringify({
-            code: 200,
-            message: 'ok',
-            data: { IRN: 'IRN', PostingDateTime: 'x', QRCodeData: 'qr' },
-          }),
-      });
+    it('decrypts the client secret using the requesting tenantId', async () => {
+      global.fetch = makeFetchMock({ postInvoice: successResponse() });
 
       await adapter.submit(makeRequest());
 
-      expect(credentialService.decrypt).toHaveBeenNthCalledWith(
-        1,
-        Buffer.from('enc-key'),
-        Buffer.from('iv-key'),
-        MASTER_KEY,
-        TENANT_ID,
-      );
-      expect(credentialService.decrypt).toHaveBeenNthCalledWith(
-        2,
+      expect(credentialService.decrypt).toHaveBeenCalledWith(
         Buffer.from('enc-secret'),
         Buffer.from('iv-secret'),
         MASTER_KEY,
@@ -235,23 +346,50 @@ describe('InterswitchAdapter', () => {
       );
     });
 
+    it('reuses a cached token across calls within the TTL', async () => {
+      let now = 1_000_000;
+      jest.spyOn(Date, 'now').mockImplementation(() => now);
+      const fetchMock = makeFetchMock({ postInvoice: successResponse() });
+      global.fetch = fetchMock;
+
+      await adapter.submit(makeRequest());
+      now += 5_000;
+      await adapter.submit(makeRequest());
+
+      const tokenCalls = fetchMock.mock.calls.filter(([url]) =>
+        url.includes('/Api/SwitchTax/Token'),
+      );
+      expect(tokenCalls).toHaveLength(1);
+    });
+
+    it('refetches the token once past the refresh margin', async () => {
+      let now = 1_000_000;
+      jest.spyOn(Date, 'now').mockImplementation(() => now);
+      const fetchMock = makeFetchMock({ postInvoice: successResponse() });
+      global.fetch = fetchMock;
+
+      await adapter.submit(makeRequest());
+      now += OAUTH_TOKEN_TTL_MS - OAUTH_TOKEN_REFRESH_MARGIN_MS + 1;
+      await adapter.submit(makeRequest());
+
+      const tokenCalls = fetchMock.mock.calls.filter(([url]) =>
+        url.includes('/Api/SwitchTax/Token'),
+      );
+      expect(tokenCalls).toHaveLength(2);
+    });
+
     it('builds a payload with FIRS invoice type codes and normalised tax category ids', async () => {
-      const fetchMock = jest.fn().mockResolvedValue({
-        status: 200,
-        text: async () =>
-          JSON.stringify({
-            code: 200,
-            message: 'ok',
-            data: { IRN: 'IRN', PostingDateTime: 'x', QRCodeData: 'qr' },
-          }),
-      });
+      const fetchMock = makeFetchMock({ postInvoice: successResponse() });
       global.fetch = fetchMock;
 
       await adapter.submit(makeRequest());
 
-      const [, init] = fetchMock.mock.calls[0];
+      const [, init] = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/postInvoice'),
+      );
       const body = JSON.parse(init.body);
 
+      expect(body.business_id).toBe(VALID_BUSINESS_ID);
       expect(body.invoice_type_code).toBe('381');
       expect(body.accounting_supplier_party.tin).toBe('SELLER-TIN-01');
       expect(body.accounting_customer_party.tin).toBe('BUYER-TIN-01');
@@ -260,16 +398,331 @@ describe('InterswitchAdapter', () => {
       );
     });
 
-    it('omits accounting_customer_party when the invoice has no buyerTin', async () => {
-      const fetchMock = jest.fn().mockResolvedValue({
-        status: 200,
-        text: async () =>
-          JSON.stringify({
-            code: 200,
-            message: 'ok',
-            data: { IRN: 'IRN', PostingDateTime: 'x', QRCodeData: 'qr' },
-          }),
+    it('normalises WHT and Stamp Duty aliases to their exact-case NRS values', async () => {
+      const fetchMock = makeFetchMock({ postInvoice: successResponse() });
+      global.fetch = fetchMock;
+
+      await adapter.submit(
+        makeRequest({
+          payload: {
+            invoice: makeInvoice({
+              taxTotal: [
+                {
+                  taxAmount: 15,
+                  taxSubtotal: [
+                    {
+                      taxableAmount: 200,
+                      taxAmount: 15,
+                      taxCategory: { id: 'WHT', percent: 5 },
+                    },
+                    {
+                      taxableAmount: 200,
+                      taxAmount: 5,
+                      taxCategory: { id: 'STAMP_DUTY', percent: 1 },
+                    },
+                  ],
+                },
+              ],
+            }),
+          },
+        }),
+      );
+
+      const [, init] = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/postInvoice'),
+      );
+      const body = JSON.parse(init.body);
+      expect(body.tax_total[0].tax_subtotal[0].tax_category.id).toBe(
+        'Withholding_Tax',
+      );
+      expect(body.tax_total[0].tax_subtotal[1].tax_category.id).toBe(
+        'Stamp_Duty',
+      );
+    });
+
+    it('rejects an unrecognized tax category id with a non-retryable INVALID_TAX_CATEGORY', async () => {
+      global.fetch = makeFetchMock({ postInvoice: successResponse() });
+
+      const result = await adapter.submit(
+        makeRequest({
+          payload: {
+            invoice: makeInvoice({
+              taxTotal: [
+                {
+                  taxAmount: 15,
+                  taxSubtotal: [
+                    {
+                      taxableAmount: 200,
+                      taxAmount: 15,
+                      taxCategory: { id: 'BOGUS', percent: 7.5 },
+                    },
+                  ],
+                },
+              ],
+            }),
+          },
+        }),
+      );
+
+      expect(result).toMatchObject({
+        success: false,
+        errorCode: 'INVALID_TAX_CATEGORY',
+        retryable: false,
       });
+    });
+
+    it('rejects an unrecognized invoice_type_code with a non-retryable error', async () => {
+      global.fetch = makeFetchMock({ postInvoice: successResponse() });
+
+      const result = await adapter.submit(
+        makeRequest({
+          payload: { invoice: makeInvoice({ invoiceTypeCode: 'BOGUS' }) },
+        }),
+      );
+
+      expect(result).toMatchObject({
+        success: false,
+        errorCode: 'INVALID_INVOICE_TYPE_CODE',
+        retryable: false,
+      });
+    });
+
+    it('requires invoice_kind to be one of B2B/B2C/B2G', async () => {
+      global.fetch = makeFetchMock({ postInvoice: successResponse() });
+
+      const result = await adapter.submit(
+        makeRequest({
+          payload: { invoice: makeInvoice({ invoiceKind: undefined }) },
+        }),
+      );
+
+      expect(result).toMatchObject({
+        success: false,
+        errorCode: 'MISSING_INVOICE_KIND',
+        retryable: false,
+      });
+    });
+
+    it('requires every legal_monetary_total field to be present and greater than zero', async () => {
+      global.fetch = makeFetchMock({ postInvoice: successResponse() });
+
+      const result = await adapter.submit(
+        makeRequest({
+          payload: {
+            invoice: makeInvoice({
+              legalMonetaryTotal: {
+                lineExtensionAmount: 200,
+                taxExclusiveAmount: 200,
+                taxInclusiveAmount: 0,
+                payableAmount: 215,
+              },
+            }),
+          },
+        }),
+      );
+
+      expect(result).toMatchObject({
+        success: false,
+        errorCode: 'INVALID_LEGAL_MONETARY_TOTAL',
+        retryable: false,
+      });
+    });
+
+    it('classifies a PRODUCT line item and requires hsn_code + product_category', async () => {
+      const fetchMock = makeFetchMock({ postInvoice: successResponse() });
+      global.fetch = fetchMock;
+
+      await adapter.submit(makeRequest());
+
+      const [, init] = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/postInvoice'),
+      );
+      const body = JSON.parse(init.body);
+      expect(body.invoice_line[0].hsn_code).toBe('1234');
+      expect(body.invoice_line[0].product_category).toBe('Widgets');
+    });
+
+    it('rejects a PRODUCT line item missing hsn_code or product_category', async () => {
+      global.fetch = makeFetchMock({ postInvoice: successResponse() });
+
+      const result = await adapter.submit(
+        makeRequest({
+          payload: {
+            invoice: makeInvoice({
+              lineItems: [
+                {
+                  invoicedQuantity: 1,
+                  lineExtensionAmount: 100,
+                  item: { name: 'Widget' },
+                  price: { priceAmount: 100 },
+                },
+              ],
+            }),
+          },
+        }),
+      );
+
+      expect(result).toMatchObject({
+        success: false,
+        errorCode: 'MISSING_PRODUCT_CLASSIFICATION',
+        retryable: false,
+      });
+    });
+
+    it('classifies a SERVICE line item using isic_code + service_category', async () => {
+      const fetchMock = makeFetchMock({ postInvoice: successResponse() });
+      global.fetch = fetchMock;
+
+      await adapter.submit(
+        makeRequest({
+          payload: {
+            invoice: makeInvoice({
+              lineItems: [
+                {
+                  itemType: 'SERVICE',
+                  isicCode: '6201',
+                  serviceCategory: 'Software Consulting',
+                  invoicedQuantity: 1,
+                  lineExtensionAmount: 500,
+                  item: { name: 'Consulting' },
+                  price: { priceAmount: 500 },
+                },
+              ],
+            }),
+          },
+        }),
+      );
+
+      const [, init] = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/postInvoice'),
+      );
+      const body = JSON.parse(init.body);
+      expect(body.invoice_line[0].isic_code).toBe('6201');
+      expect(body.invoice_line[0].service_category).toBe('Software Consulting');
+      expect(body.invoice_line[0].hsn_code).toBeUndefined();
+    });
+
+    it('rejects a SERVICE line item missing isic_code or service_category', async () => {
+      global.fetch = makeFetchMock({ postInvoice: successResponse() });
+
+      const result = await adapter.submit(
+        makeRequest({
+          payload: {
+            invoice: makeInvoice({
+              lineItems: [
+                {
+                  itemType: 'SERVICE',
+                  invoicedQuantity: 1,
+                  lineExtensionAmount: 500,
+                  item: { name: 'Consulting' },
+                  price: { priceAmount: 500 },
+                },
+              ],
+            }),
+          },
+        }),
+      );
+
+      expect(result).toMatchObject({
+        success: false,
+        errorCode: 'MISSING_SERVICE_CLASSIFICATION',
+        retryable: false,
+      });
+    });
+
+    it('defaults price_unit to EA and accepts KGM/LTR', async () => {
+      const fetchMock = makeFetchMock({ postInvoice: successResponse() });
+      global.fetch = fetchMock;
+
+      await adapter.submit(
+        makeRequest({
+          payload: {
+            invoice: makeInvoice({
+              lineItems: [
+                {
+                  hsnCode: '1234',
+                  productCategory: 'Widgets',
+                  invoicedQuantity: 2,
+                  lineExtensionAmount: 200,
+                  item: { name: 'Widget' },
+                  price: { priceAmount: 100, priceUnit: 'kgm' },
+                },
+              ],
+            }),
+          },
+        }),
+      );
+
+      const [, init] = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/postInvoice'),
+      );
+      const body = JSON.parse(init.body);
+      expect(body.invoice_line[0].price.price_unit).toBe('KGM');
+    });
+
+    it('rejects an unrecognized price_unit', async () => {
+      global.fetch = makeFetchMock({ postInvoice: successResponse() });
+
+      const result = await adapter.submit(
+        makeRequest({
+          payload: {
+            invoice: makeInvoice({
+              lineItems: [
+                {
+                  hsnCode: '1234',
+                  productCategory: 'Widgets',
+                  invoicedQuantity: 2,
+                  lineExtensionAmount: 200,
+                  item: { name: 'Widget' },
+                  price: { priceAmount: 100, priceUnit: 'BAG' },
+                },
+              ],
+            }),
+          },
+        }),
+      );
+
+      expect(result).toMatchObject({
+        success: false,
+        errorCode: 'INVALID_PRICE_UNIT',
+        retryable: false,
+      });
+    });
+
+    it('auto-generates a line item description when none is supplied', async () => {
+      const fetchMock = makeFetchMock({ postInvoice: successResponse() });
+      global.fetch = fetchMock;
+
+      await adapter.submit(
+        makeRequest({
+          payload: {
+            invoice: makeInvoice({
+              lineItems: [
+                {
+                  hsnCode: '1234',
+                  productCategory: 'Widgets',
+                  invoicedQuantity: 2,
+                  lineExtensionAmount: 200,
+                  item: { name: 'Widget' },
+                  price: { priceAmount: 100 },
+                },
+              ],
+            }),
+          },
+        }),
+      );
+
+      const [, init] = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/postInvoice'),
+      );
+      const body = JSON.parse(init.body);
+      expect(body.invoice_line[0].item.description).toBe(
+        '2.00 EA at 100.00 each',
+      );
+    });
+
+    it('omits accounting_customer_party when the invoice has no buyerTin', async () => {
+      const fetchMock = makeFetchMock({ postInvoice: successResponse() });
       global.fetch = fetchMock;
 
       await adapter.submit(
@@ -278,21 +731,15 @@ describe('InterswitchAdapter', () => {
         }),
       );
 
-      const [, init] = fetchMock.mock.calls[0];
+      const [, init] = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/postInvoice'),
+      );
       const body = JSON.parse(init.body);
       expect(body.accounting_customer_party).toBeUndefined();
     });
 
     it('defaults payment_means from the payment provider when the invoice has none stored', async () => {
-      const fetchMock = jest.fn().mockResolvedValue({
-        status: 200,
-        text: async () =>
-          JSON.stringify({
-            code: 200,
-            message: 'ok',
-            data: { IRN: 'IRN', PostingDateTime: 'x', QRCodeData: 'qr' },
-          }),
-      });
+      const fetchMock = makeFetchMock({ postInvoice: successResponse() });
       global.fetch = fetchMock;
 
       await adapter.submit(
@@ -306,23 +753,119 @@ describe('InterswitchAdapter', () => {
         }),
       );
 
-      const [, init] = fetchMock.mock.calls[0];
+      const [, init] = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/postInvoice'),
+      );
       const body = JSON.parse(init.body);
       expect(body.payment_means).toEqual([
         { payment_means_code: '48', payment_due_date: '2026-02-15' },
       ]);
     });
 
+    describe('credit/debit note billing_reference', () => {
+      it('auto-derives billing_reference from the original invoice for a credit note', async () => {
+        prisma.__originalInvoice = { issueDate: '2026-01-02' };
+        const fetchMock = makeFetchMock({ postInvoice: successResponse() });
+        global.fetch = fetchMock;
+
+        await adapter.submit(
+          makeRequest({
+            payload: {
+              invoice: makeInvoice({
+                invoiceTypeCode: 'CREDIT_NOTE',
+                originalIrn: 'ORIGINAL-IRN-1',
+              }),
+            },
+          }),
+        );
+
+        const [, init] = fetchMock.mock.calls.find(([url]) =>
+          url.includes('/Api/SwitchTax/postInvoice'),
+        );
+        const body = JSON.parse(init.body);
+        expect(body.billing_reference).toEqual([
+          { irn: 'ORIGINAL-IRN-1', issue_date: '2026-01-02' },
+        ]);
+      });
+
+      it('requires originalIrn for a credit/debit note', async () => {
+        global.fetch = makeFetchMock({ postInvoice: successResponse() });
+
+        const result = await adapter.submit(
+          makeRequest({
+            payload: {
+              invoice: makeInvoice({
+                invoiceTypeCode: 'DEBIT_NOTE',
+                originalIrn: undefined,
+              }),
+            },
+          }),
+        );
+
+        expect(result).toMatchObject({
+          success: false,
+          errorCode: 'MISSING_ORIGINAL_IRN',
+          retryable: false,
+        });
+      });
+
+      it('returns ORIGINAL_INVOICE_NOT_FOUND when the referenced original cannot be located', async () => {
+        prisma.__originalInvoice = null;
+        global.fetch = makeFetchMock({ postInvoice: successResponse() });
+
+        const result = await adapter.submit(
+          makeRequest({
+            payload: {
+              invoice: makeInvoice({
+                invoiceTypeCode: 'CREDIT_NOTE',
+                originalIrn: 'MISSING-IRN',
+              }),
+            },
+          }),
+        );
+
+        expect(result).toMatchObject({
+          success: false,
+          errorCode: 'ORIGINAL_INVOICE_NOT_FOUND',
+          retryable: false,
+        });
+      });
+
+      it('passes through billingReference untouched for a STANDARD invoice', async () => {
+        const fetchMock = makeFetchMock({ postInvoice: successResponse() });
+        global.fetch = fetchMock;
+
+        await adapter.submit(
+          makeRequest({
+            payload: {
+              invoice: makeInvoice({
+                billingReference: [
+                  { irn: 'SOME-IRN', issue_date: '2026-01-01' },
+                ],
+              }),
+            },
+          }),
+        );
+
+        const [, init] = fetchMock.mock.calls.find(([url]) =>
+          url.includes('/Api/SwitchTax/postInvoice'),
+        );
+        const body = JSON.parse(init.body);
+        expect(body.billing_reference).toEqual([
+          { irn: 'SOME-IRN', issue_date: '2026-01-01' },
+        ]);
+      });
+    });
+
     describe('error mapping (via a rejected postInvoice call)', () => {
       function mockNrsError(status: number, body: Record<string, any> = {}) {
-        global.fetch = jest.fn().mockResolvedValue({
-          status,
-          text: async () => JSON.stringify(body),
+        global.fetch = makeFetchMock({
+          postInvoice: { status, text: async () => JSON.stringify(body) },
         });
       }
 
       it('maps a 401 to a non-retryable INVALID_CREDENTIALS error', async () => {
-        mockNrsError(401, { message: 'bad api key' });
+        mockNrsError(401, { message: 'bad token' });
         const result = await adapter.submit(makeRequest());
         expect(result).toMatchObject({
           success: false,
@@ -389,13 +932,36 @@ describe('InterswitchAdapter', () => {
       });
 
       it('maps a thrown AbortError to a retryable TIMEOUT', async () => {
-        global.fetch = jest.fn().mockImplementation(() => {
+        global.fetch = jest.fn().mockImplementation((url: string) => {
+          if (url.includes('/Api/SwitchTax/Token')) {
+            return Promise.resolve(tokenResponse());
+          }
           const err = new Error('aborted');
           err.name = 'AbortError';
           return Promise.reject(err);
         });
         const result = await adapter.submit(makeRequest());
         expect(result).toMatchObject({ errorCode: 'TIMEOUT', retryable: true });
+      });
+
+      it('maps a token-fetch failure through the same error mapping as postInvoice failures', async () => {
+        global.fetch = jest.fn().mockImplementation((url: string) => {
+          if (url.includes('/Api/SwitchTax/Token')) {
+            return Promise.resolve({
+              status: 401,
+              text: async () =>
+                JSON.stringify({ message: 'bad client secret' }),
+            });
+          }
+          throw new Error('postInvoice should not be called');
+        });
+
+        const result = await adapter.submit(makeRequest());
+        expect(result).toMatchObject({
+          success: false,
+          errorCode: 'INVALID_CREDENTIALS',
+          retryable: false,
+        });
       });
     });
   });
@@ -411,14 +977,15 @@ describe('InterswitchAdapter', () => {
       });
     });
 
-    it('returns MISSING_CREDENTIALS when the tenant has no NRS credentials configured', async () => {
+    it('returns MISSING_CREDENTIALS when the tenant has no OAuth credentials configured', async () => {
       prisma.asAdmin.mockImplementation((fn: any) =>
         fn({
           tenant: {
             findUniqueOrThrow: jest
               .fn()
-              .mockResolvedValue(makeTenantRow({ nrsApiKey: null })),
+              .mockResolvedValue(makeTenantRow({ interswitchClientId: null })),
           },
+          invoice: { findFirst: jest.fn() },
         }),
       );
       const result = await adapter.checkStatus('IRN-1', {
@@ -427,26 +994,38 @@ describe('InterswitchAdapter', () => {
       expect(result.errorCode).toBe('MISSING_CREDENTIALS');
     });
 
-    it('returns success when the NRS status endpoint reports the IRN as confirmed', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        status: 200,
-        text: async () =>
-          JSON.stringify({ data: { IRN: 'IRN-CONFIRMED', QRCodeData: 'qr' } }),
+    it('fetches a token and sends it as a Bearer token on the transmit call', async () => {
+      const fetchMock = makeFetchMock({
+        token: tokenResponse('status-check-token'),
+        transmit: {
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              data: { IRN: 'IRN-CONFIRMED', QRCodeData: 'qr' },
+            }),
+        },
       });
+      global.fetch = fetchMock;
 
       const result = await adapter.checkStatus('IRN-1', {
         tenantId: TENANT_ID,
       });
+
       expect(result).toMatchObject({
         success: true,
         firsConfirmedIrn: 'IRN-CONFIRMED',
       });
+      const [, transmitInit] = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/transmit/'),
+      );
+      expect(transmitInit.headers.Authorization).toBe(
+        'Bearer status-check-token',
+      );
     });
 
     it('returns a retryable STATUS_CHECK_FAILED for a 5xx response', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        status: 503,
-        text: async () => '{}',
+      global.fetch = makeFetchMock({
+        transmit: { status: 503, text: async () => '{}' },
       });
 
       const result = await adapter.checkStatus('IRN-1', {
@@ -460,9 +1039,8 @@ describe('InterswitchAdapter', () => {
     });
 
     it('returns a non-retryable STATUS_CHECK_FAILED for a 4xx response', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        status: 404,
-        text: async () => '{}',
+      global.fetch = makeFetchMock({
+        transmit: { status: 404, text: async () => '{}' },
       });
 
       const result = await adapter.checkStatus('IRN-1', {
@@ -476,7 +1054,10 @@ describe('InterswitchAdapter', () => {
     });
 
     it('returns a retryable TIMEOUT when the request aborts', async () => {
-      global.fetch = jest.fn().mockImplementation(() => {
+      global.fetch = jest.fn().mockImplementation((url: string) => {
+        if (url.includes('/Api/SwitchTax/Token')) {
+          return Promise.resolve(tokenResponse());
+        }
         const err = new Error('aborted');
         err.name = 'AbortError';
         return Promise.reject(err);
@@ -489,7 +1070,12 @@ describe('InterswitchAdapter', () => {
     });
 
     it('returns a non-retryable STATUS_CHECK_ERROR for other thrown errors', async () => {
-      global.fetch = jest.fn().mockRejectedValue(new Error('network down'));
+      global.fetch = jest.fn().mockImplementation((url: string) => {
+        if (url.includes('/Api/SwitchTax/Token')) {
+          return Promise.resolve(tokenResponse());
+        }
+        return Promise.reject(new Error('network down'));
+      });
 
       const result = await adapter.checkStatus('IRN-1', {
         tenantId: TENANT_ID,
@@ -503,33 +1089,44 @@ describe('InterswitchAdapter', () => {
   });
 
   describe('updatePaymentStatus', () => {
-    it('does nothing (no network call) when NRS credentials are not configured', async () => {
+    it('does nothing (no network call) when OAuth credentials are not configured', async () => {
       prisma.asAdmin.mockImplementation((fn: any) =>
         fn({
           tenant: {
             findUniqueOrThrow: jest
               .fn()
-              .mockResolvedValue(makeTenantRow({ nrsApiKey: null })),
+              .mockResolvedValue(makeTenantRow({ interswitchClientId: null })),
           },
+          invoice: { findFirst: jest.fn() },
         }),
       );
       global.fetch = jest.fn();
 
-      await adapter.updatePaymentStatus('IRN-1', TENANT_ID, 'PAID');
+      await expect(
+        adapter.updatePaymentStatus('IRN-1', TENANT_ID, 'PAID'),
+      ).resolves.toBe(false);
 
       expect(global.fetch).not.toHaveBeenCalled();
     });
 
-    it('posts the payment status and includes amount only for PARTIAL payments', async () => {
-      const fetchMock = jest.fn().mockResolvedValue({ ok: true });
+    it('posts the payment status with a Bearer token and includes amount only for PARTIAL payments', async () => {
+      const fetchMock = makeFetchMock({
+        token: tokenResponse('update-status-token'),
+        updateStatus: { ok: true },
+      });
       global.fetch = fetchMock;
 
-      await adapter.updatePaymentStatus('IRN-1', TENANT_ID, 'PARTIAL', 500);
+      await expect(
+        adapter.updatePaymentStatus('IRN-1', TENANT_ID, 'PARTIAL', 500),
+      ).resolves.toBe(true);
 
-      const [url, init] = fetchMock.mock.calls[0];
+      const [url, init] = fetchMock.mock.calls.find(([u]) =>
+        u.includes('/Api/SwitchTax/UpdateStatus'),
+      );
       expect(url).toBe(
         'https://qa.interswitchgroup.com/Api/SwitchTax/UpdateStatus',
       );
+      expect(init.headers.Authorization).toBe('Bearer update-status-token');
       expect(JSON.parse(init.body)).toEqual({
         irn: 'IRN-1',
         payment_status: 'PARTIAL',
@@ -538,36 +1135,40 @@ describe('InterswitchAdapter', () => {
     });
 
     it('omits amount for a full PAID status', async () => {
-      const fetchMock = jest.fn().mockResolvedValue({ ok: true });
+      const fetchMock = makeFetchMock({ updateStatus: { ok: true } });
       global.fetch = fetchMock;
 
       await adapter.updatePaymentStatus('IRN-1', TENANT_ID, 'PAID');
 
-      const [, init] = fetchMock.mock.calls[0];
+      const [, init] = fetchMock.mock.calls.find(([u]) =>
+        u.includes('/Api/SwitchTax/UpdateStatus'),
+      );
       expect(JSON.parse(init.body)).toEqual({
         irn: 'IRN-1',
         payment_status: 'PAID',
       });
     });
 
-    it('does not throw when the NRS endpoint responds non-OK', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: async () => 'server error',
+    it('does not throw, and resolves false, when the NRS endpoint responds non-OK', async () => {
+      global.fetch = makeFetchMock({
+        updateStatus: {
+          ok: false,
+          status: 500,
+          text: async () => 'server error',
+        },
       });
 
       await expect(
         adapter.updatePaymentStatus('IRN-1', TENANT_ID, 'PAID'),
-      ).resolves.toBeUndefined();
+      ).resolves.toBe(false);
     });
 
-    it('does not throw when fetch itself rejects', async () => {
+    it('does not throw, and resolves false, when the token fetch itself rejects', async () => {
       global.fetch = jest.fn().mockRejectedValue(new Error('network down'));
 
       await expect(
         adapter.updatePaymentStatus('IRN-1', TENANT_ID, 'PAID'),
-      ).resolves.toBeUndefined();
+      ).resolves.toBe(false);
     });
   });
 

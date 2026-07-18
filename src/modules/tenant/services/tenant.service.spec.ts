@@ -163,7 +163,7 @@ describe('TenantService', () => {
           clientId: 'client-1',
           clientSecret: 'plain-secret',
           serviceId: 'service-1',
-          businessId: 'business-1',
+          businessId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
         },
       };
 
@@ -192,6 +192,24 @@ describe('TenantService', () => {
       expect(reminderService.createDefaultRules).toHaveBeenCalledWith(
         'tenant-1',
       );
+    });
+
+    it('rejects a non-UUID Interswitch business_id', async () => {
+      const request = {
+        ...baseRequest,
+        interswitchCredentials: { businessId: 'not-a-uuid' },
+      };
+
+      await expect(service.createTenant(request as any)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(tenantRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('accepts createTenant without interswitchCredentials at all', async () => {
+      await expect(
+        service.createTenant(baseRequest as any),
+      ).resolves.toBeDefined();
     });
   });
 
@@ -284,6 +302,15 @@ describe('TenantService', () => {
         undefined,
         undefined,
       );
+    });
+
+    it('rejects a non-UUID Interswitch business_id', async () => {
+      await expect(
+        service.updateTenant('tenant-1', {
+          interswitchCredentials: { businessId: 'BIZ-001' },
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(tenantRepository.update).not.toHaveBeenCalled();
     });
   });
 

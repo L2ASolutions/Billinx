@@ -10,8 +10,31 @@ const validBase: InvoiceValidationDto = {
   seller: { tin: '12345678-0001', partyName: 'Acme Ltd' },
   buyer: { partyName: 'John Doe' },
   issueDate: '2026-07-10',
-  lineItems: [{ description: 'Widget', quantity: 1, unitPrice: 100 }],
+  lineItems: [
+    {
+      description: 'Widget',
+      quantity: 1,
+      unitPrice: 100,
+      hsnCode: '1234',
+      productCategory: 'Widgets',
+    },
+  ],
   totalAmount: 100,
+  legalMonetaryTotal: {
+    lineExtensionAmount: 100,
+    taxExclusiveAmount: 100,
+    taxInclusiveAmount: 107.5,
+    payableAmount: 107.5,
+  },
+  taxTotal: [
+    {
+      taxAmount: 7.5,
+      taxSubtotal: [
+        { taxableAmount: 100, taxAmount: 7.5, taxCategory: { id: 'VAT' } },
+      ],
+    },
+  ],
+  paymentStatus: 'PENDING',
 };
 
 describe('InvoiceValidationService', () => {
@@ -106,21 +129,16 @@ describe('InvoiceValidationService', () => {
   // ── 6. VALIDATE: credit/debit note missing originalIrn → ERROR ───────────────
   //      Checks all four code forms (380, 384, CREDIT_NOTE, DEBIT_NOTE)
 
-  it.each([
-    ['380'],
-    ['384'],
-    ['CREDIT_NOTE'],
-    ['DEBIT_NOTE'],
-  ])(
+  it.each([['380'], ['384'], ['CREDIT_NOTE'], ['DEBIT_NOTE']])(
     'VALIDATE: returns MISSING_ORIGINAL_IRN for invoiceTypeCode=%s without originalIrn',
     (invoiceTypeCode) => {
       const result = service.validateInvoiceFields(
         { ...validBase, invoiceTypeCode, originalIrn: undefined },
         'VALIDATE',
       );
-      expect(
-        result.errors.some((e) => e.code === 'MISSING_ORIGINAL_IRN'),
-      ).toBe(true);
+      expect(result.errors.some((e) => e.code === 'MISSING_ORIGINAL_IRN')).toBe(
+        true,
+      );
     },
   );
 
@@ -129,28 +147,322 @@ describe('InvoiceValidationService', () => {
       { ...validBase, invoiceTypeCode: 'STANDARD', originalIrn: undefined },
       'VALIDATE',
     );
-    expect(
-      result.errors.some((e) => e.code === 'MISSING_ORIGINAL_IRN'),
-    ).toBe(false);
+    expect(result.errors.some((e) => e.code === 'MISSING_ORIGINAL_IRN')).toBe(
+      false,
+    );
   });
 
-  // ── 7. VALIDATE: missing hsnCode → WARNING, not error ────────────────────────
+  // ── 7. VALIDATE: PRODUCT/SERVICE line-item classification → hard ERROR ───────
 
-  it('VALIDATE: emits WARNING for line items missing hsnCode', () => {
+  it('VALIDATE: returns MISSING_PRODUCT_CLASSIFICATION for a PRODUCT item missing hsnCode or productCategory', () => {
     const result = service.validateInvoiceFields(
       {
         ...validBase,
         lineItems: [
-          { description: 'Widget', hsnCode: '1234' },
+          {
+            description: 'Widget',
+            hsnCode: '1234',
+            productCategory: 'Widgets',
+          },
           { description: 'No-code item' },
         ],
       },
       'VALIDATE',
     );
-    expect(result.valid).toBe(true);
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0].code).toBe('MISSING_HSN_CODE');
-    expect(result.warnings[0].field).toBe('lineItems[1].hsnCode');
+    expect(result.valid).toBe(false);
+    const err = result.errors.find(
+      (e) => e.code === 'MISSING_PRODUCT_CLASSIFICATION',
+    );
+    expect(err).toBeDefined();
+    expect(err?.field).toBe('lineItems[1]');
+  });
+
+  it('VALIDATE: returns MISSING_SERVICE_CLASSIFICATION for a SERVICE item missing isicCode or serviceCategory', () => {
+    const result = service.validateInvoiceFields(
+      {
+        ...validBase,
+        lineItems: [{ description: 'Consulting', itemType: 'SERVICE' }],
+      },
+      'VALIDATE',
+    );
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => e.code === 'MISSING_SERVICE_CLASSIFICATION'),
+    ).toBe(true);
+  });
+
+  it('VALIDATE: accepts a SERVICE item with isicCode and serviceCategory', () => {
+    const result = service.validateInvoiceFields(
+      {
+        ...validBase,
+        lineItems: [
+          {
+            description: 'Consulting',
+            itemType: 'SERVICE',
+            isicCode: '6201',
+            serviceCategory: 'Software Consulting',
+          },
+        ],
+      },
+      'VALIDATE',
+    );
+    expect(
+      result.errors.some(
+        (e) =>
+          e.code === 'MISSING_SERVICE_CLASSIFICATION' ||
+          e.code === 'MISSING_PRODUCT_CLASSIFICATION',
+      ),
+    ).toBe(false);
+  });
+
+  // ── invoiceKind: hard presence + enum check ───────────────────────────────
+
+  it('VALIDATE: returns MISSING_INVOICE_KIND when invoiceKind is absent', () => {
+    const result = service.validateInvoiceFields(
+      { ...validBase, invoiceKind: undefined },
+      'VALIDATE',
+    );
+    expect(result.errors.some((e) => e.code === 'MISSING_INVOICE_KIND')).toBe(
+      true,
+    );
+  });
+
+  it('VALIDATE: returns MISSING_INVOICE_KIND when invoiceKind is not B2B/B2C/B2G', () => {
+    const result = service.validateInvoiceFields(
+      { ...validBase, invoiceKind: 'BOGUS' },
+      'VALIDATE',
+    );
+    expect(result.errors.some((e) => e.code === 'MISSING_INVOICE_KIND')).toBe(
+      true,
+    );
+  });
+
+  it('CREATE: throws when invoiceKind is missing', () => {
+    expect(() =>
+      service.validateInvoiceFields(
+        { ...validBase, invoiceKind: undefined },
+        'CREATE',
+      ),
+    ).toThrow(BadRequestException);
+  });
+
+  // ── invoiceTypeCode: must be a recognised code ────────────────────────────
+
+  it('VALIDATE: returns INVALID_INVOICE_TYPE_CODE for an unrecognised invoiceTypeCode', () => {
+    const result = service.validateInvoiceFields(
+      { ...validBase, invoiceTypeCode: 'BOGUS' },
+      'VALIDATE',
+    );
+    expect(
+      result.errors.some((e) => e.code === 'INVALID_INVOICE_TYPE_CODE'),
+    ).toBe(true);
+  });
+
+  it('CREATE: throws for an unrecognised invoiceTypeCode', () => {
+    expect(() =>
+      service.validateInvoiceFields(
+        { ...validBase, invoiceTypeCode: 'BOGUS' },
+        'CREATE',
+      ),
+    ).toThrow(BadRequestException);
+  });
+
+  it.each([['381'], ['380'], ['384'], ['390'], ['PROFORMA']])(
+    'VALIDATE: accepts recognised invoiceTypeCode %s',
+    (invoiceTypeCode) => {
+      const result = service.validateInvoiceFields(
+        {
+          ...validBase,
+          invoiceTypeCode,
+          originalIrn:
+            invoiceTypeCode === '380' || invoiceTypeCode === '384'
+              ? 'ORIGINAL-IRN'
+              : undefined,
+        },
+        'VALIDATE',
+      );
+      expect(
+        result.errors.some((e) => e.code === 'INVALID_INVOICE_TYPE_CODE'),
+      ).toBe(false);
+    },
+  );
+
+  // ── paymentStatus: must be PENDING/PAID/PARTIAL when provided ────────────
+
+  it('VALIDATE: returns INVALID_PAYMENT_STATUS for an unrecognised paymentStatus', () => {
+    const result = service.validateInvoiceFields(
+      { ...validBase, paymentStatus: 'UNPAID' },
+      'VALIDATE',
+    );
+    expect(result.errors.some((e) => e.code === 'INVALID_PAYMENT_STATUS')).toBe(
+      true,
+    );
+  });
+
+  it('CREATE: throws for an unrecognised paymentStatus', () => {
+    expect(() =>
+      service.validateInvoiceFields(
+        { ...validBase, paymentStatus: 'OVERDUE' },
+        'CREATE',
+      ),
+    ).toThrow(BadRequestException);
+  });
+
+  it('CREATE: does not throw when paymentStatus is omitted', () => {
+    expect(() =>
+      service.validateInvoiceFields(
+        { ...validBase, paymentStatus: undefined },
+        'CREATE',
+      ),
+    ).not.toThrow();
+  });
+
+  // ── tax category: must be a recognised (or aliased) id ────────────────────
+
+  it('VALIDATE: returns INVALID_TAX_CATEGORY for an unrecognised tax category id', () => {
+    const result = service.validateInvoiceFields(
+      {
+        ...validBase,
+        taxTotal: [
+          {
+            taxAmount: 7.5,
+            taxSubtotal: [
+              {
+                taxableAmount: 100,
+                taxAmount: 7.5,
+                taxCategory: { id: 'BOGUS' },
+              },
+            ],
+          },
+        ],
+      },
+      'VALIDATE',
+    );
+    expect(result.errors.some((e) => e.code === 'INVALID_TAX_CATEGORY')).toBe(
+      true,
+    );
+  });
+
+  it('SUBMIT: throws for an unrecognised tax category id', () => {
+    expect(() =>
+      service.validateInvoiceFields(
+        {
+          ...validBase,
+          taxTotal: [
+            {
+              taxAmount: 7.5,
+              taxSubtotal: [
+                {
+                  taxableAmount: 100,
+                  taxAmount: 7.5,
+                  taxCategory: { id: 'NOT_A_CATEGORY' },
+                },
+              ],
+            },
+          ],
+        },
+        'SUBMIT',
+      ),
+    ).toThrow(BadRequestException);
+  });
+
+  it.each([
+    ['VAT'],
+    ['ZERO_VAT'],
+    ['WHT'],
+    ['Withholding_Tax'],
+    ['Stamp_Duty'],
+    ['EXEMPTED'],
+  ])('VALIDATE: accepts tax category alias %s', (id) => {
+    const result = service.validateInvoiceFields(
+      {
+        ...validBase,
+        taxTotal: [
+          {
+            taxAmount: 7.5,
+            taxSubtotal: [
+              { taxableAmount: 100, taxAmount: 7.5, taxCategory: { id } },
+            ],
+          },
+        ],
+      },
+      'VALIDATE',
+    );
+    expect(result.errors.some((e) => e.code === 'INVALID_TAX_CATEGORY')).toBe(
+      false,
+    );
+  });
+
+  // ── price_unit: must be a valid NRS code when provided ────────────────────
+
+  it('VALIDATE: returns INVALID_PRICE_UNIT for an unrecognised price unit', () => {
+    const result = service.validateInvoiceFields(
+      {
+        ...validBase,
+        lineItems: [
+          {
+            description: 'Widget',
+            hsnCode: '1234',
+            productCategory: 'Widgets',
+            price: { priceUnit: 'BAG' },
+          },
+        ],
+      },
+      'VALIDATE',
+    );
+    expect(result.errors.some((e) => e.code === 'INVALID_PRICE_UNIT')).toBe(
+      true,
+    );
+  });
+
+  it('SUBMIT: does not throw when price_unit is omitted (defaults elsewhere)', () => {
+    expect(() =>
+      service.validateInvoiceFields(validBase, 'SUBMIT'),
+    ).not.toThrow();
+  });
+
+  // ── legal_monetary_total: all four fields must be present and > 0 ────────
+
+  it('VALIDATE: returns INVALID_LEGAL_MONETARY_TOTAL when a field is zero', () => {
+    const result = service.validateInvoiceFields(
+      {
+        ...validBase,
+        legalMonetaryTotal: {
+          ...validBase.legalMonetaryTotal,
+          payableAmount: 0,
+        },
+      },
+      'VALIDATE',
+    );
+    expect(
+      result.errors.some((e) => e.code === 'INVALID_LEGAL_MONETARY_TOTAL'),
+    ).toBe(true);
+  });
+
+  it('SUBMIT: throws when a legal_monetary_total field is missing', () => {
+    expect(() =>
+      service.validateInvoiceFields(
+        {
+          ...validBase,
+          legalMonetaryTotal: {
+            lineExtensionAmount: 100,
+            taxExclusiveAmount: 100,
+            taxInclusiveAmount: 107.5,
+            // payableAmount omitted
+          },
+        },
+        'SUBMIT',
+      ),
+    ).toThrow(BadRequestException);
+  });
+
+  it('CREATE: does not throw when legalMonetaryTotal is entirely absent', () => {
+    expect(() =>
+      service.validateInvoiceFields(
+        { ...validBase, legalMonetaryTotal: undefined, taxTotal: undefined },
+        'CREATE',
+      ),
+    ).not.toThrow();
   });
 
   // ── 8. CREATE context: throws for missing core fields ────────────────────────
@@ -194,19 +506,13 @@ describe('InvoiceValidationService', () => {
 
   it('SUBMIT: throws when lineItems is empty', () => {
     expect(() =>
-      service.validateInvoiceFields(
-        { ...validBase, lineItems: [] },
-        'SUBMIT',
-      ),
+      service.validateInvoiceFields({ ...validBase, lineItems: [] }, 'SUBMIT'),
     ).toThrow(BadRequestException);
   });
 
   it('SUBMIT: throws when totalAmount is zero', () => {
     expect(() =>
-      service.validateInvoiceFields(
-        { ...validBase, totalAmount: 0 },
-        'SUBMIT',
-      ),
+      service.validateInvoiceFields({ ...validBase, totalAmount: 0 }, 'SUBMIT'),
     ).toThrow(BadRequestException);
   });
 

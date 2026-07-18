@@ -155,7 +155,9 @@ describe('UserService', () => {
     service = new UserService(
       userRepository as any,
       prisma as any,
-      { getJwtPrivateKey: jest.fn().mockResolvedValue(TEST_PRIVATE_KEY_PEM) } as any,
+      {
+        getJwtPrivateKey: jest.fn().mockResolvedValue(TEST_PRIVATE_KEY_PEM),
+      } as any,
       activityService as any,
       redisService as any,
       emailService as any,

@@ -30,26 +30,29 @@ export function formatCurrency(amount: number, currency = 'NGN'): string {
 
 export function formatCurrencyShort(amount: number, currency = 'NGN'): string {
   const symbol = currency === 'NGN' ? '₦' : currency + ' ';
-  if (amount >= 1_000_000) return `${symbol}${(amount / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (amount >= 1_000_000)
+    return `${symbol}${(amount / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
   if (amount >= 1_000) return `${symbol}${Math.round(amount / 1_000)}K`;
   return formatCurrency(amount, currency);
 }
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   BANK_TRANSFER: 'Bank Transfer',
-  CARD:          'Card',
-  PAYSTACK:      'Paystack',
-  FLUTTERWAVE:   'Flutterwave',
-  MANUAL:        'Manual',
+  CARD: 'Card',
+  PAYSTACK: 'Paystack',
+  FLUTTERWAVE: 'Flutterwave',
+  MANUAL: 'Manual',
 };
 
 export function formatPaymentMethod(method: string): string {
   if (!method) return '—';
-  return PAYMENT_METHOD_LABELS[method.toUpperCase()]
-    ?? method
-        .toLowerCase()
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, (c) => c.toUpperCase());
+  return (
+    PAYMENT_METHOD_LABELS[method.toUpperCase()] ??
+    method
+      .toLowerCase()
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+  );
 }
 
 export function formatInvoiceNumber(inv: {

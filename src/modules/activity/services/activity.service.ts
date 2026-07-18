@@ -249,18 +249,20 @@ export class ActivityService {
     eventType?: string;
     from?: string;
     to?: string;
-  }): Promise<Array<{
-    id: string;
-    eventType: string;
-    actor: string;
-    actorEmail?: string;
-    actorName?: string;
-    entityType?: string;
-    entityId?: string;
-    ipAddress?: string;
-    payload: Record<string, unknown>;
-    occurredAt: string;
-  }>> {
+  }): Promise<
+    Array<{
+      id: string;
+      eventType: string;
+      actor: string;
+      actorEmail?: string;
+      actorName?: string;
+      entityType?: string;
+      entityId?: string;
+      ipAddress?: string;
+      payload: Record<string, unknown>;
+      occurredAt: string;
+    }>
+  > {
     const where: any = {};
     if (filters.tenantId) where.tenantId = filters.tenantId;
     if (filters.eventType) where.eventType = filters.eventType;
@@ -314,9 +316,10 @@ export class ActivityService {
         entityId: e.entityId ?? undefined,
         ipAddress: e.ipAddress ?? undefined,
         payload: (e.payload as Record<string, unknown>) ?? {},
-        occurredAt: e.occurredAt instanceof Date
-          ? e.occurredAt.toISOString()
-          : e.occurredAt,
+        occurredAt:
+          e.occurredAt instanceof Date
+            ? e.occurredAt.toISOString()
+            : e.occurredAt,
       };
     });
   }

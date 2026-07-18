@@ -11,7 +11,13 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiHeader, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiHeader,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import * as ExcelJS from 'exceljs';
 import { ActivityService } from './services/activity.service';
@@ -103,13 +109,13 @@ export class ActivityController {
 
     const sheet = workbook.addWorksheet('Audit Log');
     sheet.columns = [
-      { header: 'Timestamp',   key: 'timestamp',  width: 22 },
-      { header: 'Actor',       key: 'actor',      width: 28 },
-      { header: 'Event Type',  key: 'eventType',  width: 28 },
+      { header: 'Timestamp', key: 'timestamp', width: 22 },
+      { header: 'Actor', key: 'actor', width: 28 },
+      { header: 'Event Type', key: 'eventType', width: 28 },
       { header: 'Entity Type', key: 'entityType', width: 16 },
-      { header: 'Entity ID',   key: 'entityId',   width: 36 },
-      { header: 'IP Address',  key: 'ipAddress',  width: 16 },
-      { header: 'Details',     key: 'details',    width: 60 },
+      { header: 'Entity ID', key: 'entityId', width: 36 },
+      { header: 'IP Address', key: 'ipAddress', width: 16 },
+      { header: 'Details', key: 'details', width: 60 },
     ];
 
     const headerRow = sheet.getRow(1);
@@ -133,8 +139,10 @@ export class ActivityController {
       if (e.actorName) return e.actorName;
       if (e.actorEmail) return e.actorEmail;
       const a = e.actor ?? '';
-      if (a.startsWith('system:')) return a.replace('system:', '') + ' (system)';
-      if (a.startsWith('user:')) return a.replace('user:', '').substring(0, 8) + '…';
+      if (a.startsWith('system:'))
+        return a.replace('system:', '') + ' (system)';
+      if (a.startsWith('user:'))
+        return a.replace('user:', '').substring(0, 8) + '…';
       return a;
     };
 
@@ -144,12 +152,12 @@ export class ActivityController {
           ? JSON.stringify(e.payload)
           : '';
       sheet.addRow({
-        timestamp:  fmtDate(e.occurredAt),
-        actor:      resolveActor(e),
-        eventType:  e.eventType,
+        timestamp: fmtDate(e.occurredAt),
+        actor: resolveActor(e),
+        eventType: e.eventType,
         entityType: e.entityType ?? '',
-        entityId:   e.entityId ?? '',
-        ipAddress:  e.ipAddress ?? '',
+        entityId: e.entityId ?? '',
+        ipAddress: e.ipAddress ?? '',
         details,
       });
     }

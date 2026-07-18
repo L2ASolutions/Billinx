@@ -341,7 +341,10 @@ export class BulkInvoiceService {
 
     return {
       invoiceTypeCode: row['invoice_type_code'] || 'STANDARD',
-      invoiceKind: row['invoice_kind'] || 'B2B',
+      // No silent B2B default — a missing/invalid invoice_kind must fail
+      // InvoiceValidationService's required-field check in createInvoice(),
+      // which processBatch() below catches and reports as an 'invalid' row.
+      invoiceKind: row['invoice_kind'] || undefined,
       issueDate: row['issue_date'],
       dueDate: row['due_date'] || undefined,
       currency: row['currency'] || 'NGN',

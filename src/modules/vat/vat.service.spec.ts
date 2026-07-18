@@ -15,10 +15,7 @@ describe('VatService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        VatService,
-        { provide: PrismaService, useValue: mockPrisma },
-      ],
+      providers: [VatService, { provide: PrismaService, useValue: mockPrisma }],
     }).compile();
 
     service = module.get<VatService>(VatService);
@@ -59,14 +56,16 @@ describe('VatService', () => {
         findUnique: jest.fn().mockResolvedValue(null),
       };
 
-      await expect(service.reconcileEntry('bad-id', 'tenant-1')).rejects.toThrow(
-        'VAT entry bad-id not found',
-      );
+      await expect(
+        service.reconcileEntry('bad-id', 'tenant-1'),
+      ).rejects.toThrow('VAT entry bad-id not found');
     });
 
     it('throws NotFoundException if entry belongs to different tenant', async () => {
       (mockPrisma as any).vatEntry = {
-        findUnique: jest.fn().mockResolvedValue({ id: 'e1', tenantId: 'other-tenant' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'e1', tenantId: 'other-tenant' }),
       };
 
       await expect(service.reconcileEntry('e1', 'tenant-1')).rejects.toThrow(
@@ -75,9 +74,13 @@ describe('VatService', () => {
     });
 
     it('marks entry as RECONCILED', async () => {
-      const updateMock = jest.fn().mockResolvedValue({ id: 'e1', status: 'RECONCILED' });
+      const updateMock = jest
+        .fn()
+        .mockResolvedValue({ id: 'e1', status: 'RECONCILED' });
       (mockPrisma as any).vatEntry = {
-        findUnique: jest.fn().mockResolvedValue({ id: 'e1', tenantId: 'tenant-1' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'e1', tenantId: 'tenant-1' }),
         update: updateMock,
       };
 

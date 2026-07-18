@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { ActivityService } from '../activity/services/activity.service';
 import { getRequestContext } from '../../shared/context/request-context';
@@ -25,16 +29,30 @@ export class ClientService {
               isActive: true,
               companyName: data.companyName ?? existing.companyName,
               email: data.email !== undefined ? data.email : existing.email,
-              telephone: data.telephone !== undefined ? data.telephone : existing.telephone,
-              businessDescription: data.businessDescription !== undefined ? data.businessDescription : existing.businessDescription,
-              contactPerson: data.contactPerson !== undefined ? data.contactPerson : existing.contactPerson,
+              telephone:
+                data.telephone !== undefined
+                  ? data.telephone
+                  : existing.telephone,
+              businessDescription:
+                data.businessDescription !== undefined
+                  ? data.businessDescription
+                  : existing.businessDescription,
+              contactPerson:
+                data.contactPerson !== undefined
+                  ? data.contactPerson
+                  : existing.contactPerson,
               notes: data.notes !== undefined ? data.notes : existing.notes,
-              postalAddress: data.postalAddress !== undefined ? data.postalAddress : existing.postalAddress,
+              postalAddress:
+                data.postalAddress !== undefined
+                  ? data.postalAddress
+                  : existing.postalAddress,
             },
           });
           return this.mapClient(reactivated);
         }
-        throw new ConflictException(`A client with TIN ${data.tin} already exists`);
+        throw new ConflictException(
+          `A client with TIN ${data.tin} already exists`,
+        );
       }
     }
 
@@ -65,12 +83,7 @@ export class ClientService {
     return this.mapClient(client);
   }
 
-  async findAll(
-    tenantId: string,
-    search?: string,
-    page = 1,
-    limit = 20,
-  ) {
+  async findAll(tenantId: string, search?: string, page = 1, limit = 20) {
     const where: any = { tenantId, isActive: true };
     if (search) {
       where.OR = [
@@ -116,7 +129,9 @@ export class ClientService {
         where: { tenantId_tin: { tenantId, tin: data.tin } },
       });
       if (conflict && conflict.id !== id) {
-        throw new ConflictException(`A client with TIN ${data.tin} already exists`);
+        throw new ConflictException(
+          `A client with TIN ${data.tin} already exists`,
+        );
       }
     }
 
@@ -126,12 +141,23 @@ export class ClientService {
         companyName: data.companyName ?? existing.companyName,
         tin: data.tin !== undefined ? data.tin : existing.tin,
         email: data.email !== undefined ? data.email : existing.email,
-        telephone: data.telephone !== undefined ? data.telephone : existing.telephone,
-        businessDescription: data.businessDescription !== undefined ? data.businessDescription : existing.businessDescription,
-        contactPerson: data.contactPerson !== undefined ? data.contactPerson : existing.contactPerson,
+        telephone:
+          data.telephone !== undefined ? data.telephone : existing.telephone,
+        businessDescription:
+          data.businessDescription !== undefined
+            ? data.businessDescription
+            : existing.businessDescription,
+        contactPerson:
+          data.contactPerson !== undefined
+            ? data.contactPerson
+            : existing.contactPerson,
         notes: data.notes !== undefined ? data.notes : existing.notes,
-        postalAddress: data.postalAddress !== undefined ? data.postalAddress : existing.postalAddress,
-        isActive: data.isActive !== undefined ? data.isActive : existing.isActive,
+        postalAddress:
+          data.postalAddress !== undefined
+            ? data.postalAddress
+            : existing.postalAddress,
+        isActive:
+          data.isActive !== undefined ? data.isActive : existing.isActive,
       },
     });
 

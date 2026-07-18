@@ -1,16 +1,5 @@
-import {
-  Controller,
-  Get,
-  Patch,
-  Param,
-  UseGuards,
-  Req,
-} from '@nestjs/common';
-import {
-  ApiTags,
-  ApiBearerAuth,
-  ApiOperation,
-} from '@nestjs/swagger';
+import { Controller, Get, Patch, Param, UseGuards, Req } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Request } from 'express';
 import { JwtGuard } from '../identity/guards/jwt.guard';
 import { NotificationService } from './notification.service';
@@ -27,7 +16,9 @@ export class NotificationController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List 20 most recent notifications for the current user' })
+  @ApiOperation({
+    summary: 'List 20 most recent notifications for the current user',
+  })
   list(@Req() req: Request) {
     const { tenantId, actor } = this.ctx(req);
     return this.notificationService.findForUser(tenantId, actor);

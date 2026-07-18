@@ -9,7 +9,13 @@ import { SecretsService } from '../../infrastructure/secrets/secrets.service';
 import { InventoryModule } from '../inventory/inventory.module';
 
 @Module({
-  imports: [IdentityModule, ActivityModule, EventEmitterModule, EmailModule, InventoryModule],
+  imports: [
+    IdentityModule,
+    ActivityModule,
+    EventEmitterModule,
+    EmailModule,
+    InventoryModule,
+  ],
   controllers: [IncomingInvoiceController],
   providers: [IncomingInvoiceService, SecretsService],
   exports: [IncomingInvoiceService],

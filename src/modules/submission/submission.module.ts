@@ -4,6 +4,7 @@ import { SubmissionController } from './submission.controller';
 import { SubmissionService } from './services/submission.service';
 import { SubmissionWorker } from './workers/submission.worker';
 import { BulkSubmissionWorker } from './workers/bulk-submission.worker';
+import { UpdateStatusWorker } from './workers/update-status.worker';
 import { MockAdapter } from './adapters/mock/mock.adapter';
 import { InterswitchAdapter } from './adapters/interswitch/interswitch.adapter';
 import { SecretsService } from '../../infrastructure/secrets/secrets.service';
@@ -15,14 +16,22 @@ import { RolesGuard } from '../../shared/guards/roles.guard';
 import { ClientModule } from '../client/client.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { EmailModule } from '../../shared/email/email.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
-  imports: [EventEmitterModule, ClientModule, InventoryModule, EmailModule],
+  imports: [
+    EventEmitterModule,
+    ClientModule,
+    InventoryModule,
+    EmailModule,
+    NotificationModule,
+  ],
   controllers: [SubmissionController],
   providers: [
     SubmissionService,
     SubmissionWorker,
     BulkSubmissionWorker,
+    UpdateStatusWorker,
     MockAdapter,
     InterswitchAdapter,
     SecretsService,

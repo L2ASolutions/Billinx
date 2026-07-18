@@ -16,15 +16,21 @@ export class ProductCatalogService {
         tenantId,
         name: data.name,
         description: data.description ?? null,
+        itemType: data.itemType ?? 'PRODUCT',
         hsnCode: data.hsnCode ?? null,
         productCategory: data.productCategory ?? null,
+        isicCode: data.isicCode ?? null,
+        serviceCategory: data.serviceCategory ?? null,
         unitPrice: data.unitPrice,
+        priceUnit: data.priceUnit ?? 'EA',
         currency: data.currency ?? 'NGN',
         taxCategoryId: data.taxCategoryId ?? 'STANDARD_VAT',
         isActive: data.isActive !== undefined ? data.isActive : true,
-        stockQuantity: data.stockQuantity !== undefined ? data.stockQuantity : 0,
+        stockQuantity:
+          data.stockQuantity !== undefined ? data.stockQuantity : 0,
         reorderPoint: data.reorderPoint !== undefined ? data.reorderPoint : 0,
-        reorderQuantity: data.reorderQuantity !== undefined ? data.reorderQuantity : 0,
+        reorderQuantity:
+          data.reorderQuantity !== undefined ? data.reorderQuantity : 0,
         stockUnit: data.stockUnit ?? null,
         supplierName: data.supplierName ?? null,
         supplierEmail: data.supplierEmail ?? null,
@@ -38,7 +44,11 @@ export class ProductCatalogService {
       actor: ctx.actor,
       entityType: 'ProductCatalog',
       entityId: product.id,
-      payload: { name: data.name, hsnCode: data.hsnCode, unitPrice: data.unitPrice },
+      payload: {
+        name: data.name,
+        hsnCode: data.hsnCode,
+        unitPrice: data.unitPrice,
+      },
     });
 
     return this.mapProduct(product);
@@ -99,23 +109,47 @@ export class ProductCatalogService {
           data.description !== undefined
             ? data.description
             : existing.description,
+        itemType: data.itemType ?? existing.itemType,
         hsnCode: data.hsnCode !== undefined ? data.hsnCode : existing.hsnCode,
         productCategory:
           data.productCategory !== undefined
             ? data.productCategory
             : existing.productCategory,
+        isicCode:
+          data.isicCode !== undefined ? data.isicCode : existing.isicCode,
+        serviceCategory:
+          data.serviceCategory !== undefined
+            ? data.serviceCategory
+            : existing.serviceCategory,
         unitPrice:
           data.unitPrice !== undefined ? data.unitPrice : existing.unitPrice,
+        priceUnit: data.priceUnit ?? existing.priceUnit,
         currency: data.currency ?? existing.currency,
         taxCategoryId: data.taxCategoryId ?? existing.taxCategoryId,
         isActive:
           data.isActive !== undefined ? data.isActive : existing.isActive,
-        stockQuantity: data.stockQuantity !== undefined ? data.stockQuantity : existing.stockQuantity,
-        reorderPoint: data.reorderPoint !== undefined ? data.reorderPoint : existing.reorderPoint,
-        reorderQuantity: data.reorderQuantity !== undefined ? data.reorderQuantity : existing.reorderQuantity,
-        stockUnit: data.stockUnit !== undefined ? data.stockUnit : existing.stockUnit,
-        supplierName: data.supplierName !== undefined ? data.supplierName : existing.supplierName,
-        supplierEmail: data.supplierEmail !== undefined ? data.supplierEmail : existing.supplierEmail,
+        stockQuantity:
+          data.stockQuantity !== undefined
+            ? data.stockQuantity
+            : existing.stockQuantity,
+        reorderPoint:
+          data.reorderPoint !== undefined
+            ? data.reorderPoint
+            : existing.reorderPoint,
+        reorderQuantity:
+          data.reorderQuantity !== undefined
+            ? data.reorderQuantity
+            : existing.reorderQuantity,
+        stockUnit:
+          data.stockUnit !== undefined ? data.stockUnit : existing.stockUnit,
+        supplierName:
+          data.supplierName !== undefined
+            ? data.supplierName
+            : existing.supplierName,
+        supplierEmail:
+          data.supplierEmail !== undefined
+            ? data.supplierEmail
+            : existing.supplierEmail,
       },
     });
 
@@ -151,7 +185,11 @@ export class ProductCatalogService {
       quantity: 1,
       unitPrice: product.unitPrice,
       lineExtensionAmount: product.unitPrice,
+      itemType: product.itemType,
       hsnCode: product.hsnCode ?? undefined,
+      isicCode: product.isicCode ?? undefined,
+      serviceCategory: product.serviceCategory ?? undefined,
+      priceUnit: product.priceUnit,
       taxCategory: product.taxCategoryId,
       taxRate: product.taxCategoryId === 'STANDARD_VAT' ? 7.5 : 0,
     };
@@ -163,9 +201,13 @@ export class ProductCatalogService {
       tenantId: p.tenantId,
       name: p.name,
       description: p.description ?? undefined,
+      itemType: p.itemType,
       hsnCode: p.hsnCode ?? undefined,
       productCategory: p.productCategory ?? undefined,
+      isicCode: p.isicCode ?? undefined,
+      serviceCategory: p.serviceCategory ?? undefined,
       unitPrice: Number(p.unitPrice),
+      priceUnit: p.priceUnit,
       currency: p.currency,
       taxCategoryId: p.taxCategoryId,
       isActive: p.isActive,

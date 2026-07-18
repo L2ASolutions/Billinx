@@ -33,10 +33,7 @@ export class PaymentController {
   @UseGuards(PaymentRateLimitGuard)
   @ApiOperation({ summary: 'Initialize a Paystack payment for an invoice' })
   async paystackInitialize(@Body() body: Record<string, any>) {
-    return this.paymentService.paystackInitialize(
-      body.invoiceId,
-      body.email,
-    );
+    return this.paymentService.paystackInitialize(body.invoiceId, body.email);
   }
 
   @Get('paystack/verify/:reference')
@@ -63,9 +60,7 @@ export class PaymentController {
         throw new UnauthorizedException('Invalid Paystack signature');
       }
     }
-    const event = req.rawBody
-      ? JSON.parse(req.rawBody.toString())
-      : req.body;
+    const event = req.rawBody ? JSON.parse(req.rawBody.toString()) : req.body;
     return this.paymentService.paystackWebhookEvent(event);
   }
 
@@ -93,9 +88,7 @@ export class PaymentController {
     if (secretHash && signature !== secretHash) {
       throw new UnauthorizedException('Invalid Flutterwave signature');
     }
-    const event = req.rawBody
-      ? JSON.parse(req.rawBody.toString())
-      : req.body;
+    const event = req.rawBody ? JSON.parse(req.rawBody.toString()) : req.body;
     return this.paymentService.flutterwaveWebhookEvent(event);
   }
 }

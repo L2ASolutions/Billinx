@@ -94,7 +94,9 @@ export class TokenService {
     const publicKey = await this.secrets.getJwtPublicKey();
 
     try {
-      return jwt.verify(token, publicKey, { algorithms: ['RS256'] }) as JwtPayload;
+      return jwt.verify(token, publicKey, {
+        algorithms: ['RS256'],
+      }) as JwtPayload;
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
         throw new UnauthorizedException('Access token expired');

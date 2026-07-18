@@ -612,7 +612,9 @@ export class EmailService {
       </div>` +
         h1(`Invoice from ${opts.sellerName}`) +
         p(`Dear ${opts.buyerName},`) +
-        p(`Please find your invoice from <strong>${opts.sellerName}</strong>.`) +
+        p(
+          `Please find your invoice from <strong>${opts.sellerName}</strong>.`,
+        ) +
         `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
           style="background:#f8faf9;border:1px solid #d4edda;border-radius:6px;margin:0 0 20px;">
           <tr><td style="padding:20px;">
@@ -628,9 +630,7 @@ export class EmailService {
         p(
           `This is a FIRS-certified e-invoice. The QR code on the invoice can be scanned to verify authenticity directly with FIRS.`,
         ) +
-        p(
-          `Regards,<br /><strong>${opts.sellerName}</strong>`,
-        ),
+        p(`Regards,<br /><strong>${opts.sellerName}</strong>`),
     );
 
     this.send(
@@ -695,11 +695,14 @@ export class EmailService {
     reference: string;
     paidAt: string;
   }): void {
-    const formattedAmount = opts.currency === 'NGN'
-      ? `₦${Number(opts.amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
-      : `${opts.currency} ${Number(opts.amount).toLocaleString()}`;
+    const formattedAmount =
+      opts.currency === 'NGN'
+        ? `₦${Number(opts.amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
+        : `${opts.currency} ${Number(opts.amount).toLocaleString()}`;
     const formattedDate = new Date(opts.paidAt).toLocaleDateString('en-NG', {
-      day: 'numeric', month: 'long', year: 'numeric',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
     });
 
     const html = baseLayout(
@@ -709,7 +712,9 @@ export class EmailService {
       </div>` +
         h1('Payment Confirmation') +
         p(`Dear <strong>${opts.supplierName}</strong>,`) +
-        p(`We are pleased to confirm that we have processed payment for the following invoice.`) +
+        p(
+          `We are pleased to confirm that we have processed payment for the following invoice.`,
+        ) +
         `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
               style="background:#f8fffe;border:1px solid #d5f5e3;border-radius:6px;margin:0 0 20px;">
         <tr><td style="padding:20px;">
@@ -721,10 +726,16 @@ export class EmailService {
       </table>` +
         p(`Regards,<br /><strong>${opts.tenantName}</strong>`) +
         divider() +
-        p(`This is an automated payment confirmation from <a href="${APP_BASE_URL}" style="color:${BRAND_GREEN};">Billinx</a>.`),
+        p(
+          `This is an automated payment confirmation from <a href="${APP_BASE_URL}" style="color:${BRAND_GREEN};">Billinx</a>.`,
+        ),
     );
 
-    this.send(opts.to, `Payment Confirmation — Invoice ${opts.invoiceNumber}`, html);
+    this.send(
+      opts.to,
+      `Payment Confirmation — Invoice ${opts.invoiceNumber}`,
+      html,
+    );
   }
 
   sendBuyerPaymentReceipt(opts: {
@@ -740,11 +751,16 @@ export class EmailService {
     provider: string;
     paymentLink?: string;
   }): void {
-    const formattedAmount = opts.currency === 'NGN'
-      ? `₦${Number(opts.amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
-      : `${opts.currency} ${Number(opts.amount).toLocaleString()}`;
+    const formattedAmount =
+      opts.currency === 'NGN'
+        ? `₦${Number(opts.amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
+        : `${opts.currency} ${Number(opts.amount).toLocaleString()}`;
     const formattedDate = opts.paidAt.toLocaleDateString('en-NG', {
-      day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
 
     const viewInvoiceBtn = opts.paymentLink
@@ -758,10 +774,10 @@ export class EmailService {
       `<div style="display:inline-block;background:#f0faf5;border:1px solid #27ae60;border-radius:20px;padding:4px 14px;margin-bottom:20px;">
         <span style="font-size:12px;font-weight:600;color:#1e8449;text-transform:uppercase;letter-spacing:0.5px;">&#10003; Payment Confirmed</span>
       </div>` +
-      h1('Payment Receipt') +
-      p(`Dear <strong>${opts.buyerName}</strong>,`) +
-      p(`Your payment has been received and confirmed.`) +
-      `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+        h1('Payment Receipt') +
+        p(`Dear <strong>${opts.buyerName}</strong>,`) +
+        p(`Your payment has been received and confirmed.`) +
+        `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
             style="background:#f8fffe;border:1px solid #d5f5e3;border-radius:6px;margin:0 0 20px;">
         <tr><td style="padding:20px;">
           <div style="font-size:11px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e0f0e8;font-weight:600;">Payment Details</div>
@@ -774,11 +790,15 @@ export class EmailService {
           <div style="padding-top:12px;border-top:1px solid #e0f0e8;"><span style="font-size:12px;color:#8899aa;">FIRS IRN</span><br /><code style="font-size:12px;color:${BRAND_DARK};">${opts.irn}</code></div>
         </td></tr>
       </table>` +
-      p(`This invoice has been validated by the Federal Inland Revenue Service (FIRS) and this payment has been recorded.`) +
-      viewInvoiceBtn +
-      p(`Regards,<br /><strong>${opts.sellerName}</strong>`) +
-      divider() +
-      p(`Powered by <a href="https://billinx.ng" style="color:${BRAND_GREEN};">Billinx</a> &middot; FIRS Accredited e-Invoicing Platform`),
+        p(
+          `This invoice has been validated by the Federal Inland Revenue Service (FIRS) and this payment has been recorded.`,
+        ) +
+        viewInvoiceBtn +
+        p(`Regards,<br /><strong>${opts.sellerName}</strong>`) +
+        divider() +
+        p(
+          `Powered by <a href="https://billinx.ng" style="color:${BRAND_GREEN};">Billinx</a> &middot; FIRS Accredited e-Invoicing Platform`,
+        ),
     );
 
     this.logger.log(
@@ -839,7 +859,11 @@ export class EmailService {
     const formattedAmount = `${opts.currency} ${opts.totalAmount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
     const formattedOutstanding = `${opts.currency} ${opts.amountOutstanding.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
     const formattedDue = opts.dueDate
-      ? opts.dueDate.toLocaleDateString('en-NG', { day: 'numeric', month: 'long', year: 'numeric' })
+      ? opts.dueDate.toLocaleDateString('en-NG', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        })
       : null;
 
     const subject = `Payment reminder: Invoice ${opts.invoiceNumber} from ${opts.tenantName}`;
@@ -852,7 +876,8 @@ export class EmailService {
           <span style="font-size:12px;font-weight:600;color:#856404;text-transform:uppercase;letter-spacing:0.5px;">&#128197; Payment Due</span>
         </div>`;
 
-    const invoiceLink = opts.paymentLink ?? `${APP_BASE_URL}/pay/${opts.invoiceId}`;
+    const invoiceLink =
+      opts.paymentLink ?? `${APP_BASE_URL}/pay/${opts.invoiceId}`;
 
     const html = baseLayout(
       subject,
@@ -877,10 +902,14 @@ export class EmailService {
               <span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Amount Outstanding</span><br />
               <strong style="font-size:16px;color:${isOverdue ? '#c0392b' : BRAND_GREEN};">${formattedOutstanding}</strong>
             </div>
-            ${formattedDue ? `<div>
+            ${
+              formattedDue
+                ? `<div>
               <span style="font-size:12px;color:#8899aa;text-transform:uppercase;letter-spacing:1px;">Due Date</span><br />
               <strong style="color:${isOverdue ? '#c0392b' : BRAND_DARK};">${formattedDue}</strong>
-            </div>` : ''}
+            </div>`
+                : ''
+            }
           </td></tr>
         </table>` +
         ctaButton(invoiceLink, 'View and Pay Invoice') +

@@ -307,11 +307,16 @@ export class PaymentProviderService {
     return invoice;
   }
 
-  private extractInvoiceId(ref: string | undefined, prefix = ''): string | null {
+  private extractInvoiceId(
+    ref: string | undefined,
+    prefix = '',
+  ): string | null {
     if (!ref) return null;
     // Reference format: BLX-{prefix}{invoiceId}-{timestamp}
     // e.g. BLX-abc123-1234567890 or BLX-FLW-abc123-1234567890
-    const pattern = new RegExp(`^BLX-${prefix}([^-]+-[^-]+-[^-]+-[^-]+-[^-]+)-\\d+$`);
+    const pattern = new RegExp(
+      `^BLX-${prefix}([^-]+-[^-]+-[^-]+-[^-]+-[^-]+)-\\d+$`,
+    );
     const m = ref.match(pattern);
     return m ? m[1] : null;
   }

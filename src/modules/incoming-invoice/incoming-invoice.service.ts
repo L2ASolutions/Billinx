@@ -59,7 +59,9 @@ export class IncomingInvoiceService {
     const whtFields = dto.whtApplicable
       ? (() => {
           const rate = dto.whtRate ?? 5;
-          const whtAmt = parseFloat((dto.invoiceAmount * rate / 100).toFixed(2));
+          const whtAmt = parseFloat(
+            ((dto.invoiceAmount * rate) / 100).toFixed(2),
+          );
           return {
             whtApplicable: true,
             whtRate: rate,
@@ -162,7 +164,8 @@ export class IncomingInvoiceService {
       where: { id, tenantId },
       include: { items: true },
     });
-    if (!invoice) throw new NotFoundException(`Incoming invoice ${id} not found`);
+    if (!invoice)
+      throw new NotFoundException(`Incoming invoice ${id} not found`);
     return this.map(invoice);
   }
 
@@ -170,10 +173,19 @@ export class IncomingInvoiceService {
     id: string,
     tenantId: string,
     file: Express.Multer.File,
-  ): Promise<{ attachmentName: string; attachmentMime: string; attachmentSize: number; uploadedAt: string }> {
+  ): Promise<{
+    attachmentName: string;
+    attachmentMime: string;
+    attachmentSize: number;
+    uploadedAt: string;
+  }> {
     await this.requireInvoice(id, tenantId);
 
-    const ALLOWED_MIMES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+    const ALLOWED_MIMES = new Set([
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+    ]);
 
     const detected = await fileTypeFromBuffer(file.buffer);
     if (!detected || !ALLOWED_MIMES.has(detected.mime)) {
@@ -183,7 +195,8 @@ export class IncomingInvoiceService {
     }
 
     // Normalise image/jpg (non-standard alias) before comparing to detected type.
-    const clientMime = file.mimetype === 'image/jpg' ? 'image/jpeg' : file.mimetype;
+    const clientMime =
+      file.mimetype === 'image/jpg' ? 'image/jpeg' : file.mimetype;
     if (detected.mime !== clientMime) {
       throw new BadRequestException(
         'File content does not match the declared content type.',
@@ -198,7 +211,12 @@ export class IncomingInvoiceService {
         attachmentMime: detected.mime,
         attachmentSize: file.size,
       },
-      select: { attachmentName: true, attachmentMime: true, attachmentSize: true, updatedAt: true },
+      select: {
+        attachmentName: true,
+        attachmentMime: true,
+        attachmentSize: true,
+        updatedAt: true,
+      },
     });
 
     return {
@@ -215,10 +233,16 @@ export class IncomingInvoiceService {
   ): Promise<{ data: Buffer; name: string; mime: string }> {
     const invoice = await (this.prisma as any).incomingInvoice.findFirst({
       where: { id, tenantId },
-      select: { attachmentData: true, attachmentName: true, attachmentMime: true },
+      select: {
+        attachmentData: true,
+        attachmentName: true,
+        attachmentMime: true,
+      },
     });
-    if (!invoice) throw new NotFoundException(`Incoming invoice ${id} not found`);
-    if (!invoice.attachmentData) throw new NotFoundException('No attachment found for this invoice');
+    if (!invoice)
+      throw new NotFoundException(`Incoming invoice ${id} not found`);
+    if (!invoice.attachmentData)
+      throw new NotFoundException('No attachment found for this invoice');
     return {
       data: invoice.attachmentData as Buffer,
       name: invoice.attachmentName as string,
@@ -226,7 +250,10 @@ export class IncomingInvoiceService {
     };
   }
 
-  async deleteAttachment(id: string, tenantId: string): Promise<{ deleted: boolean }> {
+  async deleteAttachment(
+    id: string,
+    tenantId: string,
+  ): Promise<{ deleted: boolean }> {
     await this.requireInvoice(id, tenantId);
     await (this.prisma as any).incomingInvoice.update({
       where: { id },
@@ -240,7 +267,10 @@ export class IncomingInvoiceService {
     return { deleted: true };
   }
 
-  async validate(id: string, tenantId: string): Promise<IncomingInvoiceResponse> {
+  async validate(
+    id: string,
+    tenantId: string,
+  ): Promise<IncomingInvoiceResponse> {
     const invoice = await this.requireInvoice(id, tenantId);
 
     if (!['RECEIVED'].includes(invoice.status)) {
@@ -258,7 +288,10 @@ export class IncomingInvoiceService {
     if (Number(invoice.vatAmount) < 0) {
       throw new BadRequestException('VAT amount must be 0 or greater');
     }
-    if (!invoice.invoiceDate || isNaN(new Date(invoice.invoiceDate).getTime())) {
+    if (
+      !invoice.invoiceDate ||
+      isNaN(new Date(invoice.invoiceDate).getTime())
+    ) {
       throw new BadRequestException('Invoice date is invalid');
     }
 
@@ -275,15 +308,24 @@ export class IncomingInvoiceService {
       actor: ctx.actor,
       entityType: 'IncomingInvoice',
       entityId: id,
-      payload: { invoiceNumber: invoice.invoiceNumber, supplierTin: invoice.supplierTin },
+      payload: {
+        invoiceNumber: invoice.invoiceNumber,
+        supplierTin: invoice.supplierTin,
+      },
     });
 
-    this.eventEmitter.emit('incoming-invoice.validated', { incomingInvoiceId: id, tenantId });
+    this.eventEmitter.emit('incoming-invoice.validated', {
+      incomingInvoiceId: id,
+      tenantId,
+    });
 
     return this.map(updated);
   }
 
-  async approve(id: string, tenantId: string): Promise<IncomingInvoiceResponse> {
+  async approve(
+    id: string,
+    tenantId: string,
+  ): Promise<IncomingInvoiceResponse> {
     const invoice = await this.requireInvoice(id, tenantId);
 
     if (!['VALIDATED'].includes(invoice.status)) {
@@ -307,13 +349,20 @@ export class IncomingInvoiceService {
       actor: ctx.actor,
       entityType: 'IncomingInvoice',
       entityId: id,
-      payload: { invoiceNumber: invoice.invoiceNumber, supplierTin: invoice.supplierTin },
+      payload: {
+        invoiceNumber: invoice.invoiceNumber,
+        supplierTin: invoice.supplierTin,
+      },
     });
 
     if (this.inventoryService) {
-      this.inventoryService.addStock(tenantId, id).catch((err) =>
-        this.logger.warn(`Stock add failed for incoming invoice ${id}: ${err.message}`),
-      );
+      this.inventoryService
+        .addStock(tenantId, id)
+        .catch((err) =>
+          this.logger.warn(
+            `Stock add failed for incoming invoice ${id}: ${err.message}`,
+          ),
+        );
     }
 
     return this.map(updated);
@@ -397,7 +446,9 @@ export class IncomingInvoiceService {
     });
 
     if (dto.sendReceiptToSupplier && invoice.supplierEmail) {
-      const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+      });
       this.emailService.sendPaymentReceipt({
         to: invoice.supplierEmail,
         supplierName: invoice.supplierName,
@@ -413,17 +464,26 @@ export class IncomingInvoiceService {
     return this.map(updated);
   }
 
-  async sendReceipt(id: string, tenantId: string): Promise<{ sent: boolean; to?: string }> {
+  async sendReceipt(
+    id: string,
+    tenantId: string,
+  ): Promise<{ sent: boolean; to?: string }> {
     const invoice = await this.requireInvoice(id, tenantId);
 
     if (invoice.status !== 'PAID') {
-      throw new BadRequestException('Invoice must be PAID before sending a receipt');
+      throw new BadRequestException(
+        'Invoice must be PAID before sending a receipt',
+      );
     }
     if (!invoice.supplierEmail) {
-      throw new BadRequestException('No supplier email on record for this invoice');
+      throw new BadRequestException(
+        'No supplier email on record for this invoice',
+      );
     }
 
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
     this.emailService.sendPaymentReceipt({
       to: invoice.supplierEmail,
       supplierName: invoice.supplierName,
@@ -442,11 +502,15 @@ export class IncomingInvoiceService {
     const invoice = await (this.prisma as any).incomingInvoice.findFirst({
       where: { id, tenantId },
     });
-    if (!invoice) throw new NotFoundException(`Incoming invoice ${id} not found`);
+    if (!invoice)
+      throw new NotFoundException(`Incoming invoice ${id} not found`);
     return invoice;
   }
 
-  private async assertAdminOrOwner(actor: string, tenantId: string): Promise<void> {
+  private async assertAdminOrOwner(
+    actor: string,
+    tenantId: string,
+  ): Promise<void> {
     if (!actor.startsWith('user:')) {
       throw new ForbiddenException('This action requires OWNER or ADMIN role');
     }
@@ -481,20 +545,24 @@ export class IncomingInvoiceService {
       rejectionReason: invoice.rejectionReason ?? undefined,
       whtApplicable: invoice.whtApplicable ?? false,
       whtRate: invoice.whtRate != null ? Number(invoice.whtRate) : undefined,
-      whtAmount: invoice.whtAmount != null ? Number(invoice.whtAmount) : undefined,
-      netPayable: invoice.netPayable != null ? Number(invoice.netPayable) : undefined,
+      whtAmount:
+        invoice.whtAmount != null ? Number(invoice.whtAmount) : undefined,
+      netPayable:
+        invoice.netPayable != null ? Number(invoice.netPayable) : undefined,
       supplierEmail: invoice.supplierEmail ?? undefined,
       supplierBankName: invoice.supplierBankName ?? undefined,
       supplierBankAccount: invoice.supplierBankAccount ?? undefined,
       supplierBankAccName: invoice.supplierBankAccName ?? undefined,
-      amountPaid: invoice.amountPaid != null ? Number(invoice.amountPaid) : undefined,
+      amountPaid:
+        invoice.amountPaid != null ? Number(invoice.amountPaid) : undefined,
       paymentReference: invoice.paymentReference ?? undefined,
       paymentProvider: invoice.paymentProvider ?? undefined,
       paidAt: invoice.paidAt?.toISOString() ?? undefined,
       paymentNotes: invoice.paymentNotes ?? undefined,
       hasAttachment: invoice.attachmentName != null,
       attachmentName: invoice.attachmentName ?? null,
-      attachmentSize: invoice.attachmentSize != null ? Number(invoice.attachmentSize) : null,
+      attachmentSize:
+        invoice.attachmentSize != null ? Number(invoice.attachmentSize) : null,
       items: (invoice.items ?? []).map(
         (item: any): IncomingInvoiceItemResponse => ({
           id: item.id,
@@ -513,11 +581,21 @@ export class IncomingInvoiceService {
 
   async getStats(tenantId: string) {
     return this.prisma.asAdmin(async (tx) => {
-      const total = await (tx as any).incomingInvoice.count({ where: { tenantId } });
-      const received = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'RECEIVED' } });
-      const validated = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'VALIDATED' } });
-      const approved = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'APPROVED' } });
-      const paid = await (tx as any).incomingInvoice.count({ where: { tenantId, status: 'PAID' } });
+      const total = await (tx as any).incomingInvoice.count({
+        where: { tenantId },
+      });
+      const received = await (tx as any).incomingInvoice.count({
+        where: { tenantId, status: 'RECEIVED' },
+      });
+      const validated = await (tx as any).incomingInvoice.count({
+        where: { tenantId, status: 'VALIDATED' },
+      });
+      const approved = await (tx as any).incomingInvoice.count({
+        where: { tenantId, status: 'APPROVED' },
+      });
+      const paid = await (tx as any).incomingInvoice.count({
+        where: { tenantId, status: 'PAID' },
+      });
 
       const outstandingAgg = await (tx as any).incomingInvoice.aggregate({
         where: { tenantId, status: { in: ['VALIDATED', 'APPROVED'] } },
@@ -531,7 +609,11 @@ export class IncomingInvoiceService {
       });
 
       const whtAgg = await (tx as any).incomingInvoice.aggregate({
-        where: { tenantId, status: { in: ['VALIDATED', 'APPROVED'] }, whtApplicable: true },
+        where: {
+          tenantId,
+          status: { in: ['VALIDATED', 'APPROVED'] },
+          whtApplicable: true,
+        },
         _sum: { whtAmount: true },
       });
 

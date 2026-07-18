@@ -1,11 +1,10 @@
+import { Controller, Get, Query, UseGuards, Req } from '@nestjs/common';
 import {
-  Controller,
-  Get,
-  Query,
-  UseGuards,
-  Req,
-} from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { Request } from 'express';
 import { AnalyticsService } from './analytics.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';
@@ -23,7 +22,11 @@ export class AnalyticsController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Top 10 items sold by revenue (outgoing invoices)' })
-  @ApiQuery({ name: 'period', required: false, enum: ['month', 'quarter', 'year'] })
+  @ApiQuery({
+    name: 'period',
+    required: false,
+    enum: ['month', 'quarter', 'year'],
+  })
   async topItemsSold(@Req() req: Request, @Query('period') period?: string) {
     const ctx = this.getCtx(req);
     return this.analyticsService.topItemsSold(ctx.tenantId, period);
@@ -32,8 +35,14 @@ export class AnalyticsController {
   @Get('top-purchases')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Top 10 purchased items by spend (incoming invoices)' })
-  @ApiQuery({ name: 'period', required: false, enum: ['month', 'quarter', 'year'] })
+  @ApiOperation({
+    summary: 'Top 10 purchased items by spend (incoming invoices)',
+  })
+  @ApiQuery({
+    name: 'period',
+    required: false,
+    enum: ['month', 'quarter', 'year'],
+  })
   async topPurchases(@Req() req: Request, @Query('period') period?: string) {
     const ctx = this.getCtx(req);
     return this.analyticsService.topPurchases(ctx.tenantId, period);
@@ -51,7 +60,9 @@ export class AnalyticsController {
   @Get('top-clients')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Top clients by revenue (outgoing accepted invoices)' })
+  @ApiOperation({
+    summary: 'Top clients by revenue (outgoing accepted invoices)',
+  })
   async topClients(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.analyticsService.topClients(ctx.tenantId);
@@ -60,7 +71,9 @@ export class AnalyticsController {
   @Get('price-trends')
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Price trends for an item over time (incoming invoices)' })
+  @ApiOperation({
+    summary: 'Price trends for an item over time (incoming invoices)',
+  })
   @ApiQuery({ name: 'itemName', required: true })
   @ApiQuery({ name: 'months', required: false })
   async priceTrends(

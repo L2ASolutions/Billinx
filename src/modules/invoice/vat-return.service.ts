@@ -120,7 +120,9 @@ export class VatReturnService {
       const customerName: string = inv.buyerName;
       const customerTin: string = inv.buyerTin ?? '';
 
-      const lineItems: any[] = Array.isArray(inv.lineItems) ? inv.lineItems : [];
+      const lineItems: any[] = Array.isArray(inv.lineItems)
+        ? inv.lineItems
+        : [];
 
       if (lineItems.length > 0) {
         for (const li of lineItems) {
@@ -131,8 +133,7 @@ export class VatReturnService {
           if (taxCode === 'E') exemptSales += amount;
           if (taxCode === 'Z') zeroRatedSales += amount;
 
-          const productName: string =
-            li.item?.name ?? li.description ?? '';
+          const productName: string = li.item?.name ?? li.description ?? '';
           const productDescription: string =
             li.item?.description ?? li.description ?? '';
 

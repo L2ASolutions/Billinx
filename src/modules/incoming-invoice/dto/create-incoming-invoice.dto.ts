@@ -107,7 +107,10 @@ export class CreateIncomingInvoiceDto {
   @IsBoolean()
   whtApplicable?: boolean;
 
-  @ApiPropertyOptional({ example: 5, description: 'WHT rate percentage (default 5)' })
+  @ApiPropertyOptional({
+    example: 5,
+    description: 'WHT rate percentage (default 5)',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -160,7 +163,10 @@ export class MarkPaidIncomingInvoiceDto {
   @IsNotEmpty()
   reference!: string;
 
-  @ApiProperty({ example: 'BANK_TRANSFER', enum: ['BANK_TRANSFER', 'CASH', 'CHEQUE', 'OTHER'] })
+  @ApiProperty({
+    example: 'BANK_TRANSFER',
+    enum: ['BANK_TRANSFER', 'CASH', 'CHEQUE', 'OTHER'],
+  })
   @IsString()
   @IsNotEmpty()
   provider!: string;
