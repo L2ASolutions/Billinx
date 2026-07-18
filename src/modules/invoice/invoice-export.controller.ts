@@ -11,12 +11,13 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiQuery,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { Request } from 'express';
 import { ExportService } from '../export/export.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';
 
-@ApiTags('Invoices')
+@ApiTags('Reports')
 @Controller('v1/invoices/export')
 export class InvoiceExportController {
   constructor(private readonly exportService: ExportService) {}
@@ -31,6 +32,11 @@ export class InvoiceExportController {
   @ApiOperation({ summary: 'Export invoices as CSV for compliance reporting' })
   @ApiQuery({ name: 'startDate', required: true })
   @ApiQuery({ name: 'endDate', required: true })
+  @ApiResponse({
+    status: 200,
+    description: 'Export invoices as CSV for compliance reporting',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async exportCSV(
     @Req() req: Request,
     @Query('startDate') startDate: string,
@@ -54,6 +60,11 @@ export class InvoiceExportController {
   @ApiOperation({ summary: 'Export invoices as JSON in NRS canonical format' })
   @ApiQuery({ name: 'startDate', required: true })
   @ApiQuery({ name: 'endDate', required: true })
+  @ApiResponse({
+    status: 200,
+    description: 'Export invoices as JSON in NRS canonical format',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async exportJSON(
     @Req() req: Request,
     @Query('startDate') startDate: string,
@@ -76,6 +87,11 @@ export class InvoiceExportController {
   @ApiOperation({ summary: 'Get monthly invoice summary report' })
   @ApiQuery({ name: 'year', required: true, type: Number })
   @ApiQuery({ name: 'month', required: true, type: Number })
+  @ApiResponse({
+    status: 200,
+    description: 'Get monthly invoice summary report',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async exportMonthly(
     @Req() req: Request,
     @Query('year') year: string,

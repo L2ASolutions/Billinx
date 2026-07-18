@@ -37,7 +37,7 @@ import {
 } from './dto/create-incoming-invoice.dto';
 import { JwtGuard } from '../identity/guards/jwt.guard';
 
-@ApiTags('Incoming Invoices')
+@ApiTags('Purchase Invoices')
 @Controller('v1/incoming-invoices')
 @UseGuards(JwtGuard)
 @ApiBearerAuth()
@@ -70,6 +70,10 @@ export class IncomingInvoiceController {
   @ApiQuery({ name: 'supplierTin', required: false })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({
+    status: 200,
+    description: 'List incoming invoices with optional filters',
+  })
   async list(
     @Req() req: Request,
     @Query('status') status?: string,
@@ -88,6 +92,10 @@ export class IncomingInvoiceController {
 
   @Get('stats')
   @ApiOperation({ summary: 'Get incoming invoice stats for dashboard' })
+  @ApiResponse({
+    status: 200,
+    description: 'Get incoming invoice stats for dashboard',
+  })
   async stats(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.incomingInvoiceService.getStats(ctx.tenantId);
@@ -124,6 +132,9 @@ export class IncomingInvoiceController {
   @Patch(':id/reject')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reject an incoming invoice' })
+  @ApiResponse({ status: 200, description: 'Reject an incoming invoice' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async reject(
     @Param('id') id: string,
     @Body() dto: RejectIncomingInvoiceDto,
@@ -136,6 +147,12 @@ export class IncomingInvoiceController {
   @Patch(':id/mark-paid')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark an approved incoming invoice as paid' })
+  @ApiResponse({
+    status: 200,
+    description: 'Mark an approved incoming invoice as paid',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async markPaid(
     @Param('id') id: string,
     @Body() dto: MarkPaidIncomingInvoiceDto,
@@ -148,6 +165,12 @@ export class IncomingInvoiceController {
   @Post(':id/send-receipt')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send payment receipt email to supplier' })
+  @ApiResponse({
+    status: 200,
+    description: 'Send payment receipt email to supplier',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async sendReceipt(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.incomingInvoiceService.sendReceipt(id, ctx.tenantId);
@@ -203,6 +226,11 @@ export class IncomingInvoiceController {
   @Delete(':id/attachment')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Remove the attachment from an incoming invoice' })
+  @ApiResponse({
+    status: 200,
+    description: 'Remove the attachment from an incoming invoice',
+  })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async deleteAttachment(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.incomingInvoiceService.deleteAttachment(id, ctx.tenantId);

@@ -4,6 +4,7 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiQuery,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import * as ExcelJS from 'exceljs';
@@ -12,7 +13,7 @@ import { JwtGuard } from '../identity/guards/jwt.guard';
 import { RolesGuard } from '../../shared/guards/roles.guard';
 import { Roles } from '../../shared/decorators/roles.decorator';
 
-@ApiTags('Submissions')
+@ApiTags('VAT & Compliance')
 @Controller('v1/submissions')
 export class SubmissionController {
   constructor(private readonly prisma: PrismaService) {}
@@ -29,6 +30,15 @@ export class SubmissionController {
   @ApiQuery({ name: 'endDate', required: false })
   @ApiOperation({
     summary: 'Export submission attempts as Excel (dashboard / JWT auth)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Export submission attempts as Excel (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
   })
   async exportSubmissions(
     @Req() req: Request,

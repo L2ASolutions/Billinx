@@ -6,8 +6,13 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { validateEnvironment } from './config/config.validation';
 import { VersionHeaderInterceptor } from './shared/interceptors/version-header.interceptor';
-import { applySecurityHeaders } from './shared/security/security-headers';
+import {
+  applySecurityHeaders,
+  buildHelmetOptions,
+} from './shared/security/security-headers';
+import { TokenService } from './modules/identity/services/token.service';
 import * as express from 'express';
+import helmet from 'helmet';
 
 async function bootstrap() {
   validateEnvironment();
@@ -87,10 +92,14 @@ async function bootstrap() {
     }),
   );
 
-  if (process.env.NODE_ENV !== 'production') {
+  {
+    const isProduction = process.env.NODE_ENV === 'production';
+
     const config = new DocumentBuilder()
-      .setTitle('Billinx Compliance API')
-      .setDescription('Nigeria FIRS/NRS E-Invoicing Compliance Infrastructure')
+      .setTitle('Billinx API')
+      .setDescription(
+        'NRS-compliant B2B e-invoicing API for Nigerian businesses',
+      )
       .setVersion('1.0')
       .addBearerAuth()
       .addApiKey(
@@ -100,9 +109,49 @@ async function bootstrap() {
       .build();
 
     const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('docs', app, document);
-    app.getHttpAdapter().get('/openapi.json', (_req: any, res: any) => {
-      res.json(document);
+
+    // In production the spec/UI describe every endpoint and payload shape in
+    // the API, so gate access behind the same RS256 JWT used for dashboard
+    // auth rather than exposing it to the public internet unauthenticated.
+    if (isProduction) {
+      // The global CSP (applySecurityHeaders above) locks script-src/style-src
+      // to 'self' in production, which would block Swagger UI's inline
+      // bootstrap script. Swagger UI is now JWT-gated rather than disabled in
+      // production, so re-relax CSP for just these two paths — the rest of
+      // the API keeps the strict policy.
+      const docsCsp = helmet.contentSecurityPolicy(
+        buildHelmetOptions(false).contentSecurityPolicy,
+      );
+      app.use('/api/docs', docsCsp);
+      app.use('/api/docs-json', docsCsp);
+
+      const tokenService = app.get(TokenService);
+      const requireJwt = async (req: any, res: any, next: any) => {
+        const header = req.headers['authorization'];
+        const token =
+          typeof header === 'string' && header.startsWith('Bearer ')
+            ? header.slice('Bearer '.length)
+            : undefined;
+
+        if (!token) {
+          res.status(401).json({ message: 'Authentication required' });
+          return;
+        }
+
+        try {
+          await tokenService.verifyAccessToken(token);
+          next();
+        } catch {
+          res.status(401).json({ message: 'Invalid or expired token' });
+        }
+      };
+
+      app.use('/api/docs', requireJwt);
+      app.use('/api/docs-json', requireJwt);
+    }
+
+    SwaggerModule.setup('api/docs', app, document, {
+      jsonDocumentUrl: 'api/docs-json',
     });
   }
 
@@ -118,7 +167,7 @@ async function bootstrap() {
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
   logger.log(`Billinx API running on port ${port}`);
-  logger.log(`OpenAPI docs: http://localhost:${port}/docs`);
+  logger.log(`OpenAPI docs: http://localhost:${port}/api/docs`);
 
   // Graceful shutdown — ECS sends SIGTERM before stopping the task
   const shutdown = async (signal: string) => {

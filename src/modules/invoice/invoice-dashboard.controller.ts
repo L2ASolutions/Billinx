@@ -22,6 +22,8 @@ import {
   ApiBearerAuth,
   ApiQuery,
   ApiProduces,
+  ApiResponse,
+  ApiBody,
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { InvoiceService } from './services/invoice.service';
@@ -59,6 +61,16 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary: 'Save a new DRAFT invoice without queuing for FIRS submission',
   })
+  @ApiResponse({
+    status: 201,
+    description: 'Save a new DRAFT invoice without queuing for FIRS submission',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async saveDraftDashboard(
     @Body() body: Record<string, any>,
     @Req() req: Request,
@@ -79,6 +91,14 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary: 'Update fields of an existing DRAFT invoice without submitting',
   })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Update fields of an existing DRAFT invoice without submitting',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async updateDraftDashboard(
     @Param('id') id: string,
     @Body() body: Record<string, any>,
@@ -98,6 +118,16 @@ export class InvoiceDashboardController {
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create invoice from dashboard (JWT auth)' })
+  @ApiResponse({
+    status: 201,
+    description: 'Create invoice from dashboard (JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async createInvoiceDashboard(
     @Body() body: Record<string, any>,
     @Req() req: Request,
@@ -133,6 +163,11 @@ export class InvoiceDashboardController {
   @ApiQuery({ name: 'to', required: false })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({
+    status: 200,
+    description: 'List invoices from dashboard (JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async listInvoicesDashboard(
     @Req() req: Request,
     @Query() filters: InvoiceDashboardFilterDto,
@@ -158,6 +193,12 @@ export class InvoiceDashboardController {
     summary:
       'Get a static sample invoice for onboarding reference (dashboard / JWT auth)',
   })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Get a static sample invoice for onboarding reference (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   getSampleInvoice() {
     return this.invoiceService.getSampleInvoice();
   }
@@ -166,6 +207,11 @@ export class InvoiceDashboardController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get invoice stats for dashboard (JWT auth)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Get invoice stats for dashboard (JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async getDashboardStats(@Req() req: Request) {
     const ctx = this.getCtx(req);
     const userId =
@@ -178,6 +224,15 @@ export class InvoiceDashboardController {
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'VIEWER')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get chart data for dashboard (JWT auth)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Get chart data for dashboard (JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
   async getDashboardCharts(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getDashboardCharts(ctx.tenantId);
@@ -190,6 +245,15 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary: 'Get FIRS rejection summary for dashboard (JWT auth)',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Get FIRS rejection summary for dashboard (JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
   async getDashboardRejections(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getDashboardRejections(ctx.tenantId);
@@ -201,6 +265,11 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary: 'Get payment collection stats for dashboard (JWT auth)',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Get payment collection stats for dashboard (JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async getPaymentStats(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getPaymentStats(ctx.tenantId);
@@ -213,6 +282,16 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary:
       'Get payment chart data (collection trend + payment methods) for dashboard (JWT auth)',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Get payment chart data (collection trend + payment methods) for dashboard (JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
   })
   async getPaymentCharts(@Req() req: Request) {
     const ctx = this.getCtx(req);
@@ -229,6 +308,15 @@ export class InvoiceDashboardController {
   @ApiQuery({ name: 'to', required: false })
   @ApiOperation({
     summary: 'Export sent invoices as Excel (dashboard / JWT auth)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Export sent invoices as Excel (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
   })
   async exportInvoicesDashboard(
     @Req() req: Request,
@@ -311,6 +399,12 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary: 'Get a single invoice by ID (dashboard / JWT auth)',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Get a single invoice by ID (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async getDashboardInvoice(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getInvoice(id, ctx.tenantId);
@@ -324,6 +418,12 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary: 'Download invoice as NRS XML (dashboard / JWT auth)',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Download invoice as NRS XML (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async getDashboardInvoiceXml(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.exportAsXml(id, ctx.tenantId);
@@ -335,7 +435,19 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary:
       'Download invoice as an NRS-compliant PDF with IRN and QR code (dashboard / JWT auth)',
+    description:
+      'Renders the invoice header (wordmark, IRN, dates), supplier/buyer blocks, a line-items table, ' +
+      'a tax-summary table, totals, and an "NRS Tax Information" footer with the QR code embedded from ' +
+      '`Invoice.qrCodeBase64`. Returns `application/pdf` as a binary attachment ' +
+      '(`Content-Disposition: attachment; filename="invoice-<IRN>.pdf"`) — not JSON.',
   })
+  @ApiProduces('application/pdf')
+  @ApiResponse({
+    status: 200,
+    description: 'Binary PDF file stream (Content-Type: application/pdf)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async getDashboardInvoicePdf(
     @Param('id') id: string,
     @Req() req: Request,
@@ -358,6 +470,43 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary:
       'Preview the exact NRS/Interswitch JSON payload for an invoice without submitting it — diagnostic only (dashboard / JWT auth, OWNER/ADMIN)',
+    description:
+      'Calls the same private `buildPayload()` used by the real `InterswitchAdapter.submit()` call, so it ' +
+      'cannot drift from the actual submission payload — for testing an invoice against the FIRS/NRS sandbox ' +
+      'portal directly. Read-only: never calls the NRS API, never touches invoice status. Downloaded as a ' +
+      '`.json` file. Note the `irn`/`issue_time` fields are regenerated on every call (`preview_note` in the ' +
+      'response flags this) so two downloads of the same invoice will differ in exactly those two fields.',
+  })
+  @ApiProduces('application/json')
+  @ApiResponse({
+    status: 200,
+    description: 'Downloadable JSON file of the exact NRS submission payload',
+    schema: {
+      example: {
+        payload: {
+          business_id: '3f2a1c9e-...',
+          invoice_kind: 'B2B',
+          invoice_type_code: '380',
+          irn: 'IRN-2026-07-18T10:00:00Z-...',
+          issue_time: '2026-07-18T10:00:00.000Z',
+          supplier: { tin: '12345678-0001', name: 'Acme Corp' },
+          buyer: { tin: '87654321-0001', name: 'Beta Traders Ltd' },
+        },
+        preview_note:
+          'irn and issue_time are regenerated on every call and will differ between downloads.',
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Invoice missing required NRS fields (e.g. MISSING_BUSINESS_ID, MISSING_CREDENTIALS)',
   })
   async getDashboardInvoiceNrsPayload(
     @Param('id') id: string,
@@ -367,10 +516,7 @@ export class InvoiceDashboardController {
     const ctx = this.getCtx(req);
     let result: { payload: Record<string, unknown>; irn: string };
     try {
-      result = await this.interswitchAdapter.previewPayload(
-        ctx.tenantId,
-        id,
-      );
+      result = await this.interswitchAdapter.previewPayload(ctx.tenantId, id);
     } catch (err) {
       if (err instanceof NrsValidationError) {
         if (err.errorCode === 'INVOICE_NOT_FOUND') {
@@ -397,6 +543,12 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary: 'Get invoice lifecycle status (dashboard / JWT auth)',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Get invoice lifecycle status (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async getDashboardInvoiceStatus(
     @Param('id') id: string,
     @Req() req: Request,
@@ -411,6 +563,17 @@ export class InvoiceDashboardController {
   @Roles('OWNER', 'ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cancel an invoice (dashboard / JWT auth)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cancel an invoice (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async cancelInvoiceDashboard(
     @Param('id') id: string,
     @Body() body: Record<string, any>,
@@ -433,6 +596,17 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary: 'Record a payment against an invoice (dashboard / JWT auth)',
   })
+  @ApiResponse({
+    status: 201,
+    description: 'Record a payment against an invoice (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async recordPaymentDashboard(
     @Param('id') id: string,
     @Body() body: Record<string, any>,
@@ -455,6 +629,12 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary: 'List payments for an invoice (dashboard / JWT auth)',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'List payments for an invoice (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async listPaymentsDashboard(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.paymentService.listPayments(id, ctx.tenantId);
@@ -467,6 +647,13 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary: 'Duplicate an invoice as a new DRAFT (dashboard / JWT auth)',
   })
+  @ApiResponse({
+    status: 201,
+    description: 'Duplicate an invoice as a new DRAFT (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async duplicateInvoiceDashboard(
     @Param('id') id: string,
     @Req() req: Request,
@@ -487,7 +674,48 @@ export class InvoiceDashboardController {
   @ApiOperation({
     summary:
       'Submit an existing DRAFT invoice (update fields + queue for FIRS submission)',
+    description:
+      'Merges the request body onto the existing DRAFT, runs the stricter SUBMIT-level FIRS/NRS field ' +
+      'validation (lineItems must be non-empty, totalAmount > 0, all NRS-schema content-correctness rules), ' +
+      'captures `issueTime`/`taxPointDate` if not already set, transitions the invoice out of DRAFT, and ' +
+      'queues it for asynchronous submission to the NRS platform. Poll `GET :id/status` or subscribe to the ' +
+      '`invoice.accepted`/`invoice.rejected` webhook for the final outcome.',
   })
+  @ApiBody({
+    description:
+      'Fields to merge onto the DRAFT before submission (any subset of the invoice payload)',
+    examples: {
+      minimalSubmit: {
+        summary: 'Submit with no field changes',
+        value: {},
+      },
+      submitWithCorrections: {
+        summary: 'Submit while filling in previously-missing fields',
+        value: {
+          buyerParty: { tin: '87654321-0001', name: 'Beta Traders Ltd' },
+          legalMonetaryTotal: {
+            lineExtensionAmount: 500000,
+            taxExclusiveAmount: 500000,
+            taxInclusiveAmount: 537500,
+            payableAmount: 537500,
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice submitted and queued for FIRS processing',
+    schema: {
+      example: { id: 'inv_01h...', status: 'QUEUED', platformIrn: 'IRN-...' },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invoice failed SUBMIT-level FIRS/NRS field validation',
+  })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async submitDraftDashboard(
     @Param('id') id: string,
     @Body() body: Record<string, any>,
@@ -508,6 +736,18 @@ export class InvoiceDashboardController {
     summary:
       'Send a manual payment reminder email to the buyer (dashboard / JWT auth)',
   })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Send a manual payment reminder email to the buyer (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async sendReminderDashboard(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.sendManualReminder(id, ctx.tenantId, ctx.actor);
@@ -520,6 +760,13 @@ export class InvoiceDashboardController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Send invoice to buyer by email (dashboard)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Send invoice to buyer by email (dashboard)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async sendToBuyerDashboard(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.sendToBuyer(id, ctx.tenantId);

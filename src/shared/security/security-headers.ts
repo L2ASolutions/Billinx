@@ -9,9 +9,11 @@ export function buildHelmetOptions(isProduction: boolean) {
     // helmet.contentSecurityPolicy() — previously `false` ("managed at
     // ALB/CDN level"), which is not a documented, verifiable control and left
     // the app with no CSP at all. Locked to 'self'/'none' for this JSON API;
-    // relaxed script/style-src only in development, where /docs (Swagger UI,
-    // mounted only when NODE_ENV !== 'production') needs inline scripts/styles
-    // to render — never reachable in production.
+    // relaxed script/style-src only in development, where /api/docs (Swagger
+    // UI) needs inline scripts/styles to render. In production, /api/docs is
+    // JWT-gated rather than disabled — main.ts re-applies this same relaxed
+    // policy scoped to just that path so the rest of the API keeps the
+    // strict, 'self'-only policy.
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],

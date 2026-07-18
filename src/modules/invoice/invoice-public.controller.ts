@@ -1,5 +1,5 @@
 import { Controller, Get, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { InvoiceService } from './services/invoice.service';
 
 @ApiTags('Invoices')
@@ -9,6 +9,11 @@ export class InvoicePublicController {
 
   @Get('pay/:invoiceId')
   @ApiOperation({ summary: 'Get public invoice data for the payment page' })
+  @ApiResponse({
+    status: 200,
+    description: 'Get public invoice data for the payment page',
+  })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async getPublicInvoice(@Param('invoiceId') id: string) {
     return this.invoiceService.getPublicInvoice(id);
   }

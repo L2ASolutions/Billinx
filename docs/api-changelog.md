@@ -101,6 +101,12 @@ No date has been set for v2 GA. When planning begins, a public roadmap will be s
 
 ## v1 Release History
 
+### v1.5.0 — July 2026
+- Full Swagger/OpenAPI documentation across all endpoints: `@ApiTags`, `@ApiOperation`, `@ApiResponse`, `@ApiBearerAuth`/`@ApiSecurity`, and `@ApiProperty` on every DTO
+- Swagger UI moved from `/docs` to `/api/docs`; raw OpenAPI JSON moved from `/openapi.json` to `/api/docs-json`
+- Swagger UI/JSON is now live in every environment (previously disabled outside development) — in production both routes require a valid Bearer JWT
+- No endpoint paths, methods, or business logic changed — documentation only
+
 ### v1.4.0 — May 2026
 - Added product catalog (`/v1/products`)
 - Added compliance export endpoints (`/v1/invoices/export/csv`, `/v1/invoices/export/json`, `/v1/invoices/export/monthly`)

@@ -17,6 +17,7 @@ import {
   ApiHeader,
   ApiQuery,
   ApiBearerAuth,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import * as ExcelJS from 'exceljs';
@@ -48,6 +49,11 @@ export class ActivityController {
   @ApiQuery({ name: 'to', required: false })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({
+    status: 200,
+    description: 'List activity events for authenticated tenant',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid credentials' })
   async getTenantActivity(
     @Query('eventType') eventType?: ActivityEventType,
     @Query('entityId') entityId?: string,
@@ -78,6 +84,15 @@ export class ActivityController {
   @ApiQuery({ name: 'endDate', required: false })
   @ApiQuery({ name: 'eventType', required: false })
   @ApiOperation({ summary: 'Export audit log as Excel — OWNER and ADMIN only' })
+  @ApiResponse({
+    status: 200,
+    description: 'Export audit log as Excel — OWNER and ADMIN only',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
   async exportAuditLogExcel(
     @Req() req: Request,
     @Res() res: Response,
@@ -179,6 +194,11 @@ export class ActivityController {
   @UseGuards(FlexAuthGuard)
   @ApiOperation({ summary: 'Export activity as CSV for authenticated tenant' })
   @ApiHeader({ name: 'Authorization', required: true })
+  @ApiResponse({
+    status: 200,
+    description: 'Export activity as CSV for authenticated tenant',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid credentials' })
   async exportTenantActivity(
     @Query('from') from?: string,
     @Query('to') to?: string,
@@ -213,6 +233,11 @@ export class ActivityController {
   @ApiQuery({ name: 'to', required: false })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin: list all activity across all tenants',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async getAllActivity(
     @Query('tenantId') tenantId?: string,
     @Query('eventType') eventType?: ActivityEventType,
@@ -244,6 +269,8 @@ export class ActivityController {
   @ApiQuery({ name: 'to', required: false })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Admin: list system errors' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async getErrors(
     @Query('severity') severity?: ErrorSeverity,
     @Query('isResolved') isResolved?: string,
@@ -268,6 +295,8 @@ export class ActivityController {
   @UseGuards(AdminJwtGuard)
   @ApiOperation({ summary: 'Admin: get error statistics' })
   @ApiHeader({ name: 'Authorization', required: true })
+  @ApiResponse({ status: 200, description: 'Admin: get error statistics' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async getErrorStats() {
     return this.activityService.getErrorStats();
   }
@@ -277,6 +306,10 @@ export class ActivityController {
   @UseGuards(AdminJwtGuard)
   @ApiOperation({ summary: 'Admin: mark an error as resolved' })
   @ApiHeader({ name: 'Authorization', required: true })
+  @ApiResponse({ status: 200, description: 'Admin: mark an error as resolved' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async resolveError(
     @Param('id') id: string,
     @Body() body: { resolvedBy: string; resolutionNote?: string },

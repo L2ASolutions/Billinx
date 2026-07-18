@@ -21,7 +21,7 @@ npm run test:e2e      # End-to-end tests
 npm run test:cov      # Coverage report
 ```
 
-Swagger UI: `http://localhost:3000/docs`
+Swagger UI: `http://localhost:3000/api/docs` (raw OpenAPI JSON: `GET /api/docs-json`). Live in every environment — in production both routes require a valid Bearer JWT (same RS256 access token as dashboard auth); in development/test they're open. All 27 controllers are tagged (`Invoices`, `Purchase Invoices`, `Products`, `Team`, `VAT & Compliance`, `Reports`, `Webhooks`, `Settings`, `Auth`, plus module-specific tags for the rest) with `@ApiOperation`/`@ApiResponse`/`@ApiBearerAuth` on every endpoint; request/response examples are on the create-invoice, submit-invoice, PDF download, NRS payload preview, and VAT return summary endpoints specifically.
 Health check: `GET /health`
 
 ---

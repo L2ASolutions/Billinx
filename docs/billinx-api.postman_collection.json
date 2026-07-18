@@ -613,11 +613,11 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/openapi.json",
+              "raw": "{{base_url}}/api/docs-json",
               "host": ["{{base_url}}"],
-              "path": ["openapi.json"]
+              "path": ["api", "docs-json"]
             },
-            "description": "Download the full OpenAPI 3.0 specification (only available outside production)."
+            "description": "Download the full OpenAPI 3.0 specification. In production this requires a valid Bearer JWT (same access token as dashboard auth)."
           }
         }
       ]

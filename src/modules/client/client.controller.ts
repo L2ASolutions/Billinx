@@ -17,6 +17,7 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiQuery,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { Request } from 'express';
 import { ClientService } from './client.service';
@@ -35,6 +36,11 @@ export class ClientController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get top 5 clients by invoice count' })
+  @ApiResponse({
+    status: 200,
+    description: 'Get top 5 clients by invoice count',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async getFrequent(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.clientService.getFrequent(ctx.tenantId);
@@ -47,6 +53,8 @@ export class ClientController {
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
+  @ApiResponse({ status: 200, description: 'List clients' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async findAll(
     @Req() req: Request,
     @Query('search') search?: string,
@@ -66,6 +74,9 @@ export class ClientController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a client by ID' })
+  @ApiResponse({ status: 200, description: 'Get a client by ID' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async findOne(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.clientService.findOne(ctx.tenantId, id);
@@ -76,6 +87,9 @@ export class ClientController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a client' })
+  @ApiResponse({ status: 201, description: 'Create a client' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async create(@Body() body: Record<string, any>, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.clientService.create(ctx.tenantId, body);
@@ -85,6 +99,10 @@ export class ClientController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a client' })
+  @ApiResponse({ status: 200, description: 'Update a client' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async update(
     @Param('id') id: string,
     @Body() body: Record<string, any>,
@@ -98,6 +116,9 @@ export class ClientController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Soft-delete a client' })
+  @ApiResponse({ status: 200, description: 'Soft-delete a client' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async delete(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.clientService.delete(ctx.tenantId, id);

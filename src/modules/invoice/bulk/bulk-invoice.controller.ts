@@ -20,6 +20,7 @@ import {
   ApiConsumes,
   ApiBody,
   ApiParam,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { Request } from 'express';
 import { BulkInvoiceService } from './bulk-invoice.service';
@@ -45,6 +46,12 @@ export class BulkInvoiceController {
       'Validates each invoice independently. Valid invoices are queued immediately. ' +
       'Returns per-invoice result. Rate limited: 3 requests per minute per tenant.',
   })
+  @ApiResponse({
+    status: 202,
+    description: 'Submit up to 500 invoices in a single bulk request',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async bulkSubmit(@Body() body: Record<string, any>, @Req() req: Request) {
     const ctx = this.getCtx(req);
     const invoices = body.invoices;
@@ -97,6 +104,12 @@ export class BulkInvoiceController {
       },
     }),
   )
+  @ApiResponse({
+    status: 202,
+    description: 'Submit invoices via CSV file upload (max 5 MB, 500 rows)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async bulkSubmitCsv(@UploadedFile() file: any, @Req() req: Request) {
     if (!file) {
       throw new BadRequestException(
@@ -123,6 +136,12 @@ export class BulkInvoiceController {
   @ApiOperation({
     summary: 'Get processing progress for a bulk submission batch',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Get processing progress for a bulk submission batch',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async getBatchStatus(@Param('batchId') batchId: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.bulkService.getBatchStatus(ctx.tenantId, batchId);
@@ -161,6 +180,12 @@ export class BulkInvoiceController {
       },
     }),
   )
+  @ApiResponse({
+    status: 202,
+    description: 'Upload CSV for bulk submission (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async bulkSubmitCsvDashboard(@UploadedFile() file: any, @Req() req: Request) {
     if (!file) {
       throw new BadRequestException(
@@ -182,6 +207,12 @@ export class BulkInvoiceController {
   @ApiBearerAuth()
   @ApiParam({ name: 'batchId', description: 'Bulk batch ID' })
   @ApiOperation({ summary: 'Get bulk batch status (dashboard / JWT auth)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Get bulk batch status (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async getBatchStatusDashboard(
     @Param('batchId') batchId: string,
     @Req() req: Request,

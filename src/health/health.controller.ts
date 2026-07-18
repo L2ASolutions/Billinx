@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags, ApiResponse } from '@nestjs/swagger';
 import { PrismaService } from '../infrastructure/database/prisma.service';
 import { RedisService } from '../shared/redis/redis.service';
 import { getSubmissionQueue } from '../modules/submission/queues/submission.queue';
@@ -15,6 +15,10 @@ export class HealthController {
   @Get('health')
   @ApiOperation({
     summary: 'Health check with latency metrics — used by load balancer',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Health check with latency metrics — used by load balancer',
   })
   async health() {
     const dbStart = Date.now();

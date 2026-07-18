@@ -12,6 +12,7 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiQuery,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import * as ExcelJS from 'exceljs';
@@ -27,7 +28,7 @@ function fmtDate(d: Date): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-@ApiTags('VAT Return')
+@ApiTags('VAT & Compliance')
 @Controller('v1/vat-return')
 export class VatReturnController {
   constructor(private readonly vatReturnService: VatReturnService) {}
@@ -54,9 +55,53 @@ export class VatReturnController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get VAT return summary and schedule previews for a filing period',
+    description:
+      'Aggregates output VAT (from ACCEPTED outbound invoices) and input VAT (from approved incoming ' +
+      'invoices) for the given date range into the NRS VAT 002 schedule structure (Schedules A, B, C2, ' +
+      'D, E, F) — the same data the Excel export (`GET /v1/vat-return/export`) renders into a filled-in ' +
+      'workbook. Read-only preview; does not file anything with FIRS.',
   })
   @ApiQuery({ name: 'startDate', required: true, example: '2026-01-01' })
   @ApiQuery({ name: 'endDate', required: true, example: '2026-03-31' })
+  @ApiResponse({
+    status: 200,
+    description: 'VAT return summary with per-schedule line items',
+    schema: {
+      example: {
+        outputVat: 375000,
+        inputVat: 120000,
+        netVatPayable: 255000,
+        scheduleA: [
+          {
+            customerName: 'Beta Traders Ltd',
+            customerTin: '87654321-0001',
+            productName: 'Consulting services',
+            productCategory: 0,
+            amountExclVat: 5000000,
+          },
+        ],
+        scheduleB: [],
+        scheduleC2: [
+          {
+            sellerName: 'Acme Supplies Ltd',
+            sellerTin: '12345678-0001',
+            productDescription: 'Office equipment',
+            amountExclVat: 1600000,
+            vatStatus: 'VATABLE',
+          },
+        ],
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Missing or invalid startDate/endDate',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
   async getSummary(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
@@ -76,6 +121,15 @@ export class VatReturnController {
   })
   @ApiQuery({ name: 'startDate', required: true, example: '2026-01-01' })
   @ApiQuery({ name: 'endDate', required: true, example: '2026-03-31' })
+  @ApiResponse({
+    status: 200,
+    description: 'Download pre-filled VAT 002 Excel file for a filing period',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
   async exportExcel(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
