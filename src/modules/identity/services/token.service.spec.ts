@@ -33,10 +33,12 @@ beforeAll(() => {
   attackerPrivateKeyPem = attacker.privateKey;
 });
 
-function makeSecrets(overrides: Partial<{
-  getJwtPrivateKey: () => Promise<string>;
-  getJwtPublicKey: () => Promise<string>;
-}> = {}) {
+function makeSecrets(
+  overrides: Partial<{
+    getJwtPrivateKey: () => Promise<string>;
+    getJwtPublicKey: () => Promise<string>;
+  }> = {},
+) {
   return {
     getJwtPrivateKey: jest.fn().mockResolvedValue(testPrivateKeyPem),
     getJwtPublicKey: jest.fn().mockResolvedValue(testPublicKeyPem),
@@ -109,7 +111,10 @@ describe('TokenService', () => {
 
       expect(prisma.__tx.refreshToken.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ tenantId: TENANT_ID, userId: USER_ID }),
+          data: expect.objectContaining({
+            tenantId: TENANT_ID,
+            userId: USER_ID,
+          }),
         }),
       );
       // The raw refresh token must never be persisted — only its bcrypt hash.
@@ -161,7 +166,13 @@ describe('TokenService', () => {
 
     it('(AC5b) rejects a token signed with a symmetric HS256 secret', async () => {
       const hs256Token = jwt.sign(
-        { sub: USER_ID, tenantId: TENANT_ID, environment: 'PRODUCTION', tier: 'STANDARD', role: 'member' },
+        {
+          sub: USER_ID,
+          tenantId: TENANT_ID,
+          environment: 'PRODUCTION',
+          tier: 'STANDARD',
+          role: 'member',
+        },
         'some-symmetric-secret',
         { expiresIn: '15m' },
         // jsonwebtoken defaults to HS256 when given a string secret

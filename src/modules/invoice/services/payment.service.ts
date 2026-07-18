@@ -144,7 +144,12 @@ export class PaymentService {
           );
       } else if (newPaymentStatus === 'PARTIAL') {
         this.interswitchAdapter
-          .updatePaymentStatus(invoice.firsConfirmedIrn, tenantId, 'PARTIAL', newAmountPaid)
+          .updatePaymentStatus(
+            invoice.firsConfirmedIrn,
+            tenantId,
+            'PARTIAL',
+            newAmountPaid,
+          )
           .catch((err) =>
             this.logger.warn(
               `updatePaymentStatus PARTIAL fire-and-forget failed for invoice ${invoiceId}: ${err.message}`,

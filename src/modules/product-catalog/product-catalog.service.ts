@@ -22,9 +22,11 @@ export class ProductCatalogService {
         currency: data.currency ?? 'NGN',
         taxCategoryId: data.taxCategoryId ?? 'STANDARD_VAT',
         isActive: data.isActive !== undefined ? data.isActive : true,
-        stockQuantity: data.stockQuantity !== undefined ? data.stockQuantity : 0,
+        stockQuantity:
+          data.stockQuantity !== undefined ? data.stockQuantity : 0,
         reorderPoint: data.reorderPoint !== undefined ? data.reorderPoint : 0,
-        reorderQuantity: data.reorderQuantity !== undefined ? data.reorderQuantity : 0,
+        reorderQuantity:
+          data.reorderQuantity !== undefined ? data.reorderQuantity : 0,
         stockUnit: data.stockUnit ?? null,
         supplierName: data.supplierName ?? null,
         supplierEmail: data.supplierEmail ?? null,
@@ -38,7 +40,11 @@ export class ProductCatalogService {
       actor: ctx.actor,
       entityType: 'ProductCatalog',
       entityId: product.id,
-      payload: { name: data.name, hsnCode: data.hsnCode, unitPrice: data.unitPrice },
+      payload: {
+        name: data.name,
+        hsnCode: data.hsnCode,
+        unitPrice: data.unitPrice,
+      },
     });
 
     return this.mapProduct(product);
@@ -110,12 +116,28 @@ export class ProductCatalogService {
         taxCategoryId: data.taxCategoryId ?? existing.taxCategoryId,
         isActive:
           data.isActive !== undefined ? data.isActive : existing.isActive,
-        stockQuantity: data.stockQuantity !== undefined ? data.stockQuantity : existing.stockQuantity,
-        reorderPoint: data.reorderPoint !== undefined ? data.reorderPoint : existing.reorderPoint,
-        reorderQuantity: data.reorderQuantity !== undefined ? data.reorderQuantity : existing.reorderQuantity,
-        stockUnit: data.stockUnit !== undefined ? data.stockUnit : existing.stockUnit,
-        supplierName: data.supplierName !== undefined ? data.supplierName : existing.supplierName,
-        supplierEmail: data.supplierEmail !== undefined ? data.supplierEmail : existing.supplierEmail,
+        stockQuantity:
+          data.stockQuantity !== undefined
+            ? data.stockQuantity
+            : existing.stockQuantity,
+        reorderPoint:
+          data.reorderPoint !== undefined
+            ? data.reorderPoint
+            : existing.reorderPoint,
+        reorderQuantity:
+          data.reorderQuantity !== undefined
+            ? data.reorderQuantity
+            : existing.reorderQuantity,
+        stockUnit:
+          data.stockUnit !== undefined ? data.stockUnit : existing.stockUnit,
+        supplierName:
+          data.supplierName !== undefined
+            ? data.supplierName
+            : existing.supplierName,
+        supplierEmail:
+          data.supplierEmail !== undefined
+            ? data.supplierEmail
+            : existing.supplierEmail,
       },
     });
 

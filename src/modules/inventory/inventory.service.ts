@@ -21,7 +21,10 @@ export class InventoryService {
 
   async checkEnabled(tenantId: string): Promise<void> {
     const tenant = await this.prisma.asAdmin((tx) =>
-      tx.tenant.findUnique({ where: { id: tenantId }, select: { inventoryEnabled: true } }),
+      tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { inventoryEnabled: true },
+      }),
     );
     if (!tenant?.inventoryEnabled) {
       throw new ForbiddenException(
@@ -30,7 +33,10 @@ export class InventoryService {
     }
   }
 
-  private computeStatus(product: { stockQuantity: any; reorderPoint: any }): StockStatus {
+  private computeStatus(product: {
+    stockQuantity: any;
+    reorderPoint: any;
+  }): StockStatus {
     const qty = Number(product.stockQuantity);
     const reorder = Number(product.reorderPoint);
     if (qty === 0) return 'OUT_OF_STOCK';
@@ -120,11 +126,7 @@ export class InventoryService {
     return { data, total, page, limit };
   }
 
-  async adjustStock(
-    tenantId: string,
-    productId: string,
-    dto: AdjustStockDto,
-  ) {
+  async adjustStock(tenantId: string, productId: string, dto: AdjustStockDto) {
     await this.checkEnabled(tenantId);
 
     return this.prisma.asAdmin(async (tx) => {
@@ -166,12 +168,18 @@ export class InventoryService {
 
   async deductStock(tenantId: string, invoiceId: string): Promise<void> {
     const tenant = await this.prisma.asAdmin((tx) =>
-      tx.tenant.findUnique({ where: { id: tenantId }, select: { inventoryEnabled: true } }),
+      tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { inventoryEnabled: true },
+      }),
     );
     if (!tenant?.inventoryEnabled) return;
 
     const invoice = await this.prisma.asAdmin((tx) =>
-      tx.invoice.findUnique({ where: { id: invoiceId }, select: { lineItems: true } }),
+      tx.invoice.findUnique({
+        where: { id: invoiceId },
+        select: { lineItems: true },
+      }),
     );
     if (!invoice) return;
 
@@ -226,7 +234,10 @@ export class InventoryService {
 
   async addStock(tenantId: string, incomingInvoiceId: string): Promise<void> {
     const tenant = await this.prisma.asAdmin((tx) =>
-      tx.tenant.findUnique({ where: { id: tenantId }, select: { inventoryEnabled: true, name: true } }),
+      tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { inventoryEnabled: true, name: true },
+      }),
     );
     if (!tenant?.inventoryEnabled) return;
 
@@ -277,7 +288,10 @@ export class InventoryService {
 
   async getLowStockCount(tenantId: string): Promise<number> {
     const tenant = await this.prisma.asAdmin((tx) =>
-      tx.tenant.findUnique({ where: { id: tenantId }, select: { inventoryEnabled: true } }),
+      tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { inventoryEnabled: true },
+      }),
     );
     if (!tenant?.inventoryEnabled) return 0;
 
@@ -288,15 +302,22 @@ export class InventoryService {
       }),
     );
 
-    return products.filter((p) => Number(p.stockQuantity) <= Number(p.reorderPoint)).length;
+    return products.filter(
+      (p) => Number(p.stockQuantity) <= Number(p.reorderPoint),
+    ).length;
   }
 
   async triggerReorder(tenantId: string, productId: string) {
     await this.checkEnabled(tenantId);
 
     const [product, tenant] = await this.prisma.asAdmin(async (tx) => {
-      const p = await tx.productCatalog.findFirst({ where: { id: productId, tenantId } });
-      const t = await tx.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+      const p = await tx.productCatalog.findFirst({
+        where: { id: productId, tenantId },
+      });
+      const t = await tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true },
+      });
       return [p, t] as const;
     });
 
@@ -316,7 +337,9 @@ export class InventoryService {
       stockUnit: product.stockUnit ?? undefined,
     });
 
-    this.logger.log(`Reorder request sent for product ${productId} to ${product.supplierEmail}`);
+    this.logger.log(
+      `Reorder request sent for product ${productId} to ${product.supplierEmail}`,
+    );
 
     return { sent: true, to: product.supplierEmail };
   }

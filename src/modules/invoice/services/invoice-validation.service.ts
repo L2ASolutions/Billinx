@@ -170,8 +170,7 @@ export class InvoiceValidationService {
       throw new BadRequestException('seller.partyName is required');
     if (!dto.buyer?.partyName)
       throw new BadRequestException('buyer.partyName is required');
-    if (!dto.issueDate)
-      throw new BadRequestException('issueDate is required');
+    if (!dto.issueDate) throw new BadRequestException('issueDate is required');
 
     if (
       (dto.invoiceKind === 'B2B' || dto.invoiceKind === 'B2G') &&

@@ -307,7 +307,17 @@ export class UserController {
   @ApiOperation({ summary: 'Update current tenant profile' })
   async updateMyTenant(@Body() body: Record<string, any>) {
     const ctx = getRequestContext();
-    const allowed = ['name', 'telephone', 'phone', 'industry', 'businessDescription', 'bankName', 'bankAccount', 'bankAccountName', 'inventoryEnabled'] as const;
+    const allowed = [
+      'name',
+      'telephone',
+      'phone',
+      'industry',
+      'businessDescription',
+      'bankName',
+      'bankAccount',
+      'bankAccountName',
+      'inventoryEnabled',
+    ] as const;
     const data: Record<string, any> = {};
     for (const key of allowed) {
       if (body[key] !== undefined) data[key] = body[key];
@@ -316,11 +326,21 @@ export class UserController {
       data.taxRepresentative = body.taxRepresentative;
     }
     // Merge address sub-fields into registeredAddress Json
-    const addressFields = ['state', 'lga', 'postalZone', 'city', 'country', 'street'];
+    const addressFields = [
+      'state',
+      'lga',
+      'postalZone',
+      'city',
+      'country',
+      'street',
+    ];
     const hasAddressField = addressFields.some((f) => body[f] !== undefined);
     if (hasAddressField) {
       const tenant = await this.prisma.asAdmin((tx) =>
-        tx.tenant.findUniqueOrThrow({ where: { id: ctx.tenantId }, select: { registeredAddress: true } }),
+        tx.tenant.findUniqueOrThrow({
+          where: { id: ctx.tenantId },
+          select: { registeredAddress: true },
+        }),
       );
       const existing = (tenant.registeredAddress as Record<string, any>) ?? {};
       const patch: Record<string, any> = {};
@@ -337,17 +357,33 @@ export class UserController {
   // ── Dashboard visibility (JWT auth) ─────────────────────────────────────
 
   private static readonly VISIBILITY_SECTIONS = [
-    'receivables', 'vat_strip', 'revenue_chart', 'pipeline_chart', 'activity_chart', 'needs_attention',
+    'receivables',
+    'vat_strip',
+    'revenue_chart',
+    'pipeline_chart',
+    'activity_chart',
+    'needs_attention',
   ] as const;
 
-  private static readonly VISIBILITY_DEFAULTS: Record<string, Record<string, boolean>> = {
+  private static readonly VISIBILITY_DEFAULTS: Record<
+    string,
+    Record<string, boolean>
+  > = {
     VIEWER: {
-      receivables: false, vat_strip: false, revenue_chart: false,
-      pipeline_chart: true, activity_chart: true, needs_attention: true,
+      receivables: false,
+      vat_strip: false,
+      revenue_chart: false,
+      pipeline_chart: true,
+      activity_chart: true,
+      needs_attention: true,
     },
     ACCOUNTANT: {
-      receivables: true, vat_strip: true, revenue_chart: true,
-      pipeline_chart: true, activity_chart: true, needs_attention: true,
+      receivables: true,
+      vat_strip: true,
+      revenue_chart: true,
+      pipeline_chart: true,
+      activity_chart: true,
+      needs_attention: true,
     },
   };
 
@@ -355,13 +391,21 @@ export class UserController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'VIEWER')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get dashboard section visibility settings for all roles' })
+  @ApiOperation({
+    summary: 'Get dashboard section visibility settings for all roles',
+  })
   async getDashboardVisibility() {
     const ctx = getRequestContext();
     const tenant = await this.prisma.asAdmin((tx) =>
-      tx.tenant.findUniqueOrThrow({ where: { id: ctx.tenantId }, select: { dashboardVisibility: true } }),
+      tx.tenant.findUniqueOrThrow({
+        where: { id: ctx.tenantId },
+        select: { dashboardVisibility: true },
+      }),
     );
-    const stored = (tenant.dashboardVisibility ?? {}) as Record<string, Record<string, boolean>>;
+    const stored = (tenant.dashboardVisibility ?? {}) as Record<
+      string,
+      Record<string, boolean>
+    >;
     const result: Record<string, Record<string, boolean>> = {};
     for (const role of ['VIEWER', 'ACCOUNTANT']) {
       const defaults = UserController.VISIBILITY_DEFAULTS[role];
@@ -375,33 +419,56 @@ export class UserController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles('OWNER', 'ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update a single dashboard section visibility for a role' })
+  @ApiOperation({
+    summary: 'Update a single dashboard section visibility for a role',
+  })
   async updateDashboardVisibility(@Body() body: Record<string, any>) {
     const { role, section, visible } = body;
     if (!['VIEWER', 'ACCOUNTANT'].includes(role)) {
       throw new BadRequestException('role must be VIEWER or ACCOUNTANT');
     }
-    if (!(UserController.VISIBILITY_SECTIONS as readonly string[]).includes(section)) {
-      throw new BadRequestException(`section must be one of: ${UserController.VISIBILITY_SECTIONS.join(', ')}`);
+    if (
+      !(UserController.VISIBILITY_SECTIONS as readonly string[]).includes(
+        section,
+      )
+    ) {
+      throw new BadRequestException(
+        `section must be one of: ${UserController.VISIBILITY_SECTIONS.join(', ')}`,
+      );
     }
     if (typeof visible !== 'boolean') {
       throw new BadRequestException('visible must be a boolean');
     }
     const ctx = getRequestContext();
     const tenant = await this.prisma.asAdmin((tx) =>
-      tx.tenant.findUniqueOrThrow({ where: { id: ctx.tenantId }, select: { dashboardVisibility: true } }),
+      tx.tenant.findUniqueOrThrow({
+        where: { id: ctx.tenantId },
+        select: { dashboardVisibility: true },
+      }),
     );
-    const stored = (tenant.dashboardVisibility ?? {}) as Record<string, Record<string, boolean>>;
+    const stored = (tenant.dashboardVisibility ?? {}) as Record<
+      string,
+      Record<string, boolean>
+    >;
     const updated = {
       ...stored,
       [role]: { ...(stored[role] ?? {}), [section]: visible },
     };
     await this.prisma.asAdmin((tx) =>
-      tx.tenant.update({ where: { id: ctx.tenantId }, data: { dashboardVisibility: updated } }),
+      tx.tenant.update({
+        where: { id: ctx.tenantId },
+        data: { dashboardVisibility: updated },
+      }),
     );
     const defaults = UserController.VISIBILITY_DEFAULTS[role] ?? {};
-    const roleOverrides = (updated as Record<string, Record<string, boolean>>)[role] ?? {};
-    return { role, section, visible, effective: { ...defaults, ...roleOverrides } };
+    const roleOverrides =
+      (updated as Record<string, Record<string, boolean>>)[role] ?? {};
+    return {
+      role,
+      section,
+      visible,
+      effective: { ...defaults, ...roleOverrides },
+    };
   }
 
   @Get('users')

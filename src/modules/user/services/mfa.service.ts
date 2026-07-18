@@ -220,14 +220,14 @@ export class MfaService {
 
   async issueMfaToken(userId: string, tenantId: string): Promise<string> {
     const secret = await this.getMfaChallengeSecret();
-    return jwt.sign(
-      { sub: userId, tenantId, isMfaToken: true },
-      secret,
-      { expiresIn: MFA_TOKEN_TTL },
-    );
+    return jwt.sign({ sub: userId, tenantId, isMfaToken: true }, secret, {
+      expiresIn: MFA_TOKEN_TTL,
+    });
   }
 
-  async verifyMfaToken(token: string): Promise<{ userId: string; tenantId: string }> {
+  async verifyMfaToken(
+    token: string,
+  ): Promise<{ userId: string; tenantId: string }> {
     const secret = await this.getMfaChallengeSecret();
     try {
       const payload = jwt.verify(token, secret) as any;
@@ -344,6 +344,9 @@ export class MfaService {
 
   private async getMfaChallengeSecret(): Promise<string> {
     const key = await this.secrets.getMasterEncryptionKey();
-    return crypto.createHmac('sha256', key).update('mfa-challenge').digest('hex');
+    return crypto
+      .createHmac('sha256', key)
+      .update('mfa-challenge')
+      .digest('hex');
   }
 }

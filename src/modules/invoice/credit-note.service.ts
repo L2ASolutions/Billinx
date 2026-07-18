@@ -31,7 +31,8 @@ export class CreditNoteService {
     });
 
     if (!invoice) throw new NotFoundException('Invoice not found');
-    if (invoice.tenantId !== tenantId) throw new ForbiddenException('Access denied');
+    if (invoice.tenantId !== tenantId)
+      throw new ForbiddenException('Access denied');
 
     const meta: any = (invoice.metadata as any) ?? {};
     const buyerParty: any = meta.buyerParty ?? {};
@@ -51,11 +52,7 @@ export class CreditNoteService {
     });
   }
 
-  async findByPeriod(
-    tenantId: string,
-    startDate: Date,
-    endDate: Date,
-  ) {
+  async findByPeriod(tenantId: string, startDate: Date, endDate: Date) {
     return this.prisma.creditNote.findMany({
       where: {
         tenantId,

@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { Worker, Job } from 'bullmq';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
 import { NotificationService } from '../notification/notification.service';
@@ -7,8 +12,18 @@ import { redisConnection } from '../submission/queues/submission.queue';
 import { VAT_REMINDER_QUEUE } from './vat-reminder.queue';
 
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 @Injectable()
@@ -45,7 +60,8 @@ export class VatReminderProcessor implements OnModuleInit, OnModuleDestroy {
     const now = new Date();
     // Filing period = previous calendar month
     const periodMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-    const periodYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    const periodYear =
+      now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
     const filingPeriod = `${MONTHS[periodMonth]} ${periodYear}`;
     // Due date = 21st of current month
     const dueDate = `21 ${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
@@ -73,7 +89,14 @@ export class VatReminderProcessor implements OnModuleInit, OnModuleDestroy {
             role: { in: ['OWNER', 'ADMIN'] },
           },
           include: {
-            user: { select: { id: true, email: true, firstName: true, isActive: true } },
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                isActive: true,
+              },
+            },
           },
         }),
       );
@@ -82,11 +105,12 @@ export class VatReminderProcessor implements OnModuleInit, OnModuleDestroy {
         const user = ur.user;
         if (!user.isActive) continue;
 
-        const alreadySent = await this.notificationService.hasUnreadOfTypeForPeriod(
-          user.id,
-          'VAT_REMINDER',
-          filingPeriod,
-        );
+        const alreadySent =
+          await this.notificationService.hasUnreadOfTypeForPeriod(
+            user.id,
+            'VAT_REMINDER',
+            filingPeriod,
+          );
         if (alreadySent) continue;
 
         await this.notificationService.create({

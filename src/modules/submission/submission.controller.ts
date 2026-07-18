@@ -1,5 +1,10 @@
 import { Controller, Get, Query, Req, Res, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
@@ -22,7 +27,9 @@ export class SubmissionController {
   @ApiBearerAuth()
   @ApiQuery({ name: 'startDate', required: false })
   @ApiQuery({ name: 'endDate', required: false })
-  @ApiOperation({ summary: 'Export submission attempts as Excel (dashboard / JWT auth)' })
+  @ApiOperation({
+    summary: 'Export submission attempts as Excel (dashboard / JWT auth)',
+  })
   async exportSubmissions(
     @Req() req: Request,
     @Res() res: Response,
@@ -60,16 +67,16 @@ export class SubmissionController {
 
     const sheet = workbook.addWorksheet('Submissions');
     sheet.columns = [
-      { header: 'Invoice #',      key: 'invoiceIrn',    width: 32 },
-      { header: 'Submission Date', key: 'submittedAt',  width: 22 },
-      { header: 'Attempt #',      key: 'attempt',       width: 10 },
-      { header: 'Adapter',        key: 'adapter',       width: 14 },
-      { header: 'Success',        key: 'success',       width: 10 },
-      { header: 'Response Code',  key: 'responseCode',  width: 16 },
-      { header: 'IRN',            key: 'irn',           width: 32 },
-      { header: 'Error Code',     key: 'errorCode',     width: 16 },
-      { header: 'Error Message',  key: 'errorMessage',  width: 40 },
-      { header: 'Duration (ms)',  key: 'durationMs',    width: 14 },
+      { header: 'Invoice #', key: 'invoiceIrn', width: 32 },
+      { header: 'Submission Date', key: 'submittedAt', width: 22 },
+      { header: 'Attempt #', key: 'attempt', width: 10 },
+      { header: 'Adapter', key: 'adapter', width: 14 },
+      { header: 'Success', key: 'success', width: 10 },
+      { header: 'Response Code', key: 'responseCode', width: 16 },
+      { header: 'IRN', key: 'irn', width: 32 },
+      { header: 'Error Code', key: 'errorCode', width: 16 },
+      { header: 'Error Message', key: 'errorMessage', width: 40 },
+      { header: 'Duration (ms)', key: 'durationMs', width: 14 },
     ];
 
     const headerRow = sheet.getRow(1);
@@ -93,16 +100,16 @@ export class SubmissionController {
       const succeeded = a.succeededAt != null;
       const failed = a.failedAt != null;
       sheet.addRow({
-        invoiceIrn:   (a.invoice as any)?.platformIrn ?? '',
-        submittedAt:  fmtDate(a.createdAt),
-        attempt:      a.attemptNumber,
-        adapter:      a.adapterKey,
-        success:      succeeded ? 'Yes' : 'No',
+        invoiceIrn: (a.invoice as any)?.platformIrn ?? '',
+        submittedAt: fmtDate(a.createdAt),
+        attempt: a.attemptNumber,
+        adapter: a.adapterKey,
+        success: succeeded ? 'Yes' : 'No',
         responseCode: a.responseCode ?? '',
-        irn:          succeeded ? ((a.invoice as any)?.firsConfirmedIrn ?? '') : '',
-        errorCode:    failed ? (a.errorCode ?? '') : '',
+        irn: succeeded ? ((a.invoice as any)?.firsConfirmedIrn ?? '') : '',
+        errorCode: failed ? (a.errorCode ?? '') : '',
         errorMessage: failed ? (a.errorMessage ?? '') : '',
-        durationMs:   a.durationMs ?? '',
+        durationMs: a.durationMs ?? '',
       });
     }
 

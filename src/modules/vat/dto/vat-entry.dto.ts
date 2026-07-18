@@ -13,7 +13,9 @@ export class VatEntryFilterDto {
   @IsString()
   period?: string;
 
-  @ApiPropertyOptional({ enum: ['UNRECONCILED', 'RECONCILED', 'DISPUTED', 'EXEMPT'] })
+  @ApiPropertyOptional({
+    enum: ['UNRECONCILED', 'RECONCILED', 'DISPUTED', 'EXEMPT'],
+  })
   @IsOptional()
   @IsIn(['UNRECONCILED', 'RECONCILED', 'DISPUTED', 'EXEMPT'])
   status?: string;

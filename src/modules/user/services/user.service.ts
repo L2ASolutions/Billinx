@@ -649,10 +649,7 @@ export class UserService {
   }
 
   // â"€â"€ Remove role â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-  async removeRole(
-    userId: string,
-    role: UserRoleType,
-  ): Promise<UserResponse> {
+  async removeRole(userId: string, role: UserRoleType): Promise<UserResponse> {
     const user = await this.userRepository.findById(userId);
     if (!user) throw new NotFoundException('User not found');
 
@@ -841,13 +838,16 @@ export class UserService {
     return this.consentService.requestErasure({ userId, tenantId, email });
   }
 
-  async getPreferences(userId: string): Promise<{ dashboardWidgets: Record<string, boolean>; hidden: string[] }> {
+  async getPreferences(
+    userId: string,
+  ): Promise<{ dashboardWidgets: Record<string, boolean>; hidden: string[] }> {
     const row = await this.prisma.asAdmin((tx) =>
       tx.userPreference.findUnique({ where: { userId } }),
     );
     const prefs = (row?.preferences as Record<string, unknown>) ?? {};
     return {
-      dashboardWidgets: (prefs.dashboardWidgets as Record<string, boolean>) ?? {},
+      dashboardWidgets:
+        (prefs.dashboardWidgets as Record<string, boolean>) ?? {},
       hidden: (prefs.hidden as string[]) ?? [],
     };
   }
@@ -872,7 +872,8 @@ export class UserService {
     );
 
     return {
-      dashboardWidgets: (merged.dashboardWidgets as Record<string, boolean>) ?? {},
+      dashboardWidgets:
+        (merged.dashboardWidgets as Record<string, boolean>) ?? {},
       hidden: (merged.hidden as string[]) ?? [],
     };
   }

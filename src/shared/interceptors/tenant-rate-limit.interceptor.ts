@@ -40,7 +40,9 @@ export class TenantRateLimitInterceptor implements NestInterceptor {
 
     const isJwtUser = ctx.actorType === 'user';
     const tier: string = ctx.tier ?? 'STANDARD';
-    const limit = isJwtUser ? JWT_LIMIT : (TIER_LIMITS[tier] ?? TIER_LIMITS.STANDARD);
+    const limit = isJwtUser
+      ? JWT_LIMIT
+      : (TIER_LIMITS[tier] ?? TIER_LIMITS.STANDARD);
     const hourBucket = Math.floor(Date.now() / (WINDOW_SECS * 1000));
     // Separate Redis keys so JWT dashboard calls never consume API key quota
     const key = isJwtUser

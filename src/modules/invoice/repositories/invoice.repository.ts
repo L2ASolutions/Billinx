@@ -84,7 +84,13 @@ export class InvoiceRepository {
     }
     if (filters.forPayments) {
       where.status = {
-        notIn: ['DRAFT', 'CANCELLED', 'VALIDATION_FAILED', 'SUBMISSION_FAILED', 'DEAD_LETTERED'] as any[],
+        notIn: [
+          'DRAFT',
+          'CANCELLED',
+          'VALIDATION_FAILED',
+          'SUBMISSION_FAILED',
+          'DEAD_LETTERED',
+        ] as any[],
       };
       where.NOT = {
         AND: [
@@ -104,7 +110,9 @@ export class InvoiceRepository {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          creditNotes: { select: { id: true, originalAmount: true, adjustedAmount: true } },
+          creditNotes: {
+            select: { id: true, originalAmount: true, adjustedAmount: true },
+          },
         },
       });
       const total = await tx.invoice.count({ where });

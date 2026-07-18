@@ -46,7 +46,9 @@ export class AnalyticsService {
       for (const line of lines) {
         const name: string = line.description ?? line.itemName ?? 'Unknown';
         const qty = Number(line.quantity ?? 1);
-        const revenue = Number(line.lineExtensionAmount ?? line.taxInclusiveAmount ?? 0);
+        const revenue = Number(
+          line.lineExtensionAmount ?? line.taxInclusiveAmount ?? 0,
+        );
         const hsn: string = line.hsnCode ?? '';
 
         const key = name.toLowerCase();
@@ -78,7 +80,8 @@ export class AnalyticsService {
         totalQuantity: item.totalQuantity,
         totalRevenue: item.totalRevenue,
         invoiceCount: item.invoiceCount,
-        averagePrice: item.totalUnits > 0 ? item.totalRevenue / item.totalUnits : 0,
+        averagePrice:
+          item.totalUnits > 0 ? item.totalRevenue / item.totalUnits : 0,
       }));
   }
 
@@ -142,7 +145,8 @@ export class AnalyticsService {
         totalQuantity: item.totalQuantity,
         totalSpend: item.totalSpend,
         invoiceCount: item.invoiceCount,
-        averagePrice: item.totalQuantity > 0 ? item.totalSpend / item.totalQuantity : 0,
+        averagePrice:
+          item.totalQuantity > 0 ? item.totalSpend / item.totalQuantity : 0,
       }));
   }
 
@@ -264,7 +268,9 @@ export class AnalyticsService {
       where: { tenantId, createdAt: { gte: since } },
       select: {
         createdAt: true,
-        items: { select: { description: true, quantity: true, lineAmount: true } },
+        items: {
+          select: { description: true, quantity: true, lineAmount: true },
+        },
       },
     });
 
@@ -287,7 +293,11 @@ export class AnalyticsService {
           existing.totalQty += qty;
           existing.invoiceCount += 1;
         } else {
-          periodMap.set(period, { totalPrice: spend, totalQty: qty, invoiceCount: 1 });
+          periodMap.set(period, {
+            totalPrice: spend,
+            totalQty: qty,
+            invoiceCount: 1,
+          });
         }
       }
     }
@@ -313,11 +323,18 @@ export class AnalyticsService {
     for (let i = months - 1; i >= 0; i--) {
       const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-      const label = start.toLocaleString('en-NG', { month: 'short', year: 'numeric' });
+      const label = start.toLocaleString('en-NG', {
+        month: 'short',
+        year: 'numeric',
+      });
 
       const [revenueAgg, expensesAgg] = await Promise.all([
         (this.prisma as any).invoice.aggregate({
-          where: { tenantId, status: 'ACCEPTED', createdAt: { gte: start, lt: end } },
+          where: {
+            tenantId,
+            status: 'ACCEPTED',
+            createdAt: { gte: start, lt: end },
+          },
           _sum: { totalAmount: true },
         }),
         (this.prisma as any).incomingInvoice.aggregate({

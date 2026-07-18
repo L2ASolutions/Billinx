@@ -55,17 +55,18 @@ export class IncomingInvoiceController {
   @ApiOperation({ summary: 'Create an incoming invoice manually' })
   @ApiResponse({ status: 201, description: 'Invoice created' })
   @ApiResponse({ status: 409, description: 'Duplicate invoice' })
-  async create(
-    @Body() dto: CreateIncomingInvoiceDto,
-    @Req() req: Request,
-  ) {
+  async create(@Body() dto: CreateIncomingInvoiceDto, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.incomingInvoiceService.create(ctx.tenantId, dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List incoming invoices with optional filters' })
-  @ApiQuery({ name: 'status', required: false, enum: ['RECEIVED', 'VALIDATED', 'REJECTED', 'APPROVED', 'PAID'] })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['RECEIVED', 'VALIDATED', 'REJECTED', 'APPROVED', 'PAID'],
+  })
   @ApiQuery({ name: 'supplierTin', required: false })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -111,7 +112,9 @@ export class IncomingInvoiceController {
 
   @Patch(':id/approve')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Approve an incoming invoice (OWNER or ADMIN only)' })
+  @ApiOperation({
+    summary: 'Approve an incoming invoice (OWNER or ADMIN only)',
+  })
   @ApiResponse({ status: 403, description: 'Requires OWNER or ADMIN role' })
   async approve(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
@@ -152,9 +155,13 @@ export class IncomingInvoiceController {
 
   @Post(':id/attachment')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Upload a document attachment to an incoming invoice' })
+  @ApiOperation({
+    summary: 'Upload a document attachment to an incoming invoice',
+  })
   @ApiResponse({ status: 200, description: 'Attachment stored' })
   @ApiResponse({ status: 400, description: 'Invalid file type or size' })
   async uploadAttachment(
@@ -183,7 +190,8 @@ export class IncomingInvoiceController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
     const ctx = this.getCtx(req);
-    const { data, name, mime } = await this.incomingInvoiceService.getAttachment(id, ctx.tenantId);
+    const { data, name, mime } =
+      await this.incomingInvoiceService.getAttachment(id, ctx.tenantId);
     res.set({
       'Content-Type': mime,
       'Content-Disposition': `attachment; filename="${name}"`,

@@ -106,21 +106,16 @@ describe('InvoiceValidationService', () => {
   // ── 6. VALIDATE: credit/debit note missing originalIrn → ERROR ───────────────
   //      Checks all four code forms (380, 384, CREDIT_NOTE, DEBIT_NOTE)
 
-  it.each([
-    ['380'],
-    ['384'],
-    ['CREDIT_NOTE'],
-    ['DEBIT_NOTE'],
-  ])(
+  it.each([['380'], ['384'], ['CREDIT_NOTE'], ['DEBIT_NOTE']])(
     'VALIDATE: returns MISSING_ORIGINAL_IRN for invoiceTypeCode=%s without originalIrn',
     (invoiceTypeCode) => {
       const result = service.validateInvoiceFields(
         { ...validBase, invoiceTypeCode, originalIrn: undefined },
         'VALIDATE',
       );
-      expect(
-        result.errors.some((e) => e.code === 'MISSING_ORIGINAL_IRN'),
-      ).toBe(true);
+      expect(result.errors.some((e) => e.code === 'MISSING_ORIGINAL_IRN')).toBe(
+        true,
+      );
     },
   );
 
@@ -129,9 +124,9 @@ describe('InvoiceValidationService', () => {
       { ...validBase, invoiceTypeCode: 'STANDARD', originalIrn: undefined },
       'VALIDATE',
     );
-    expect(
-      result.errors.some((e) => e.code === 'MISSING_ORIGINAL_IRN'),
-    ).toBe(false);
+    expect(result.errors.some((e) => e.code === 'MISSING_ORIGINAL_IRN')).toBe(
+      false,
+    );
   });
 
   // ── 7. VALIDATE: missing hsnCode → WARNING, not error ────────────────────────
@@ -194,19 +189,13 @@ describe('InvoiceValidationService', () => {
 
   it('SUBMIT: throws when lineItems is empty', () => {
     expect(() =>
-      service.validateInvoiceFields(
-        { ...validBase, lineItems: [] },
-        'SUBMIT',
-      ),
+      service.validateInvoiceFields({ ...validBase, lineItems: [] }, 'SUBMIT'),
     ).toThrow(BadRequestException);
   });
 
   it('SUBMIT: throws when totalAmount is zero', () => {
     expect(() =>
-      service.validateInvoiceFields(
-        { ...validBase, totalAmount: 0 },
-        'SUBMIT',
-      ),
+      service.validateInvoiceFields({ ...validBase, totalAmount: 0 }, 'SUBMIT'),
     ).toThrow(BadRequestException);
   });
 

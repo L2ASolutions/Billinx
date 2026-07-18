@@ -288,18 +288,28 @@ export class SubmissionService {
     });
 
     if (this.clientService) {
-      const fullInvoice = await this.prisma.invoice.findUnique({ where: { id: invoiceId } });
+      const fullInvoice = await this.prisma.invoice.findUnique({
+        where: { id: invoiceId },
+      });
       if (fullInvoice) {
-        this.clientService.syncFromInvoice(tenantId, fullInvoice).catch((err) =>
-          this.logger.warn(`Client sync failed for invoice ${invoiceId}: ${err.message}`),
-        );
+        this.clientService
+          .syncFromInvoice(tenantId, fullInvoice)
+          .catch((err) =>
+            this.logger.warn(
+              `Client sync failed for invoice ${invoiceId}: ${err.message}`,
+            ),
+          );
       }
     }
 
     if (this.inventoryService) {
-      this.inventoryService.deductStock(tenantId, invoiceId).catch((err) =>
-        this.logger.warn(`Stock deduct failed for invoice ${invoiceId}: ${err.message}`),
-      );
+      this.inventoryService
+        .deductStock(tenantId, invoiceId)
+        .catch((err) =>
+          this.logger.warn(
+            `Stock deduct failed for invoice ${invoiceId}: ${err.message}`,
+          ),
+        );
     }
 
     this.logger.log(

@@ -34,7 +34,9 @@ export class CreditNoteController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Issue a credit note against an accepted invoice (VAT Schedule B)' })
+  @ApiOperation({
+    summary: 'Issue a credit note against an accepted invoice (VAT Schedule B)',
+  })
   async createCreditNote(
     @Param('id') invoiceId: string,
     @Body()
@@ -67,7 +69,9 @@ export class CreditNoteController {
   @UseGuards(JwtGuard, RolesGuard)
   @Roles('OWNER', 'ADMIN', 'ACCOUNTANT', 'VIEWER')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List credit notes by date range for VAT return Schedule B' })
+  @ApiOperation({
+    summary: 'List credit notes by date range for VAT return Schedule B',
+  })
   @ApiQuery({ name: 'startDate', required: true, example: '2026-01-01' })
   @ApiQuery({ name: 'endDate', required: true, example: '2026-03-31' })
   async listCreditNotes(
