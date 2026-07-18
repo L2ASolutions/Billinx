@@ -248,14 +248,6 @@ describe('InvoiceDashboardController', () => {
     expect(invoiceService.getInvoice).toHaveBeenCalledWith('inv-1', 'tenant-1');
   });
 
-  it('getDashboardInvoiceXml delegates to exportAsXml', async () => {
-    await controller.getDashboardInvoiceXml('inv-1', makeReq());
-    expect(invoiceService.exportAsXml).toHaveBeenCalledWith(
-      'inv-1',
-      'tenant-1',
-    );
-  });
-
   it('getDashboardInvoicePdf delegates to InvoicePdfService and streams the buffer', async () => {
     const res = makeRes();
     await controller.getDashboardInvoicePdf('inv-1', makeReq(), res);

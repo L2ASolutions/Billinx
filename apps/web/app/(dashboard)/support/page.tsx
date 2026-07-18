@@ -36,7 +36,7 @@ export default function SupportPage() {
 
       <div className="p-6 max-w-4xl space-y-6">
         {/* Contact cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Documentation */}
           <a
             href="https://docs.billinx.ng"
@@ -59,33 +59,6 @@ export default function SupportPage() {
               </svg>
             </div>
           </a>
-
-          {/* Live chat */}
-          <button
-            onClick={() => {
-              // Opens live chat widget if available
-              if (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).Intercom) {
-                ((window as unknown as Record<string, unknown>).Intercom as (cmd: string) => void)('show');
-              } else {
-                window.location.href = 'mailto:support@billinx.ng?subject=Live%20Chat%20Request';
-              }
-            }}
-            className="text-left bg-white rounded-xl border border-border p-6 hover:shadow-sm transition-shadow group"
-          >
-            <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center mb-4">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            </div>
-            <h3 className="font-semibold text-dark mb-1 group-hover:text-green transition-colors">Live chat</h3>
-            <p className="text-sm text-muted">Chat with our support team — available Mon–Fri 9am–6pm WAT</p>
-            <div className="mt-4 flex items-center gap-1 text-sm text-green font-medium">
-              Start chat
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            </div>
-          </button>
 
           {/* Email support */}
           <a

@@ -2,6 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { adminApi } from "@/lib/api";
+import { Input } from "@/components/ui/Input";
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 interface QueueStatus {
   waiting: number;
@@ -123,6 +133,14 @@ export default function AdminSystemPage() {
   const [retentionResult, setRetentionResult] = useState("");
   const [auditLoading, setAuditLoading] = useState(false);
 
+  // Platform CSV export
+  const today = new Date().toISOString().slice(0, 10);
+  const firstOfMonth = today.slice(0, 7) + "-01";
+  const [exportStartDate, setExportStartDate] = useState(firstOfMonth);
+  const [exportEndDate, setExportEndDate] = useState(today);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportResult, setExportResult] = useState("");
+
   async function loadAll() {
     setLoading(true);
     setError("");
@@ -211,6 +229,20 @@ export default function AdminSystemPage() {
       setAudit({ valid: false, totalEvents: 0, message: err instanceof Error ? err.message : "Verification failed" });
     } finally {
       setAuditLoading(false);
+    }
+  }
+
+  async function handleExportPlatformCsv() {
+    setExportLoading(true);
+    setExportResult("");
+    try {
+      const { blob, filename } = await adminApi.exportPlatformCsv(exportStartDate, exportEndDate);
+      downloadBlob(blob, filename || `platform-invoices-${exportStartDate}-to-${exportEndDate}.csv`);
+      setExportResult("Download started");
+    } catch (err: unknown) {
+      setExportResult(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExportLoading(false);
     }
   }
 
@@ -354,6 +386,28 @@ export default function AdminSystemPage() {
             onAction={handleVerifyAudit}
             loading={auditLoading}
           />
+          <div className="bg-white rounded-xl border border-border p-5">
+            <h3 className="font-semibold text-dark mb-1">Export Platform CSV</h3>
+            <p className="text-sm text-muted mb-4">Export all invoices across every tenant as CSV for a given date range.</p>
+            <div className="flex items-end gap-3 flex-wrap">
+              <div className="w-40">
+                <Input label="Start date" type="date" value={exportStartDate} onChange={(e) => setExportStartDate(e.target.value)} />
+              </div>
+              <div className="w-40">
+                <Input label="End date" type="date" value={exportEndDate} onChange={(e) => setExportEndDate(e.target.value)} />
+              </div>
+              <button
+                disabled={exportLoading}
+                onClick={handleExportPlatformCsv}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-dark text-white hover:bg-dark/90 disabled:opacity-50"
+              >
+                {exportLoading ? "Exporting…" : "Export CSV"}
+              </button>
+              {exportResult && (
+                <span className="text-sm text-muted italic">{exportResult}</span>
+              )}
+            </div>
+          </div>
         </div>
       </section>
     </div>

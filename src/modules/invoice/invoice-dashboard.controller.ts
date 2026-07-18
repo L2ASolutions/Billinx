@@ -11,7 +11,6 @@ import {
   UseGuards,
   Req,
   Res,
-  Header,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -408,25 +407,6 @@ export class InvoiceDashboardController {
   async getDashboardInvoice(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.getInvoice(id, ctx.tenantId);
-  }
-
-  @Get(':id/xml')
-  @UseGuards(JwtGuard)
-  @ApiBearerAuth()
-  @Header('Content-Type', 'application/xml')
-  @ApiProduces('application/xml')
-  @ApiOperation({
-    summary: 'Download invoice as NRS XML (dashboard / JWT auth)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Download invoice as NRS XML (dashboard / JWT auth)',
-  })
-  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
-  @ApiResponse({ status: 404, description: 'Resource not found' })
-  async getDashboardInvoiceXml(@Param('id') id: string, @Req() req: Request) {
-    const ctx = this.getCtx(req);
-    return this.invoiceService.exportAsXml(id, ctx.tenantId);
   }
 
   @Get(':id/pdf')
