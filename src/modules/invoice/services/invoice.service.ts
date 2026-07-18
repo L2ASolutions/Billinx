@@ -114,6 +114,9 @@ export class InvoiceService {
         originalIrn: request.originalIrn,
         lineItems: request.lineItems,
         totalAmount: request.legalMonetaryTotal?.payableAmount,
+        legalMonetaryTotal: request.legalMonetaryTotal,
+        taxTotal: request.taxTotal,
+        paymentStatus: request.paymentStatus,
       },
       'CREATE',
     );
@@ -135,9 +138,12 @@ export class InvoiceService {
       issueDate: new Date(request.issueDate),
       dueDate: request.dueDate ? new Date(request.dueDate) : null,
       paymentDueDate: request.dueDate ? new Date(request.dueDate) : null,
+      // Persisted at creation time (not left null for the adapter to
+      // compute transiently at submission) so the stored record always
+      // reflects the actual tax point date used.
       taxPointDate: request.taxPointDate
         ? new Date(request.taxPointDate)
-        : null,
+        : new Date(request.issueDate),
       actualDeliveryDate: request.actualDeliveryDate
         ? new Date(request.actualDeliveryDate)
         : null,
@@ -195,11 +201,11 @@ export class InvoiceService {
         }),
       ),
       invoiceKind: request.invoiceKind ?? null,
-      // Captured now rather than trusting a client-supplied timestamp — this
-      // call queues the invoice for FIRS submission immediately after create,
-      // so "now" is the actual submission moment, not draft-creation time.
-      issueTime: request.issueTime ?? this.captureCurrentTime(),
-      paymentStatus: request.paymentStatus ?? null,
+      // Not auto-captured here — createInvoice() only creates a DRAFT, which
+      // may not be submitted for hours/days. The real submission-time value
+      // is stamped in submitDraft() instead.
+      issueTime: request.issueTime ?? null,
+      paymentStatus: request.paymentStatus ?? 'PENDING',
       originalIrn: request.originalIrn ?? null,
       status: 'DRAFT',
       ...(request.whtApplicable
@@ -314,6 +320,11 @@ export class InvoiceService {
       request.lineItems ?? (invoice.lineItems as any[]) ?? [];
     const effectiveTotal =
       request.legalMonetaryTotal?.payableAmount ?? Number(invoice.totalAmount);
+    const effectiveLegalMonetaryTotal =
+      request.legalMonetaryTotal ?? (invoice.legalMonetaryTotal as any);
+    const effectiveTaxTotal = request.taxTotal ?? (invoice.taxTotal as any[]);
+    const effectivePaymentStatus =
+      request.paymentStatus ?? (invoice as any).paymentStatus;
 
     this.validationService.validateInvoiceFields(
       {
@@ -326,6 +337,9 @@ export class InvoiceService {
         originalIrn: request.originalIrn ?? (invoice as any).originalIrn,
         lineItems: effectiveLineItems,
         totalAmount: effectiveTotal,
+        legalMonetaryTotal: effectiveLegalMonetaryTotal,
+        taxTotal: effectiveTaxTotal,
+        paymentStatus: effectivePaymentStatus,
       },
       'SUBMIT',
     );
@@ -432,6 +446,9 @@ export class InvoiceService {
         originalIrn: request.originalIrn,
         lineItems: request.lineItems,
         totalAmount: request.legalMonetaryTotal?.payableAmount,
+        legalMonetaryTotal: request.legalMonetaryTotal,
+        taxTotal: request.taxTotal,
+        paymentStatus: request.paymentStatus,
       },
       'VALIDATE',
     );
@@ -675,12 +692,12 @@ export class InvoiceService {
           createdAt: true,
         },
       });
-      // paymentStatus is nullable — `{ not: 'PAID' }` excludes NULL rows in
-      // PostgreSQL. Use OR to include invoices that have no payment recorded yet.
+      // paymentStatus is NOT NULL (defaults to PENDING), so `{ not: 'PAID' }`
+      // alone already covers every unpaid invoice.
       const unpaidWhere = {
         tenantId,
         status: 'ACCEPTED' as const,
-        OR: [{ paymentStatus: null }, { paymentStatus: { not: 'PAID' } }],
+        paymentStatus: { not: 'PAID' as const },
       };
       const outstandingAgg = await tx.invoice.aggregate({
         where: unpaidWhere,
@@ -707,7 +724,7 @@ export class InvoiceService {
           tenantId,
           status: 'ACCEPTED',
           whtApplicable: true,
-          OR: [{ paymentStatus: null }, { paymentStatus: { not: 'PAID' } }],
+          paymentStatus: { not: 'PAID' },
         } as any,
         _sum: { whtAmount: true } as any,
       });
@@ -1202,6 +1219,12 @@ export class InvoiceService {
       seller: invoice.metadata?.sellerParty ?? undefined,
       buyer: invoice.metadata?.buyerParty ?? undefined,
       qrCodeBase64: invoice.qrCodeBase64 ?? undefined,
+      lastNrsStatusUpdateAt:
+        invoice.lastNrsStatusUpdateAt instanceof Date
+          ? invoice.lastNrsStatusUpdateAt.toISOString()
+          : (invoice.lastNrsStatusUpdateAt ?? undefined),
+      lastNrsStatusUpdateSuccess:
+        invoice.lastNrsStatusUpdateSuccess ?? undefined,
       stateHistory: invoice.stateHistory
         ? (invoice.stateHistory as any[]).map((h) => ({
             fromStatus: h.fromStatus ?? null,
@@ -1319,7 +1342,7 @@ export class InvoiceService {
         JSON.stringify(request.legalMonetaryTotal ?? {}),
       ),
       invoiceKind: request.invoiceKind ?? null,
-      paymentStatus: null,
+      paymentStatus: 'PENDING',
       originalIrn: request.originalIrn ?? null,
       note: request.note ?? null,
       metadata: JSON.parse(
@@ -1513,7 +1536,7 @@ export class InvoiceService {
       issueDate: invoice.issueDate,
       dueDate: invoice.dueDate ?? null,
       status: invoice.status,
-      paymentStatus: invoice.paymentStatus ?? 'UNPAID',
+      paymentStatus: invoice.paymentStatus,
       acceptedAt: invoice.acceptedAt ?? null,
       currency: invoice.currency,
       seller: {
@@ -1596,7 +1619,7 @@ export class InvoiceService {
       vatAmount: Number(original.vatAmount),
       totalAmount: Number(original.totalAmount),
       amountPaid: 0,
-      paymentStatus: null,
+      paymentStatus: 'PENDING',
       lineItems: JSON.parse(JSON.stringify(original.lineItems ?? [])),
       taxTotal: JSON.parse(JSON.stringify(original.taxTotal ?? [])),
       legalMonetaryTotal: JSON.parse(
@@ -1898,7 +1921,7 @@ export class InvoiceService {
 
     const allInvoices: {
       status: string;
-      paymentStatus: string | null;
+      paymentStatus: string;
       isOverdue: boolean;
     }[] = await this.prisma.asAdmin((tx) =>
       (tx as any).invoice.findMany({

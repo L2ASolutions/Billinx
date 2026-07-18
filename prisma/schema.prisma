@@ -47,18 +47,18 @@ model Tenant {
   webhookSubscriptions WebhookSubscription[]
   auditLogs            AuditLog[]
   invoices             Invoice[]
-  activityEvents ActivityEvent[]
-systemErrors   SystemError[]
-users         User[]
-  productCatalog   ProductCatalog[]
-  bulkBatches      BulkBatch[]
-  reminderRules    ReminderRule[]
-  reminderLogs     ReminderLog[]
-  incomingInvoices IncomingInvoice[]
-  vatEntries       VatEntry[]
-  vatPeriodSummaries VatPeriodSummary[]
-  clients            Client[]
-  stockMovements     StockMovement[]
+  activityEvents       ActivityEvent[]
+  systemErrors         SystemError[]
+  users                User[]
+  productCatalog       ProductCatalog[]
+  bulkBatches          BulkBatch[]
+  reminderRules        ReminderRule[]
+  reminderLogs         ReminderLog[]
+  incomingInvoices     IncomingInvoice[]
+  vatEntries           VatEntry[]
+  vatPeriodSummaries   VatPeriodSummary[]
+  clients              Client[]
+  stockMovements       StockMovement[]
 
   @@map("tenants")
 }
@@ -77,7 +77,7 @@ model ApiKey {
   isRevoked    Boolean           @default(false)
   createdAt    DateTime          @default(now())
 
-  tenant       Tenant            @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([keyPrefix])
@@ -86,16 +86,16 @@ model ApiKey {
 }
 
 model RefreshToken {
-  id         String   @id @default(uuid())
-  tenantId   String
-  userId     String
-  tokenHash  String   @unique
-  expiresAt  DateTime
-  isRevoked  Boolean  @default(false)
-  revokedAt  DateTime?
-  createdAt  DateTime @default(now())
+  id        String    @id @default(uuid())
+  tenantId  String
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  isRevoked Boolean   @default(false)
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
 
-  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([userId])
@@ -103,106 +103,108 @@ model RefreshToken {
 }
 
 model AdminKey {
-  id         String   @id @default(uuid())
-  keyHash    String   @unique
-  keyPrefix  String
-  name       String
-  isRevoked  Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  keyHash   String   @unique
+  keyPrefix String
+  name      String
+  isRevoked Boolean  @default(false)
+  createdAt DateTime @default(now())
 
   @@index([keyPrefix])
   @@map("admin_keys")
 }
 
 model IdempotencyRecord {
-  id              String   @id @default(uuid())
-  tenantId        String
-  idempotencyKey  String
-  requestHash     String
-  responseBody    Json
-  responseStatus  Int
-  expiresAt       DateTime
-  createdAt       DateTime @default(now())
+  id             String   @id @default(uuid())
+  tenantId       String
+  idempotencyKey String
+  requestHash    String
+  responseBody   Json
+  responseStatus Int
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
 
   @@unique([tenantId, idempotencyKey])
   @@index([expiresAt])
   @@map("idempotency_records")
 }
 
-  model Invoice {
-  id                    String            @id @default(uuid())
-  tenantId              String
-  userId                String?
-  environment           TenantEnvironment
-  schemaVersion         String            @default("2.0")
-  invoiceTypeCode       InvoiceTypeCode
-  invoiceKind           InvoiceKind?
-  platformIrn           String            @unique
-  firsConfirmedIrn      String?
-  sourceReference       String?
-  buyerReference        String?
-  orderReference        String?
-  accountingCost        String?
-  sellerTin             String
-  sellerName            String
-  buyerTin              String?
-  buyerName             String
-  issueDate             DateTime
-  issueTime             String?
-  dueDate               DateTime?
-  taxPointDate          DateTime?
-  actualDeliveryDate    DateTime?
-  paymentStatus         String?
-  currency              String            @default("NGN")
-  taxCurrencyCode       String?
-  exchangeRate          Decimal?
-  exchangeRateSource    String?
-  subtotal              Decimal
-  vatAmount             Decimal
-  totalAmount           Decimal
-  lineItems             Json
-  taxTotal              Json
-  legalMonetaryTotal    Json
-  paymentMeans          Json?
-  allowanceCharges      Json?
-  billingReference      Json?
-  documentReferences    Json?
-  invoiceDeliveryPeriod Json?
-  deliveryPeriodStart   DateTime?
-  deliveryPeriodEnd     DateTime?
-  paymentTermsNote      String?
-  note                  String?
-  metadata              Json?
-  originalIrn           String?
-  qrCodeBase64          String?
-  paymentLink           String?
-  buyerEmail            String?
-  status                InvoiceStatus     @default(DRAFT)
-  submittedAt           DateTime?
-  acceptedAt            DateTime?
-  rejectedAt            DateTime?
-  cancelledAt           DateTime?
-  archivedAt            DateTime?
-  isArchived            Boolean           @default(false)
-  amountPaid            Decimal           @default(0)
-  paymentDueDate        DateTime?
-  isOverdue             Boolean           @default(false)
-  overdueAt             DateTime?
-  reminderCount         Int               @default(0)
-  lastReminderAt        DateTime?
-  whtApplicable         Boolean           @default(false)
-  whtRate               Decimal?
-  whtAmount             Decimal?
-  expectedCash          Decimal?
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
+model Invoice {
+  id                         String            @id @default(uuid())
+  tenantId                   String
+  userId                     String?
+  environment                TenantEnvironment
+  schemaVersion              String            @default("2.0")
+  invoiceTypeCode            InvoiceTypeCode
+  invoiceKind                InvoiceKind?
+  platformIrn                String            @unique
+  firsConfirmedIrn           String?
+  sourceReference            String?
+  buyerReference             String?
+  orderReference             String?
+  accountingCost             String?
+  sellerTin                  String
+  sellerName                 String
+  buyerTin                   String?
+  buyerName                  String
+  issueDate                  DateTime
+  issueTime                  String?
+  dueDate                    DateTime?
+  taxPointDate               DateTime?
+  actualDeliveryDate         DateTime?
+  paymentStatus              PaymentStatusType @default(PENDING)
+  currency                   String            @default("NGN")
+  taxCurrencyCode            String?
+  exchangeRate               Decimal?
+  exchangeRateSource         String?
+  subtotal                   Decimal
+  vatAmount                  Decimal
+  totalAmount                Decimal
+  lineItems                  Json
+  taxTotal                   Json
+  legalMonetaryTotal         Json
+  paymentMeans               Json?
+  allowanceCharges           Json?
+  billingReference           Json?
+  documentReferences         Json?
+  invoiceDeliveryPeriod      Json?
+  deliveryPeriodStart        DateTime?
+  deliveryPeriodEnd          DateTime?
+  paymentTermsNote           String?
+  note                       String?
+  metadata                   Json?
+  originalIrn                String?
+  qrCodeBase64               String?
+  paymentLink                String?
+  buyerEmail                 String?
+  status                     InvoiceStatus     @default(DRAFT)
+  submittedAt                DateTime?
+  acceptedAt                 DateTime?
+  rejectedAt                 DateTime?
+  cancelledAt                DateTime?
+  archivedAt                 DateTime?
+  isArchived                 Boolean           @default(false)
+  amountPaid                 Decimal           @default(0)
+  paymentDueDate             DateTime?
+  isOverdue                  Boolean           @default(false)
+  overdueAt                  DateTime?
+  reminderCount              Int               @default(0)
+  lastReminderAt             DateTime?
+  whtApplicable              Boolean           @default(false)
+  whtRate                    Decimal?
+  whtAmount                  Decimal?
+  expectedCash               Decimal?
+  lastNrsStatusUpdateAt      DateTime?
+  lastNrsStatusUpdateSuccess Boolean?
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
 
-  tenant                Tenant            @relation(fields: [tenantId], references: [id])
-  stateHistory          InvoiceStateHistory[]
-  submissionAttempts    SubmissionAttempt[]
-  paymentRecords        PaymentRecord[]
-  reminderLogs          ReminderLog[]
-  creditNotes           CreditNote[]
+  tenant             Tenant                @relation(fields: [tenantId], references: [id])
+  stateHistory       InvoiceStateHistory[]
+  submissionAttempts SubmissionAttempt[]
+  paymentRecords     PaymentRecord[]
+  reminderLogs       ReminderLog[]
+  creditNotes        CreditNote[]
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
@@ -220,7 +222,7 @@ model IdempotencyRecord {
 }
 
 model InvoiceStateHistory {
-  id         String        @id @default(uuid())
+  id         String         @id @default(uuid())
   invoiceId  String
   tenantId   String
   fromStatus InvoiceStatus?
@@ -228,9 +230,9 @@ model InvoiceStateHistory {
   actor      String
   reason     String?
   metadata   Json?
-  createdAt  DateTime      @default(now())
+  createdAt  DateTime       @default(now())
 
-  invoice    Invoice       @relation(fields: [invoiceId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
 
   @@index([invoiceId])
   @@index([tenantId, createdAt])
@@ -238,7 +240,7 @@ model InvoiceStateHistory {
 }
 
 model SubmissionAttempt {
-  id              String   @id @default(uuid())
+  id              String    @id @default(uuid())
   invoiceId       String
   tenantId        String
   adapterKey      String
@@ -251,28 +253,28 @@ model SubmissionAttempt {
   durationMs      Int?
   succeededAt     DateTime?
   failedAt        DateTime?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
 
-  invoice         Invoice  @relation(fields: [invoiceId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
 
   @@index([invoiceId])
   @@map("submission_attempts")
 }
 
 model WebhookSubscription {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   tenantId    String
   url         String
   signingKey  Bytes
   signingIv   Bytes
   eventTypes  String[]
-  isActive    Boolean   @default(true)
+  isActive    Boolean  @default(true)
   description String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  tenant      Tenant    @relation(fields: [tenantId], references: [id])
-  deliveries  WebhookDelivery[]
+  tenant     Tenant            @relation(fields: [tenantId], references: [id])
+  deliveries WebhookDelivery[]
 
   @@index([tenantId])
   @@map("webhook_subscriptions")
@@ -294,7 +296,7 @@ model WebhookDelivery {
   deliveredAt      DateTime?
   createdAt        DateTime              @default(now())
 
-  subscription     WebhookSubscription   @relation(fields: [subscriptionId], references: [id])
+  subscription WebhookSubscription @relation(fields: [subscriptionId], references: [id])
 
   @@index([tenantId, status])
   @@index([nextRetryAt])
@@ -313,7 +315,7 @@ model AuditLog {
   payload    Json
   createdAt  DateTime @default(now())
 
-  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, createdAt])
   @@index([entityType, entityId])
@@ -344,6 +346,17 @@ enum InvoiceKind {
   B2G
 }
 
+enum ProductItemType {
+  PRODUCT
+  SERVICE
+}
+
+enum PaymentStatusType {
+  PENDING
+  PAID
+  PARTIAL
+}
+
 enum InvoiceStatus {
   DRAFT
   VALIDATING
@@ -365,24 +378,25 @@ enum WebhookDeliveryStatus {
   FAILED
   DEAD_LETTERED
 }
+
 // ── ACTIVITY EVENTS ───────────────────────────────────────────────────────────
 model ActivityEvent {
-  id          String            @id @default(uuid())
-  tenantId    String?
-  eventType   ActivityEventType
-  actor       String
-  actorEmail  String?
-  ipAddress   String?
-  userAgent   String?
-  entityType  String?
-  entityId    String?
+  id           String            @id @default(uuid())
+  tenantId     String?
+  eventType    ActivityEventType
+  actor        String
+  actorEmail   String?
+  ipAddress    String?
+  userAgent    String?
+  entityType   String?
+  entityId     String?
   payload      Json
-  occurredAt   DateTime @default(now())
-  isArchived   Boolean  @default(false)
+  occurredAt   DateTime          @default(now())
+  isArchived   Boolean           @default(false)
   entryHash    String?
   previousHash String?
 
-  tenant      Tenant?           @relation(fields: [tenantId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, occurredAt])
   @@index([tenantId, eventType])
@@ -392,28 +406,32 @@ model ActivityEvent {
 
 // ── PRODUCT CATALOG ───────────────────────────────────────────────────────────
 model ProductCatalog {
-  id              String   @id @default(uuid())
+  id              String          @id @default(uuid())
   tenantId        String
   name            String
   description     String?
+  itemType        ProductItemType @default(PRODUCT)
   hsnCode         String?
   productCategory String?
+  isicCode        String?
+  serviceCategory String?
   unitPrice       Decimal
-  currency        String   @default("NGN")
-  taxCategoryId   String   @default("STANDARD_VAT")
-  isActive        Boolean  @default(true)
-  stockQuantity   Decimal  @default(0)
-  reorderPoint    Decimal  @default(0)
-  reorderQuantity Decimal  @default(0)
+  priceUnit       String          @default("EA")
+  currency        String          @default("NGN")
+  taxCategoryId   String          @default("STANDARD_VAT")
+  isActive        Boolean         @default(true)
+  stockQuantity   Decimal         @default(0)
+  reorderPoint    Decimal         @default(0)
+  reorderQuantity Decimal         @default(0)
   stockUnit       String?
   supplierName    String?
   supplierEmail   String?
   lastRestockedAt DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
-  tenant          Tenant         @relation(fields: [tenantId], references: [id])
-  stockMovements  StockMovement[]
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  stockMovements StockMovement[]
 
   @@index([tenantId])
   @@index([tenantId, isActive])
@@ -438,7 +456,7 @@ model SystemError {
   resolutionNote String?
   occurredAt     DateTime      @default(now())
 
-  tenant         Tenant?       @relation(fields: [tenantId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
 
   @@index([isResolved, severity])
   @@index([tenantId, occurredAt])
@@ -447,28 +465,28 @@ model SystemError {
 
 // ── USERS ─────────────────────────────────────────────────────────────────────
 model User {
-  id                   String    @id @default(uuid())
-  tenantId             String
-  email                String
-  passwordHash         String
-  firstName            String
-  lastName             String
-  isActive             Boolean   @default(true)
-  isVerified           Boolean   @default(false)
-  mfaEnabled           Boolean   @default(false)
-  mfaSecret            Bytes?
-  mfaSecretIv          Bytes?
-  mfaBackupCodes       Json?
-  lastLoginAt          DateTime?
-  isErased             Boolean   @default(false)
-  erasureRequestedAt   DateTime?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                 String    @id @default(uuid())
+  tenantId           String
+  email              String
+  passwordHash       String
+  firstName          String
+  lastName           String
+  isActive           Boolean   @default(true)
+  isVerified         Boolean   @default(false)
+  mfaEnabled         Boolean   @default(false)
+  mfaSecret          Bytes?
+  mfaSecretIv        Bytes?
+  mfaBackupCodes     Json?
+  lastLoginAt        DateTime?
+  isErased           Boolean   @default(false)
+  erasureRequestedAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  tenant               Tenant        @relation(fields: [tenantId], references: [id])
-  roles                UserRole[]
-  invitations          UserInvitation[]
-  preference           UserPreference?
+  tenant      Tenant           @relation(fields: [tenantId], references: [id])
+  roles       UserRole[]
+  invitations UserInvitation[]
+  preference  UserPreference?
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -484,7 +502,7 @@ model UserPreference {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@index([tenantId])
   @@map("user_preferences")
@@ -498,7 +516,7 @@ model UserRole {
   role      UserRoleType
   createdAt DateTime     @default(now())
 
-  user      User         @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@unique([userId, role])
   @@index([tenantId])
@@ -507,18 +525,18 @@ model UserRole {
 
 // ── USER INVITATIONS ──────────────────────────────────────────────────────────
 model UserInvitation {
-  id          String       @id @default(uuid())
-  tenantId    String
-  email       String
-  role        UserRoleType
-  token       String       @unique
-  invitedBy   String
-  expiresAt   DateTime
-  acceptedAt  DateTime?
-  isRevoked   Boolean      @default(false)
-  createdAt   DateTime     @default(now())
+  id         String       @id @default(uuid())
+  tenantId   String
+  email      String
+  role       UserRoleType
+  token      String       @unique
+  invitedBy  String
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  isRevoked  Boolean      @default(false)
+  createdAt  DateTime     @default(now())
 
-  invitedByUser User?      @relation(fields: [invitedBy], references: [id])
+  invitedByUser User? @relation(fields: [invitedBy], references: [id])
 
   @@index([tenantId])
   @@index([token])
@@ -527,12 +545,12 @@ model UserInvitation {
 
 // ── PASSWORD RESET TOKENS ─────────────────────────────────────────────────────
 model PasswordResetToken {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String
-  token     String   @unique
+  token     String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([token])
   @@map("password_reset_tokens")
@@ -566,18 +584,18 @@ model AccessRequest {
 
 // ── KYB VERIFICATION ──────────────────────────────────────────────────────────
 model KybVerification {
-  id                  String       @id @default(uuid())
-  accessRequestId     String       @unique
-  tenantId            String?
+  id              String  @id @default(uuid())
+  accessRequestId String  @unique
+  tenantId        String?
 
-  tin                 String
-  tinUserConfirmed    Boolean      @default(false)
-  tinConfirmedAt      DateTime?
-  tinConfirmedIp      String?
-  tinProofNote        String?
+  tin              String
+  tinUserConfirmed Boolean   @default(false)
+  tinConfirmedAt   DateTime?
+  tinConfirmedIp   String?
+  tinProofNote     String?
 
   cacRcNumber         String?
-  cacVerified         Boolean      @default(false)
+  cacVerified         Boolean   @default(false)
   cacVerifiedAt       DateTime?
   cacCompanyName      String?
   cacStatus           String?
@@ -586,31 +604,32 @@ model KybVerification {
   cacRawResponse      Json?
   cacErrorMessage     String?
 
-  nameMatchScore      Float?
-  nameMatchResult     String?
+  nameMatchScore  Float?
+  nameMatchResult String?
 
-  riskScore           KybRiskScore @default(PENDING)
-  riskReasons         Json?
+  riskScore   KybRiskScore @default(PENDING)
+  riskReasons Json?
 
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  accessRequest       AccessRequest @relation(fields: [accessRequestId], references: [id])
+  accessRequest AccessRequest @relation(fields: [accessRequestId], references: [id])
 
   @@map("kyb_verifications")
 }
+
 // ── ADMIN USERS (L2A Solutions staff) ─────────────────────────────────────────
 model AdminUser {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  passwordHash  String
-  firstName     String
-  lastName      String
-  role          AdminRole @default(STAFF)
-  isActive      Boolean   @default(true)
-  lastLoginAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         AdminRole @default(STAFF)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([email])
   @@map("admin_users")
@@ -620,6 +639,7 @@ enum AdminRole {
   SUPER_ADMIN
   STAFF
 }
+
 enum AccessRequestStatus {
   PENDING
   APPROVED
@@ -684,6 +704,7 @@ model ErasureRequest {
   @@index([status])
   @@map("erasure_requests")
 }
+
 enum ActivityEventType {
   USER_LOGIN
   USER_LOGOUT
@@ -759,7 +780,7 @@ model BulkBatch {
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
-  tenant       Tenant            @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@map("bulk_batches")
@@ -772,11 +793,11 @@ enum BulkBatchSource {
 
 // ── PAYMENT RECORDS ───────────────────────────────────────────────────────────
 model PaymentRecord {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   invoiceId        String
   tenantId         String
   amount           Decimal
-  currency         String   @default("NGN")
+  currency         String    @default("NGN")
   paymentReference String
   provider         String
   paidAt           DateTime
@@ -785,10 +806,10 @@ model PaymentRecord {
   notes            String?
   whtDeducted      Decimal?
   metadata         Json?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  invoice          Invoice  @relation(fields: [invoiceId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
 
   @@index([invoiceId])
   @@index([tenantId])
@@ -816,8 +837,8 @@ model ReminderRule {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
-  tenant          Tenant              @relation(fields: [tenantId], references: [id])
-  reminderLogs    ReminderLog[]
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  reminderLogs ReminderLog[]
 
   @@index([tenantId])
   @@index([tenantId, isActive])
@@ -834,9 +855,9 @@ model ReminderLog {
   emailSentTo      String
   webhookDelivered Boolean  @default(false)
 
-  invoice          Invoice       @relation(fields: [invoiceId], references: [id])
-  tenant           Tenant        @relation(fields: [tenantId], references: [id])
-  rule             ReminderRule? @relation(fields: [ruleId], references: [id])
+  invoice Invoice       @relation(fields: [invoiceId], references: [id])
+  tenant  Tenant        @relation(fields: [tenantId], references: [id])
+  rule    ReminderRule? @relation(fields: [ruleId], references: [id])
 
   @@unique([invoiceId, ruleId])
   @@index([tenantId])
@@ -854,67 +875,67 @@ enum IncomingInvoiceStatus {
 }
 
 model IncomingInvoice {
-  id              String                 @id @default(uuid())
+  id              String                @id @default(uuid())
   tenantId        String
   supplierName    String
   supplierTin     String
   invoiceNumber   String
   invoiceAmount   Decimal
   vatAmount       Decimal
-  currency        String                 @default("NGN")
+  currency        String                @default("NGN")
   invoiceDate     DateTime
   dueDate         DateTime?
-  status          IncomingInvoiceStatus  @default(RECEIVED)
+  status          IncomingInvoiceStatus @default(RECEIVED)
   description     String?
   sourceReference String?
   rawPayload      Json?
   rejectionReason String?
-  whtApplicable       Boolean                @default(false)
-  whtRate             Decimal?
-  whtAmount           Decimal?
-  netPayable          Decimal?
+  whtApplicable   Boolean               @default(false)
+  whtRate         Decimal?
+  whtAmount       Decimal?
+  netPayable      Decimal?
 
   supplierEmail       String?
   supplierBankName    String?
   supplierBankAccount String?
   supplierBankAccName String?
 
-  amountPaid          Decimal?
-  paymentReference    String?
-  paymentProvider     String?
-  paidAt              DateTime?
-  paymentNotes        String?
+  amountPaid       Decimal?
+  paymentReference String?
+  paymentProvider  String?
+  paidAt           DateTime?
+  paymentNotes     String?
 
-  attachmentData      Bytes?
-  attachmentName      String?
-  attachmentMime      String?
-  attachmentSize      Int?
+  attachmentData Bytes?
+  attachmentName String?
+  attachmentMime String?
+  attachmentSize Int?
 
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  tenant          Tenant                 @relation(fields: [tenantId], references: [id])
-  items           IncomingInvoiceItem[]
+  tenant Tenant                @relation(fields: [tenantId], references: [id])
+  items  IncomingInvoiceItem[]
 
+  @@unique([tenantId, invoiceNumber, supplierTin])
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
   @@index([supplierTin])
-  @@unique([tenantId, invoiceNumber, supplierTin])
   @@map("incoming_invoices")
 }
 
 model IncomingInvoiceItem {
-  id                String          @id @default(uuid())
+  id                String  @id @default(uuid())
   incomingInvoiceId String
   description       String
   quantity          Decimal
   unitPrice         Decimal
   lineAmount        Decimal
-  vatAmount         Decimal         @default(0)
+  vatAmount         Decimal @default(0)
   hsnCode           String?
 
-  invoice           IncomingInvoice @relation(fields: [incomingInvoiceId], references: [id], onDelete: Cascade)
+  invoice IncomingInvoice @relation(fields: [incomingInvoiceId], references: [id], onDelete: Cascade)
 
   @@index([incomingInvoiceId])
   @@map("incoming_invoice_items")
@@ -958,7 +979,7 @@ model VatEntry {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
-  tenant            Tenant         @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, period])
   @@index([tenantId, type])
@@ -981,7 +1002,7 @@ model VatPeriodSummary {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  tenant            Tenant          @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, period])
   @@index([tenantId])
@@ -1111,8 +1132,8 @@ model StockMovement {
   notes         String?
   createdAt     DateTime          @default(now())
 
-  tenant        Tenant            @relation(fields: [tenantId], references: [id])
-  product       ProductCatalog    @relation(fields: [productId], references: [id])
+  tenant  Tenant         @relation(fields: [tenantId], references: [id])
+  product ProductCatalog @relation(fields: [productId], references: [id])
 
   @@index([tenantId])
   @@index([productId])
@@ -1121,7 +1142,7 @@ model StockMovement {
 }
 
 model Client {
-  id                  String    @id @default(uuid())
+  id                  String  @id @default(uuid())
   tenantId            String
   companyName         String
   tin                 String?
@@ -1132,22 +1153,23 @@ model Client {
   notes               String?
   postalAddress       Json?
 
-  totalInvoices       Int       @default(0)
-  totalBilled         Decimal   @default(0)
-  lastInvoiceAt       DateTime?
+  totalInvoices Int       @default(0)
+  totalBilled   Decimal   @default(0)
+  lastInvoiceAt DateTime?
 
-  isActive            Boolean   @default(true)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  tenant              Tenant    @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
+  @@unique([tenantId, tin])
   @@index([tenantId])
   @@index([tenantId, companyName])
   @@index([tenantId, totalInvoices])
-  @@unique([tenantId, tin])
   @@map("clients")
 }
+
 model CreditNote {
   id                String   @id @default(uuid())
   tenantId          String

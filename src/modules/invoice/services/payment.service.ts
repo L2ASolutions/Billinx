@@ -8,7 +8,7 @@ import { Cron } from '@nestjs/schedule';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ActivityService } from '../../activity/services/activity.service';
-import { InterswitchAdapter } from '../../submission/adapters/interswitch/interswitch.adapter';
+import { addToUpdateStatusQueue } from '../../submission/queues/update-status.queue';
 
 const VALID_PROVIDERS = [
   'MANUAL',
@@ -35,7 +35,6 @@ export class PaymentService {
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
     private readonly activityService: ActivityService,
-    private readonly interswitchAdapter: InterswitchAdapter,
   ) {}
 
   async recordPayment(
@@ -134,28 +133,17 @@ export class PaymentService {
     this.eventEmitter.emit(eventData.eventType, eventData);
 
     if (invoice.firsConfirmedIrn) {
-      if (newPaymentStatus === 'PAID') {
-        this.interswitchAdapter
-          .updatePaymentStatus(invoice.firsConfirmedIrn, tenantId, 'PAID')
-          .catch((err) =>
-            this.logger.warn(
-              `updatePaymentStatus PAID fire-and-forget failed for invoice ${invoiceId}: ${err.message}`,
-            ),
-          );
-      } else if (newPaymentStatus === 'PARTIAL') {
-        this.interswitchAdapter
-          .updatePaymentStatus(
-            invoice.firsConfirmedIrn,
-            tenantId,
-            'PARTIAL',
-            newAmountPaid,
-          )
-          .catch((err) =>
-            this.logger.warn(
-              `updatePaymentStatus PARTIAL fire-and-forget failed for invoice ${invoiceId}: ${err.message}`,
-            ),
-          );
-      }
+      addToUpdateStatusQueue({
+        invoiceId,
+        tenantId,
+        irn: invoice.firsConfirmedIrn,
+        status: newPaymentStatus,
+        ...(newPaymentStatus === 'PARTIAL' ? { amount: newAmountPaid } : {}),
+      }).catch((err) =>
+        this.logger.warn(
+          `Failed to enqueue NRS UpdateStatus for invoice ${invoiceId}: ${err.message}`,
+        ),
+      );
     }
 
     this.activityService.track({
@@ -235,10 +223,9 @@ export class PaymentService {
           status: 'ACCEPTED',
           isOverdue: false,
           paymentDueDate: { lt: now },
-          // paymentStatus defaults to null until a payment is recorded, and
-          // SQL's three-valued NULL logic means `{ not: 'PAID' }` alone would
-          // silently drop those rows — explicitly include null alongside not-PAID.
-          OR: [{ paymentStatus: null }, { paymentStatus: { not: 'PAID' } }],
+          // paymentStatus is NOT NULL (defaults to PENDING), so this alone
+          // already covers every unpaid invoice.
+          paymentStatus: { not: 'PAID' },
         },
         select: {
           id: true,

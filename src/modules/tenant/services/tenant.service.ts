@@ -39,6 +39,15 @@ export class TenantService {
       throw new BadRequestException(`Invalid TIN format: ${request.tin}`);
     }
 
+    if (
+      request.interswitchCredentials?.businessId &&
+      !this.isValidUuid(request.interswitchCredentials.businessId)
+    ) {
+      throw new BadRequestException(
+        `Invalid Interswitch business_id format: ${request.interswitchCredentials.businessId}`,
+      );
+    }
+
     let encryptedCredential: Buffer | undefined;
     let credentialIv: Buffer | undefined;
 
@@ -124,6 +133,15 @@ export class TenantService {
       throw new NotFoundException(`Tenant ${id} not found`);
     }
 
+    if (
+      request.interswitchCredentials?.businessId &&
+      !this.isValidUuid(request.interswitchCredentials.businessId)
+    ) {
+      throw new BadRequestException(
+        `Invalid Interswitch business_id format: ${request.interswitchCredentials.businessId}`,
+      );
+    }
+
     let encryptedCredential: Buffer | undefined;
     let credentialIv: Buffer | undefined;
 
@@ -200,6 +218,15 @@ export class TenantService {
   private isValidTin(tin: string): boolean {
     const tinPattern = /^[A-Z0-9-]{5,20}$/i;
     return tinPattern.test(tin);
+  }
+
+  // Matches InterswitchAdapter's BUSINESS_ID_UUID_RE — the NRS business_id
+  // must be a UUID before the adapter will accept it at submission time, so
+  // catch a malformed value here rather than at every future submission.
+  private isValidUuid(value: string): boolean {
+    const uuidPattern =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidPattern.test(value);
   }
 
   private mapToResponse(tenant: any): TenantResponse {

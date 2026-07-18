@@ -16,6 +16,82 @@ export interface InvoiceValidationDto {
   lineItems?: any[];
   // Effective payable amount, resolved by the caller before passing in.
   totalAmount?: number;
+  legalMonetaryTotal?: {
+    lineExtensionAmount?: number;
+    taxExclusiveAmount?: number;
+    taxInclusiveAmount?: number;
+    payableAmount?: number;
+  };
+  taxTotal?: any[];
+  paymentStatus?: string;
+}
+
+const VALID_INVOICE_KINDS = new Set(['B2B', 'B2C', 'B2G']);
+
+// Every invoiceTypeCode value InvoiceService.mapInvoiceTypeCode() recognises
+// (NRS numeric codes, legacy aliases, and the stored enum names themselves).
+// Anything outside this set would otherwise silently fall back to STANDARD
+// there — this check rejects it before it ever reaches that fallback.
+const VALID_INVOICE_TYPE_CODES = new Set([
+  '381',
+  '380',
+  '384',
+  '390',
+  '385',
+  '383',
+  '325',
+  'STANDARD',
+  'CREDIT_NOTE',
+  'DEBIT_NOTE',
+  'PROFORMA',
+]);
+
+const VALID_PAYMENT_STATUSES = new Set(['PENDING', 'PAID', 'PARTIAL']);
+
+// Matches InterswitchAdapter's VALID_PRICE_UNITS.
+const VALID_PRICE_UNITS = new Set(['EA', 'KGM', 'LTR']);
+
+// Matches every alias InterswitchAdapter's normaliseTaxCategoryId() accepts
+// (case-insensitively) — a value is valid here iff the adapter would
+// successfully normalise it rather than throwing INVALID_TAX_CATEGORY.
+const VALID_TAX_CATEGORY_ALIASES = new Set([
+  'VAT',
+  'S',
+  'STANDARD_VAT',
+  'Z',
+  'ZERO',
+  'ZERO_RATED',
+  'ZERO_VAT',
+  'WHT',
+  'WITHHOLDING_TAX',
+  'EXEMPT',
+  'NOT_APPLICABLE',
+  'EXEMPTED',
+  'STAMP_DUTY',
+  'STAMP',
+  'SD',
+]);
+
+const LEGAL_MONETARY_TOTAL_FIELDS = [
+  ['lineExtensionAmount', 'legalMonetaryTotal.lineExtensionAmount'],
+  ['taxExclusiveAmount', 'legalMonetaryTotal.taxExclusiveAmount'],
+  ['taxInclusiveAmount', 'legalMonetaryTotal.taxInclusiveAmount'],
+  ['payableAmount', 'legalMonetaryTotal.payableAmount'],
+] as const;
+
+function isValidTaxCategoryId(id: string): boolean {
+  return VALID_TAX_CATEGORY_ALIASES.has(id.toUpperCase());
+}
+
+function getLineItemType(item: any): 'PRODUCT' | 'SERVICE' {
+  const raw = (item.itemType ?? item.item_type ?? 'PRODUCT')
+    .toString()
+    .toUpperCase();
+  return raw === 'SERVICE' ? 'SERVICE' : 'PRODUCT';
+}
+
+function getLineItemPriceUnit(item: any): string | undefined {
+  return item.price?.priceUnit ?? item.price?.price_unit ?? undefined;
 }
 
 // Rules by context
@@ -24,9 +100,16 @@ export interface InvoiceValidationDto {
 //           lineItems and totalAmount are NOT required (empty DRAFT allowed).
 //           buyer.tin IS required for B2B/B2G (FIRS mandate).
 //           originalIrn IS required for credit/debit notes.
+//           invoiceTypeCode, invoiceKind, and paymentStatus (if present) must
+//           be recognised values — this is content-correctness, not
+//           completeness, so it's enforced even for a DRAFT.
 //
 // SUBMIT  — pre-queue checks; invoice must be FIRS-ready.
-//           All CREATE rules PLUS: lineItems non-empty, totalAmount > 0.
+//           All CREATE rules PLUS: lineItems non-empty, totalAmount > 0,
+//           legal_monetary_total fields all present and > 0, every line
+//           item's classification/tax-category/price-unit content is valid
+//           (these are NRS-schema content checks that only make sense once
+//           the invoice is actually being submitted, not mid-draft).
 //
 // VALIDATE — POST /v1/invoices/validate; collects all errors rather than
 //            throwing; returns ValidationResponse.
@@ -102,6 +185,36 @@ export class InvoiceValidationService {
       });
     }
 
+    if (!dto.invoiceKind || !VALID_INVOICE_KINDS.has(dto.invoiceKind)) {
+      errors.push({
+        field: 'invoiceKind',
+        code: 'MISSING_INVOICE_KIND',
+        message: 'invoiceKind is required and must be one of B2B, B2C, B2G',
+        severity: 'ERROR',
+      });
+    }
+
+    if (
+      dto.invoiceTypeCode &&
+      !VALID_INVOICE_TYPE_CODES.has(dto.invoiceTypeCode)
+    ) {
+      errors.push({
+        field: 'invoiceTypeCode',
+        code: 'INVALID_INVOICE_TYPE_CODE',
+        message: `Unrecognized invoice type code: ${dto.invoiceTypeCode}`,
+        severity: 'ERROR',
+      });
+    }
+
+    if (dto.paymentStatus && !VALID_PAYMENT_STATUSES.has(dto.paymentStatus)) {
+      errors.push({
+        field: 'paymentStatus',
+        code: 'INVALID_PAYMENT_STATUS',
+        message: `paymentStatus must be one of ${[...VALID_PAYMENT_STATUSES].join(', ')}`,
+        severity: 'ERROR',
+      });
+    }
+
     if (!dto.lineItems || dto.lineItems.length === 0) {
       errors.push({
         field: 'lineItems',
@@ -141,14 +254,74 @@ export class InvoiceValidationService {
       });
     }
 
+    if (dto.legalMonetaryTotal) {
+      for (const [key, field] of LEGAL_MONETARY_TOTAL_FIELDS) {
+        const value = Number(dto.legalMonetaryTotal[key]);
+        if (!value || value <= 0) {
+          errors.push({
+            field,
+            code: 'INVALID_LEGAL_MONETARY_TOTAL',
+            message: `${field} must be present and greater than zero`,
+            severity: 'ERROR',
+          });
+        }
+      }
+    }
+
+    if (dto.taxTotal) {
+      dto.taxTotal.forEach((tt: any, ttIndex: number) => {
+        (tt.taxSubtotal ?? tt.tax_subtotal ?? []).forEach(
+          (sub: any, subIndex: number) => {
+            const id = sub.taxCategory?.id ?? sub.tax_category?.id;
+            if (id && !isValidTaxCategoryId(id)) {
+              errors.push({
+                field: `taxTotal[${ttIndex}].taxSubtotal[${subIndex}].taxCategory.id`,
+                code: 'INVALID_TAX_CATEGORY',
+                message: `Unrecognized tax category id: ${id}`,
+                severity: 'ERROR',
+              });
+            }
+          },
+        );
+      });
+    }
+
     if (dto.lineItems) {
       dto.lineItems.forEach((item: any, index: number) => {
-        if (!item.hsnCode) {
-          warnings.push({
-            field: `lineItems[${index}].hsnCode`,
-            code: 'MISSING_HSN_CODE',
-            message: 'HSN code recommended for goods-based line items',
-            severity: 'WARNING',
+        const itemType = getLineItemType(item);
+        if (itemType === 'SERVICE') {
+          const isicCode = item.isicCode ?? item.isic_code;
+          const serviceCategory = item.serviceCategory ?? item.service_category;
+          if (!isicCode || !serviceCategory) {
+            errors.push({
+              field: `lineItems[${index}]`,
+              code: 'MISSING_SERVICE_CLASSIFICATION',
+              message:
+                'SERVICE line items require both isicCode and serviceCategory',
+              severity: 'ERROR',
+            });
+          }
+        } else {
+          const hsnCode = item.hsnCode ?? item.hsn_code;
+          const productCategory = item.productCategory ?? item.product_category;
+          if (!hsnCode || !productCategory) {
+            errors.push({
+              field: `lineItems[${index}]`,
+              code: 'MISSING_PRODUCT_CLASSIFICATION',
+              message:
+                'PRODUCT line items require both hsnCode and productCategory',
+              severity: 'ERROR',
+            });
+          }
+        }
+
+        const priceUnit = getLineItemPriceUnit(item);
+        if (priceUnit && !VALID_PRICE_UNITS.has(priceUnit.toUpperCase())) {
+          errors.push({
+            field: `lineItems[${index}].price.priceUnit`,
+            code: 'INVALID_PRICE_UNIT',
+            message: `Unrecognized price_unit: ${priceUnit}`,
+            severity: 'ERROR',
           });
         }
       });
@@ -171,6 +344,27 @@ export class InvoiceValidationService {
     if (!dto.buyer?.partyName)
       throw new BadRequestException('buyer.partyName is required');
     if (!dto.issueDate) throw new BadRequestException('issueDate is required');
+
+    if (!dto.invoiceKind || !VALID_INVOICE_KINDS.has(dto.invoiceKind)) {
+      throw new BadRequestException(
+        'invoiceKind is required and must be one of B2B, B2C, B2G',
+      );
+    }
+
+    if (
+      dto.invoiceTypeCode &&
+      !VALID_INVOICE_TYPE_CODES.has(dto.invoiceTypeCode)
+    ) {
+      throw new BadRequestException(
+        `Unrecognized invoice type code: ${dto.invoiceTypeCode}`,
+      );
+    }
+
+    if (dto.paymentStatus && !VALID_PAYMENT_STATUSES.has(dto.paymentStatus)) {
+      throw new BadRequestException(
+        `paymentStatus must be one of ${[...VALID_PAYMENT_STATUSES].join(', ')}`,
+      );
+    }
 
     if (
       (dto.invoiceKind === 'B2B' || dto.invoiceKind === 'B2G') &&
@@ -195,6 +389,62 @@ export class InvoiceValidationService {
         throw new BadRequestException(
           'Invoice total must be greater than zero',
         );
+
+      if (dto.legalMonetaryTotal) {
+        for (const [key, field] of LEGAL_MONETARY_TOTAL_FIELDS) {
+          const value = Number(dto.legalMonetaryTotal[key]);
+          if (!value || value <= 0) {
+            throw new BadRequestException(
+              `${field} must be present and greater than zero`,
+            );
+          }
+        }
+      }
+
+      if (dto.taxTotal) {
+        for (const tt of dto.taxTotal) {
+          for (const sub of tt.taxSubtotal ?? tt.tax_subtotal ?? []) {
+            const id = sub.taxCategory?.id ?? sub.tax_category?.id;
+            if (id && !isValidTaxCategoryId(id)) {
+              throw new BadRequestException(
+                `Unrecognized tax category id: ${id}`,
+              );
+            }
+          }
+        }
+      }
+
+      if (dto.lineItems) {
+        for (const item of dto.lineItems) {
+          const itemType = getLineItemType(item);
+          if (itemType === 'SERVICE') {
+            const isicCode = item.isicCode ?? item.isic_code;
+            const serviceCategory =
+              item.serviceCategory ?? item.service_category;
+            if (!isicCode || !serviceCategory) {
+              throw new BadRequestException(
+                'SERVICE line items require both isicCode and serviceCategory',
+              );
+            }
+          } else {
+            const hsnCode = item.hsnCode ?? item.hsn_code;
+            const productCategory =
+              item.productCategory ?? item.product_category;
+            if (!hsnCode || !productCategory) {
+              throw new BadRequestException(
+                'PRODUCT line items require both hsnCode and productCategory',
+              );
+            }
+          }
+
+          const priceUnit = getLineItemPriceUnit(item);
+          if (priceUnit && !VALID_PRICE_UNITS.has(priceUnit.toUpperCase())) {
+            throw new BadRequestException(
+              `Unrecognized price_unit: ${priceUnit}`,
+            );
+          }
+        }
+      }
     }
   }
 }

@@ -1,23 +1,35 @@
 // packages/types/invoice.ts
 
 export type InvoiceStatus =
-  | "DRAFT"
-  | "VALIDATING"
-  | "VALIDATION_FAILED"
-  | "QUEUED"
-  | "SUBMITTING"
-  | "SUBMITTED"
-  | "ACCEPTED"
-  | "REJECTED"
-  | "SUBMISSION_FAILED"
-  | "DEAD_LETTERED"
-  | "CANCELLATION_REQUESTED"
-  | "CANCELLED";
+  | 'DRAFT'
+  | 'VALIDATING'
+  | 'VALIDATION_FAILED'
+  | 'QUEUED'
+  | 'SUBMITTING'
+  | 'SUBMITTED'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'SUBMISSION_FAILED'
+  | 'DEAD_LETTERED'
+  | 'CANCELLATION_REQUESTED'
+  | 'CANCELLED';
 
 export type InvoiceTypeCode =
-  | "380" | "381" | "383" | "325" | "386" | "388"
-  | "389" | "390" | "393" | "394" | "395" | "396"
-  | "420" | "456" | "457";
+  | '380'
+  | '381'
+  | '383'
+  | '325'
+  | '386'
+  | '388'
+  | '389'
+  | '390'
+  | '393'
+  | '394'
+  | '395'
+  | '396'
+  | '420'
+  | '456'
+  | '457';
 
 export interface CancelInvoiceRequest {
   reason: string;
@@ -80,6 +92,8 @@ export interface InvoiceResponse {
   seller?: Record<string, any>;
   buyer?: Record<string, any>;
   qrCodeBase64?: string;
+  lastNrsStatusUpdateAt?: string;
+  lastNrsStatusUpdateSuccess?: boolean;
   stateHistory?: any[];
   submissionAttempts?: any[];
   submittedAt?: string;
@@ -149,5 +163,5 @@ export interface ValidationErrorItem {
   field: string;
   code: string;
   message: string;
-  severity: "ERROR" | "WARNING";
+  severity: 'ERROR' | 'WARNING';
 }

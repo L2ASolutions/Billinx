@@ -1102,7 +1102,9 @@ describe('InterswitchAdapter', () => {
       );
       global.fetch = jest.fn();
 
-      await adapter.updatePaymentStatus('IRN-1', TENANT_ID, 'PAID');
+      await expect(
+        adapter.updatePaymentStatus('IRN-1', TENANT_ID, 'PAID'),
+      ).resolves.toBe(false);
 
       expect(global.fetch).not.toHaveBeenCalled();
     });
@@ -1114,7 +1116,9 @@ describe('InterswitchAdapter', () => {
       });
       global.fetch = fetchMock;
 
-      await adapter.updatePaymentStatus('IRN-1', TENANT_ID, 'PARTIAL', 500);
+      await expect(
+        adapter.updatePaymentStatus('IRN-1', TENANT_ID, 'PARTIAL', 500),
+      ).resolves.toBe(true);
 
       const [url, init] = fetchMock.mock.calls.find(([u]) =>
         u.includes('/Api/SwitchTax/UpdateStatus'),
@@ -1145,7 +1149,7 @@ describe('InterswitchAdapter', () => {
       });
     });
 
-    it('does not throw when the NRS endpoint responds non-OK', async () => {
+    it('does not throw, and resolves false, when the NRS endpoint responds non-OK', async () => {
       global.fetch = makeFetchMock({
         updateStatus: {
           ok: false,
@@ -1156,15 +1160,15 @@ describe('InterswitchAdapter', () => {
 
       await expect(
         adapter.updatePaymentStatus('IRN-1', TENANT_ID, 'PAID'),
-      ).resolves.toBeUndefined();
+      ).resolves.toBe(false);
     });
 
-    it('does not throw when the token fetch itself rejects', async () => {
+    it('does not throw, and resolves false, when the token fetch itself rejects', async () => {
       global.fetch = jest.fn().mockRejectedValue(new Error('network down'));
 
       await expect(
         adapter.updatePaymentStatus('IRN-1', TENANT_ID, 'PAID'),
-      ).resolves.toBeUndefined();
+      ).resolves.toBe(false);
     });
   });
 

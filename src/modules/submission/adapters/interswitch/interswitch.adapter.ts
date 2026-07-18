@@ -306,12 +306,15 @@ export class InterswitchAdapter implements AppAdapter {
     }
   }
 
+  // Returns whether the NRS call succeeded, so callers (e.g. the
+  // update-status BullMQ worker) can throw and drive a retry rather than
+  // this method silently swallowing every failure.
   async updatePaymentStatus(
     irn: string,
     tenantId: string,
     status: 'PAID' | 'PARTIAL',
     amount?: number,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const tenant = await this.loadTenant(tenantId);
     if (
       !tenant.interswitchClientId ||
@@ -321,7 +324,7 @@ export class InterswitchAdapter implements AppAdapter {
       this.logger.warn(
         `Cannot update payment status for IRN ${irn}: NRS OAuth credentials not configured`,
       );
-      return;
+      return false;
     }
 
     const baseUrl =
@@ -363,15 +366,17 @@ export class InterswitchAdapter implements AppAdapter {
         this.logger.warn(
           `UpdateStatus for IRN ${irn} returned ${response.status}: ${body.slice(0, 200)}`,
         );
-      } else {
-        this.logger.log(
-          `Payment status updated on NRS for IRN ${irn}: ${status}`,
-        );
+        return false;
       }
+      this.logger.log(
+        `Payment status updated on NRS for IRN ${irn}: ${status}`,
+      );
+      return true;
     } catch (err: any) {
       this.logger.warn(
         `UpdateStatus call failed for IRN ${irn}: ${err.message}`,
       );
+      return false;
     } finally {
       clearTimeout(timeout);
     }

@@ -19,9 +19,13 @@ function makeProductRow(overrides: Record<string, any> = {}) {
     tenantId: TENANT_ID,
     name: 'Widget',
     description: 'A widget',
+    itemType: 'PRODUCT',
     hsnCode: '1234',
     productCategory: 'hardware',
+    isicCode: null,
+    serviceCategory: null,
     unitPrice: 100,
+    priceUnit: 'EA',
     currency: 'NGN',
     taxCategoryId: 'STANDARD_VAT',
     isActive: true,
@@ -69,9 +73,13 @@ describe('ProductCatalogService', () => {
           tenantId: TENANT_ID,
           name: 'Widget',
           description: null,
+          itemType: 'PRODUCT',
           hsnCode: null,
           productCategory: null,
+          isicCode: null,
+          serviceCategory: null,
           unitPrice: 100,
+          priceUnit: 'EA',
           currency: 'NGN',
           taxCategoryId: 'STANDARD_VAT',
           isActive: true,
@@ -82,6 +90,26 @@ describe('ProductCatalogService', () => {
       });
       expect(result.id).toBe('product-1');
       expect(result.unitPrice).toBe(100);
+    });
+
+    it('accepts SERVICE itemType with isicCode/serviceCategory and a non-default priceUnit', async () => {
+      await service.createProduct(TENANT_ID, {
+        name: 'Consulting',
+        unitPrice: 500,
+        itemType: 'SERVICE',
+        isicCode: '6201',
+        serviceCategory: 'Software Consulting',
+        priceUnit: 'KGM',
+      });
+
+      expect(prisma.productCatalog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          itemType: 'SERVICE',
+          isicCode: '6201',
+          serviceCategory: 'Software Consulting',
+          priceUnit: 'KGM',
+        }),
+      });
     });
 
     it('respects explicit isActive=false and stockQuantity=0 (not treated as missing)', async () => {
@@ -234,6 +262,48 @@ describe('ProductCatalogService', () => {
         }),
       );
     });
+
+    it('falls back to existing itemType/isicCode/serviceCategory/priceUnit when omitted', async () => {
+      prisma.productCatalog.findFirst.mockResolvedValue(
+        makeProductRow({
+          itemType: 'SERVICE',
+          isicCode: '6201',
+          serviceCategory: 'Software Consulting',
+          priceUnit: 'KGM',
+        }),
+      );
+
+      await service.updateProduct('product-1', TENANT_ID, { name: 'New Name' });
+
+      expect(prisma.productCatalog.update).toHaveBeenCalledWith({
+        where: { id: 'product-1' },
+        data: expect.objectContaining({
+          itemType: 'SERVICE',
+          isicCode: '6201',
+          serviceCategory: 'Software Consulting',
+          priceUnit: 'KGM',
+        }),
+      });
+    });
+
+    it('overwrites itemType/isicCode/serviceCategory/priceUnit when explicitly patched', async () => {
+      await service.updateProduct('product-1', TENANT_ID, {
+        itemType: 'SERVICE',
+        isicCode: '4321',
+        serviceCategory: 'Consulting',
+        priceUnit: 'LTR',
+      });
+
+      expect(prisma.productCatalog.update).toHaveBeenCalledWith({
+        where: { id: 'product-1' },
+        data: expect.objectContaining({
+          itemType: 'SERVICE',
+          isicCode: '4321',
+          serviceCategory: 'Consulting',
+          priceUnit: 'LTR',
+        }),
+      });
+    });
   });
 
   describe('deleteProduct', () => {
@@ -264,6 +334,27 @@ describe('ProductCatalogService', () => {
         lineExtensionAmount: 100,
         taxCategory: 'STANDARD_VAT',
         taxRate: 7.5,
+        itemType: 'PRODUCT',
+        hsnCode: '1234',
+        priceUnit: 'EA',
+      });
+    });
+
+    it('surfaces isicCode/serviceCategory for a SERVICE product', async () => {
+      prisma.productCatalog.findFirst.mockResolvedValue(
+        makeProductRow({
+          itemType: 'SERVICE',
+          isicCode: '6201',
+          serviceCategory: 'Software Consulting',
+          hsnCode: null,
+          productCategory: null,
+        }),
+      );
+      const result = await service.getProductAsLineItem('product-1', TENANT_ID);
+      expect(result).toMatchObject({
+        itemType: 'SERVICE',
+        isicCode: '6201',
+        serviceCategory: 'Software Consulting',
       });
     });
 

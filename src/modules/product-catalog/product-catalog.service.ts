@@ -16,9 +16,13 @@ export class ProductCatalogService {
         tenantId,
         name: data.name,
         description: data.description ?? null,
+        itemType: data.itemType ?? 'PRODUCT',
         hsnCode: data.hsnCode ?? null,
         productCategory: data.productCategory ?? null,
+        isicCode: data.isicCode ?? null,
+        serviceCategory: data.serviceCategory ?? null,
         unitPrice: data.unitPrice,
+        priceUnit: data.priceUnit ?? 'EA',
         currency: data.currency ?? 'NGN',
         taxCategoryId: data.taxCategoryId ?? 'STANDARD_VAT',
         isActive: data.isActive !== undefined ? data.isActive : true,
@@ -105,13 +109,21 @@ export class ProductCatalogService {
           data.description !== undefined
             ? data.description
             : existing.description,
+        itemType: data.itemType ?? existing.itemType,
         hsnCode: data.hsnCode !== undefined ? data.hsnCode : existing.hsnCode,
         productCategory:
           data.productCategory !== undefined
             ? data.productCategory
             : existing.productCategory,
+        isicCode:
+          data.isicCode !== undefined ? data.isicCode : existing.isicCode,
+        serviceCategory:
+          data.serviceCategory !== undefined
+            ? data.serviceCategory
+            : existing.serviceCategory,
         unitPrice:
           data.unitPrice !== undefined ? data.unitPrice : existing.unitPrice,
+        priceUnit: data.priceUnit ?? existing.priceUnit,
         currency: data.currency ?? existing.currency,
         taxCategoryId: data.taxCategoryId ?? existing.taxCategoryId,
         isActive:
@@ -173,7 +185,11 @@ export class ProductCatalogService {
       quantity: 1,
       unitPrice: product.unitPrice,
       lineExtensionAmount: product.unitPrice,
+      itemType: product.itemType,
       hsnCode: product.hsnCode ?? undefined,
+      isicCode: product.isicCode ?? undefined,
+      serviceCategory: product.serviceCategory ?? undefined,
+      priceUnit: product.priceUnit,
       taxCategory: product.taxCategoryId,
       taxRate: product.taxCategoryId === 'STANDARD_VAT' ? 7.5 : 0,
     };
@@ -185,9 +201,13 @@ export class ProductCatalogService {
       tenantId: p.tenantId,
       name: p.name,
       description: p.description ?? undefined,
+      itemType: p.itemType,
       hsnCode: p.hsnCode ?? undefined,
       productCategory: p.productCategory ?? undefined,
+      isicCode: p.isicCode ?? undefined,
+      serviceCategory: p.serviceCategory ?? undefined,
       unitPrice: Number(p.unitPrice),
+      priceUnit: p.priceUnit,
       currency: p.currency,
       taxCategoryId: p.taxCategoryId,
       isActive: p.isActive,
