@@ -59,8 +59,10 @@ const OAUTH_TOKEN_REFRESH_MARGIN_MS = 60 * 1000;
 // Thrown for payload-shape/business-rule problems caught before (or instead
 // of) ever calling NRS — always maps to a non-retryable SubmissionResult with
 // a specific errorCode, distinct from mapError()'s handling of NRS's own
-// HTTP-level responses.
-class NrsValidationError extends Error {
+// HTTP-level responses. Exported so callers of previewPayload() (a diagnostic
+// read path, not the submission path) can catch it and translate errorCode
+// into an appropriate HTTP response.
+export class NrsValidationError extends Error {
   constructor(
     public readonly errorCode: string,
     message: string,
@@ -199,6 +201,59 @@ export class InterswitchAdapter implements AppAdapter {
       }
       return this.mapError(err);
     }
+  }
+
+  // Diagnostic read path — builds the exact same payload submit() would send
+  // to NRS, without ever calling postInvoice() or touching invoice/submission
+  // state. Replicates submit()'s two pre-flight guards (business_id/OAuth
+  // credentials) so a preview fails the same way a real submission would,
+  // rather than silently emitting an incomplete payload.
+  async previewPayload(
+    tenantId: string,
+    invoiceId: string,
+  ): Promise<{ payload: Record<string, unknown>; irn: string }> {
+    const tenant = await this.loadTenant(tenantId);
+
+    if (
+      !tenant.interswitchBusinessId ||
+      !BUSINESS_ID_UUID_RE.test(tenant.interswitchBusinessId)
+    ) {
+      throw new NrsValidationError(
+        'MISSING_BUSINESS_ID',
+        'NRS business_id not configured for this tenant — contact your administrator',
+      );
+    }
+
+    if (
+      !tenant.interswitchClientId ||
+      !tenant.interswitchClientSecret ||
+      !tenant.interswitchSecretIv
+    ) {
+      throw new NrsValidationError(
+        'MISSING_CREDENTIALS',
+        'NRS OAuth credentials not configured for this tenant',
+      );
+    }
+
+    const invoice = await this.prisma.asAdmin((tx) =>
+      tx.invoice.findUnique({ where: { id: invoiceId } }),
+    );
+    if (!invoice || invoice.tenantId !== tenantId) {
+      throw new NrsValidationError(
+        'INVOICE_NOT_FOUND',
+        `Invoice ${invoiceId} not found`,
+      );
+    }
+
+    const payload = await this.buildPayload(invoice, tenant);
+    return {
+      payload: {
+        ...payload,
+        preview_note:
+          'IRN and issue_time are generated at preview time and will differ from the final submission IRN',
+      },
+      irn: invoice.firsConfirmedIrn ?? invoice.platformIrn,
+    };
   }
 
   async checkStatus(

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { InvoiceDocument } from "@/components/invoice/InvoiceDocument";
 import { invoiceApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { formatCurrency, formatDateTime, formatDate } from "@/lib/utils";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -518,6 +519,8 @@ export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
+  const canViewNrsPayload = user?.role === "OWNER" || user?.role === "ADMIN";
   const isDuplicated = searchParams.get("duplicated") === "true";
   const [showDuplicatedBanner, setShowDuplicatedBanner] = useState(isDuplicated);
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
@@ -527,6 +530,7 @@ export default function InvoiceDetailPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [pdfDownloading, setPdfDownloading] = useState(false);
+  const [nrsPayloadDownloading, setNrsPayloadDownloading] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
 
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
@@ -641,6 +645,23 @@ export default function InvoiceDetailPage() {
       alert(err instanceof Error ? err.message : "Download failed");
     } finally {
       setPdfDownloading(false);
+    }
+  }
+
+  async function handleDownloadNrsPayload() {
+    setNrsPayloadDownloading(true);
+    try {
+      const { blob, filename } = await invoiceApi.getNrsPayload(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || `nrs-payload-${id}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setNrsPayloadDownloading(false);
     }
   }
 
@@ -854,6 +875,11 @@ export default function InvoiceDetailPage() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <Link href="/invoices"><Button variant="secondary" size="sm">← Sales Invoices</Button></Link>
+          {canViewNrsPayload && (
+            <Button variant="secondary" size="sm" loading={nrsPayloadDownloading} onClick={handleDownloadNrsPayload}>
+              Download NRS Payload
+            </Button>
+          )}
           {isDraft && (
             <Link href={`/invoices/new?id=${invoice.id}`}>
               <Button size="sm" variant="secondary">Edit draft →</Button>

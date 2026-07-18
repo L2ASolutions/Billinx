@@ -12,6 +12,8 @@ import {
   Req,
   Res,
   Header,
+  NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import {
@@ -25,6 +27,10 @@ import { Request, Response } from 'express';
 import { InvoiceService } from './services/invoice.service';
 import { PaymentService } from './services/payment.service';
 import { InvoicePdfService } from './services/invoice-pdf.service';
+import {
+  InterswitchAdapter,
+  NrsValidationError,
+} from '../submission/adapters/interswitch/interswitch.adapter';
 import { JwtGuard } from '../identity/guards/jwt.guard';
 import { RolesGuard } from '../../shared/guards/roles.guard';
 import { Roles } from '../../shared/decorators/roles.decorator';
@@ -38,6 +44,7 @@ export class InvoiceDashboardController {
     private readonly invoiceService: InvoiceService,
     private readonly paymentService: PaymentService,
     private readonly invoicePdfService: InvoicePdfService,
+    private readonly interswitchAdapter: InterswitchAdapter,
   ) {}
 
   private getCtx(req: Request): any {
@@ -342,6 +349,46 @@ export class InvoiceDashboardController {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buffer);
+  }
+
+  @Get(':id/nrs-payload')
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Preview the exact NRS/Interswitch JSON payload for an invoice without submitting it — diagnostic only (dashboard / JWT auth, OWNER/ADMIN)',
+  })
+  async getDashboardInvoiceNrsPayload(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const ctx = this.getCtx(req);
+    let result: { payload: Record<string, unknown>; irn: string };
+    try {
+      result = await this.interswitchAdapter.previewPayload(
+        ctx.tenantId,
+        id,
+      );
+    } catch (err) {
+      if (err instanceof NrsValidationError) {
+        if (err.errorCode === 'INVOICE_NOT_FOUND') {
+          throw new NotFoundException(err.message);
+        }
+        throw new BadRequestException({
+          errorCode: err.errorCode,
+          message: err.message,
+        });
+      }
+      throw err;
+    }
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="nrs-payload-${result.irn}.json"`,
+    );
+    res.send(JSON.stringify(result.payload, null, 2));
   }
 
   @Get(':id/status')
