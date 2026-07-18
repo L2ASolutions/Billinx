@@ -27,6 +27,8 @@ import { FlexAuthGuard } from '../identity/guards/flex-auth.guard';
 import { JwtGuard } from '../identity/guards/jwt.guard';
 import { RolesGuard } from '../../shared/guards/roles.guard';
 import { Roles } from '../../shared/decorators/roles.decorator';
+import { ScopeGuard } from '../../shared/guards/scope.guard';
+import { RequireScope } from '../../shared/decorators/require-scope.decorator';
 import {
   ActivityEventType,
   ErrorSeverity,
@@ -40,8 +42,13 @@ export class ActivityController {
   // ── Activity endpoints (tenant-scoped) ─────────────────────────────────────
 
   @Get('activity')
-  @UseGuards(FlexAuthGuard)
-  @ApiOperation({ summary: 'List activity events for authenticated tenant' })
+  @UseGuards(FlexAuthGuard, ScopeGuard)
+  @RequireScope('reports:read')
+  @ApiOperation({
+    summary: 'List activity events for authenticated tenant',
+    description:
+      'When called with an API key, requires the `reports:read` scope (no effect for JWT/dashboard callers).',
+  })
   @ApiHeader({ name: 'Authorization', required: true })
   @ApiQuery({ name: 'eventType', required: false })
   @ApiQuery({ name: 'entityId', required: false })
@@ -54,6 +61,10 @@ export class ActivityController {
     description: 'List activity events for authenticated tenant',
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid credentials' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the reports:read scope',
+  })
   async getTenantActivity(
     @Query('eventType') eventType?: ActivityEventType,
     @Query('entityId') entityId?: string,
@@ -191,14 +202,23 @@ export class ActivityController {
   }
 
   @Get('activity/export')
-  @UseGuards(FlexAuthGuard)
-  @ApiOperation({ summary: 'Export activity as CSV for authenticated tenant' })
+  @UseGuards(FlexAuthGuard, ScopeGuard)
+  @RequireScope('reports:read')
+  @ApiOperation({
+    summary: 'Export activity as CSV for authenticated tenant',
+    description:
+      'When called with an API key, requires the `reports:read` scope (no effect for JWT/dashboard callers).',
+  })
   @ApiHeader({ name: 'Authorization', required: true })
   @ApiResponse({
     status: 200,
     description: 'Export activity as CSV for authenticated tenant',
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid credentials' })
+  @ApiResponse({
+    status: 403,
+    description: 'API key is missing the reports:read scope',
+  })
   async exportTenantActivity(
     @Query('from') from?: string,
     @Query('to') to?: string,

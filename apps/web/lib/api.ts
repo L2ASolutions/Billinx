@@ -453,12 +453,20 @@ export const tenantApi = {
 
 // API Keys — use JWT-guarded /users/api-keys routes (BUG-004)
 // BUG-016: backend stores as `name`, not `label` — translate at the API boundary
+const READ_ONLY_SCOPES = [
+  'invoices:read',
+  'submissions:read',
+  'products:read',
+  'reports:read',
+];
+
 export const apiKeyApi = {
   list: () => api.get<{ data: unknown[]; total: number }>('/v1/users/api-keys'),
-  create: (label: string, environment: string) =>
+  create: (label: string, environment: string, access: 'read' | 'full' = 'full') =>
     api.post<{ key: string }>('/v1/users/api-keys', {
       name: label,
       environment,
+      scopes: access === 'read' ? READ_ONLY_SCOPES : ['*'],
     }),
   revoke: (id: string) => api.delete(`/v1/users/api-keys/${id}`),
   rotate: (id: string) =>

@@ -37,10 +37,15 @@ interface ApiKey {
   name: string;
   environment: string;
   keyPrefix: string;
+  scopes?: string[];
   requestCount: number;
   lastUsedAt?: string;
   expiresAt?: string;
   createdAt: string;
+}
+
+function isFullAccess(scopes?: string[]): boolean {
+  return !scopes || scopes.length === 0 || scopes.includes("*");
 }
 
 function ApiKeysTab() {
@@ -48,6 +53,7 @@ function ApiKeysTab() {
   const [loading, setLoading] = useState(true);
   const [newLabel, setNewLabel] = useState("");
   const [newEnv, setNewEnv] = useState("test");
+  const [newAccess, setNewAccess] = useState<"full" | "read">("full");
   const [creating, setCreating] = useState(false);
   const [newKey, setNewKey] = useState("");
   const [rotatedKey, setRotatedKey] = useState<{ id: string; key: string } | null>(null);
@@ -79,7 +85,7 @@ function ApiKeysTab() {
     setKeyError("");
     setCreating(true);
     try {
-      const res = await apiKeyApi.create(newLabel, newEnv);
+      const res = await apiKeyApi.create(newLabel, newEnv, newAccess);
       setNewKey(res.key);
       setNewLabel("");
       loadKeys();
@@ -153,8 +159,18 @@ function ApiKeysTab() {
             <option value="live">Live</option>
           </select>
         </div>
+        <div>
+          <label className="block text-sm font-medium text-dark mb-1">Access</label>
+          <select className={sel("w-auto")} value={newAccess} onChange={(e) => setNewAccess(e.target.value as "full" | "read")}>
+            <option value="full">Full access</option>
+            <option value="read">Read only</option>
+          </select>
+        </div>
         <Button type="submit" loading={creating}>Create key</Button>
       </form>
+      <p className="text-xs text-muted -mt-3">
+        Read only keys can view invoices, submissions, products, and reports but cannot create, submit, or modify anything.
+      </p>
       {keyError && <p className="text-sm text-red-500">{keyError}</p>}
 
       {loading ? (
@@ -175,6 +191,9 @@ function ApiKeysTab() {
                     <span className="text-sm font-medium text-dark">{key.name}</span>
                     <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${key.environment === "live" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>
                       {key.environment}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${isFullAccess(key.scopes) ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>
+                      {isFullAccess(key.scopes) ? "Full access" : "Read only"}
                     </span>
                     {key.expiresAt && new Date(key.expiresAt) < new Date() && (
                       <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-red-600">Expired</span>

@@ -25,6 +25,8 @@ import { ApiKeyGuard } from './guards/api-key.guard';
 import { JwtGuard } from './guards/jwt.guard';
 import { RolesGuard } from '../../shared/guards/roles.guard';
 import { Roles } from '../../shared/decorators/roles.decorator';
+import { ScopeGuard } from '../../shared/guards/scope.guard';
+import { RequireScope } from '../../shared/decorators/require-scope.decorator';
 import { AuthRateLimitGuard } from '../../shared/guards/auth-rate-limit.guard';
 import { getRequestContext } from '../../shared/context/request-context';
 import {
@@ -105,10 +107,15 @@ export class IdentityController {
 
   @Post('api-keys')
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(ApiKeyGuard)
+  @UseGuards(ApiKeyGuard, ScopeGuard)
+  @RequireScope('*')
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Create a new API key for the authenticated tenant',
+    description:
+      'Requires a full-access ("*") API key — a scoped (e.g. read-only) key cannot create new keys, ' +
+      'since the caller controls the scopes of the key it creates and could otherwise mint itself a ' +
+      'full-access key.',
   })
   @ApiHeader({ name: 'Idempotency-Key', required: false })
   @ApiResponse({
@@ -116,6 +123,7 @@ export class IdentityController {
     description: 'Create a new API key for the authenticated tenant',
   })
   @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 403, description: 'API key is not full-access ("*")' })
   @ApiResponse({ status: 400, description: 'Invalid request body' })
   async createApiKey(@Body() body: CreateApiKeyRequest) {
     const ctx = getRequestContext();

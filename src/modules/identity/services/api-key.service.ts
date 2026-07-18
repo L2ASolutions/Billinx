@@ -11,9 +11,11 @@ import { EmailService } from '../../../shared/email/email.service';
 import { ActivityService } from '../../activity/services/activity.service';
 import { getRequestContext } from '../../../shared/context/request-context';
 import {
+  ApiKeyScope,
   CreateApiKeyRequest,
   CreateApiKeyResponse,
   Environment,
+  FULL_ACCESS_API_KEY_SCOPES,
 } from '../../../../packages/types/identity';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -48,6 +50,10 @@ export class ApiKeyService {
     request: CreateApiKeyRequest,
   ): Promise<CreateApiKeyResponse> {
     const { name, environment, expiresAt } = request;
+    const scopes: ApiKeyScope[] =
+      request.scopes && request.scopes.length > 0
+        ? request.scopes
+        : FULL_ACCESS_API_KEY_SCOPES;
 
     const rawRandom = crypto
       .randomBytes(KEY_TOTAL_LENGTH)
@@ -65,6 +71,7 @@ export class ApiKeyService {
           keyPrefix,
           environment,
           name,
+          scopes,
           expiresAt: expiresAt ? new Date(expiresAt) : this.defaultExpiryDate(),
         },
       });
@@ -79,7 +86,7 @@ export class ApiKeyService {
       actor: ctx.actor,
       entityType: 'ApiKey',
       entityId: record.id,
-      payload: { keyName: name, environment, keyPrefix },
+      payload: { keyName: name, environment, keyPrefix, scopes },
     });
 
     return {
@@ -88,6 +95,7 @@ export class ApiKeyService {
       keyPrefix,
       name: record.name,
       environment: record.environment,
+      scopes: record.scopes as ApiKeyScope[],
       expiresAt: record.expiresAt?.toISOString() ?? null,
       createdAt: record.createdAt.toISOString(),
     };
@@ -100,6 +108,7 @@ export class ApiKeyService {
     tenantId: string;
     keyId: string;
     environment: Environment;
+    scopes: ApiKeyScope[];
   }> {
     if (!rawKey || !KEY_FORMAT_RE.test(rawKey)) {
       throw new UnauthorizedException('Invalid API key format');
@@ -162,6 +171,7 @@ export class ApiKeyService {
       tenantId: matched.tenantId,
       keyId: matched.id,
       environment: matched.environment,
+      scopes: matched.scopes as ApiKeyScope[],
     };
   }
 
@@ -238,6 +248,7 @@ export class ApiKeyService {
             keyPrefix: newKeyPrefix,
             environment: existing.environment,
             name: existing.name,
+            scopes: existing.scopes,
             expiresAt: existing.expiresAt,
           },
         }),
@@ -258,6 +269,7 @@ export class ApiKeyService {
       keyPrefix: newKeyPrefix,
       name: newRecord.name,
       environment: newRecord.environment,
+      scopes: newRecord.scopes as ApiKeyScope[],
       expiresAt: newRecord.expiresAt?.toISOString() ?? null,
       createdAt: newRecord.createdAt.toISOString(),
     };
@@ -272,6 +284,7 @@ export class ApiKeyService {
           keyPrefix: true,
           name: true,
           environment: true,
+          scopes: true,
           lastUsedAt: true,
           lastUsedIp: true,
           requestCount: true,

@@ -102,4 +102,23 @@ describe('ApiKeyGuard', () => {
       '203.0.113.5',
     );
   });
+
+  it("propagates the matched key's scopes onto the request context", async () => {
+    apiKeyService.verifyApiKey.mockResolvedValue({
+      tenantId: 'tenant-001',
+      keyId: 'key-1',
+      environment: 'PRODUCTION',
+      scopes: ['invoices:read', 'products:read'],
+    });
+    const { context, req } = makeContext({
+      authorization: 'Bearer blx_live_abcdefghijklmnopqrstuvwx',
+    });
+
+    await guard.canActivate(context);
+
+    expect(req._billinxContext.scopes).toEqual([
+      'invoices:read',
+      'products:read',
+    ]);
+  });
 });

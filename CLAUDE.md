@@ -79,13 +79,15 @@ billinx/
 ## Modules
 
 ### identity
-- **ApiKeyGuard** — Bearer token; validates format (`/^blx_(live|test)_[A-Za-z0-9_-]{20,}$/`) before bcrypt; injects `RequestContext`; extracts `clientIp` from `X-Forwarded-For`
+- **ApiKeyGuard** — Bearer token; validates format (`/^blx_(live|test)_[A-Za-z0-9_-]{20,}$/`) before bcrypt; injects `RequestContext` (incl. `scopes`, see below); extracts `clientIp` from `X-Forwarded-For`
 - **JwtGuard** — Bearer JWT; verifies RS256 signature; injects `RequestContext`
 - **AdminKeyGuard** — `X-Admin-Key` header; bcrypt compare to stored hash
 - **TokenService** — Issue/rotate access + refresh token pairs using **RS256 asymmetric signing** via `SecretsService` (`getJwtPrivateKey` / `getJwtPublicKey`); `jwt.verify` pins `algorithms: ['RS256']`; lifetimes configurable via `JWT_ACCESS_TOKEN_EXPIRY` / `JWT_REFRESH_TOKEN_EXPIRY` env vars (e.g. `15m`, `7d`; defaults: 15 min / 7 days). No symmetric secret or hardcoded fallback.
 - **ApiKeyService** — Create, list, revoke, rotate tenant API keys; tracks `requestCount` and `lastUsedIp` per key; daily cron sends 7-day and 1-day expiry warnings by email
-- Rotation: `POST /v1/api-keys/:keyId/rotate` — zero-downtime rotation with 24h grace period on old key
+- Rotation: `POST /v1/api-keys/:keyId/rotate` — zero-downtime rotation with 24h grace period on old key; the new key **carries forward the old key's `scopes` unchanged** (rotation cannot escalate access)
 - Endpoints: `POST /v1/auth/token`, `/auth/refresh`, `/auth/revoke`, `/v1/api-keys` CRUD + rotate
+- **API key scopes** (added 2026-07-18, migration `20260718195736_add_api_key_scopes`) — `ApiKey.scopes: String[]`, default `["*"]` (full access, matching every key created before scopes existed — no behaviour change for existing integrations). `CreateApiKeyRequest.scopes?: ApiKeyScope[]` (`packages/types/identity.ts`) lets a caller mint a narrower key; the Settings → API Keys UI exposes this as a simple **Read only / Full access** toggle rather than per-scope checkboxes — read-only maps to `["invoices:read", "submissions:read", "products:read", "reports:read"]`, full access to `["*"]`. Enforced by a new `ScopeGuard` + `@RequireScope(...scopes)` decorator (`src/shared/guards/scope.guard.ts`, `src/shared/decorators/require-scope.decorator.ts`), mirroring the existing `RolesGuard`/`@Roles()` pattern exactly: `ScopeGuard` is a no-op for JWT/admin/system actors (`ctx.actorType !== 'apikey'`) since scopes are an API-key-only concept — JWT dashboard users are governed by `RolesGuard` instead — and a key carrying `"*"` satisfies any required scope. Applied only to the controllers that were already `ApiKeyGuard`/`FlexAuthGuard`-protected (no new API-key-reachable surface was added): `invoice-api.controller.ts` (`invoices:read` on GET routes, `invoices:write` on POST/PATCH routes), `bulk-invoice.controller.ts`'s API-key routes (`submissions:write` on the two submit routes, `submissions:read` on batch-status), and `activity.controller.ts`'s two `FlexAuthGuard` routes (`reports:read`). **Deliberately not scoped:** `webhook.controller.ts` — none of the given scope names (invoices/submissions/products/reports) fit webhook management, and inventing a new scope category wasn't part of this task; it remains reachable by any valid key regardless of scope, unchanged from before. **One addition beyond the literal spec:** `POST /v1/api-keys` (creating a new key) now requires a full-access (`"*"`) key — a read-only key could otherwise mint itself a brand-new full-access key via the `scopes` field in its own request body, which would have been a real privilege-escalation hole. `GET/POST-rotate/DELETE /v1/api-keys` (list/rotate/revoke) were deliberately left unscoped: rotation carries forward the caller's existing scopes (can't escalate), and there's no scope in the given taxonomy that cleanly covers key-management actions.
+- **Per-API-key rate limiting** (added 2026-07-18) — `TenantRateLimitInterceptor` (`src/shared/interceptors/tenant-rate-limit.interceptor.ts`) now keys the Redis bucket for `actorType === 'apikey'` requests by `keyId` (`rl:api:key:{keyId}:{hour}`), not `tenantId` (`rl:api:tenant:{tenantId}:{hour}`, still used as a fallback for any other non-JWT actor type). Each key gets its own bucket up to the tenant's tier limit (e.g. three PREMIUM-tier keys under one tenant each get their own 1000/hr budget, rather than sharing one), so a noisy or leaked key can no longer throttle every other integration on the same tenant. JWT dashboard users are unaffected — still bucketed per-tenant on the separate `rl:dashboard:tenant:...` key as before.
 
 ### tenant
 - Multi-tenant provisioning; every resource is scoped to a `Tenant`
@@ -301,9 +303,10 @@ billinx/
 20260718100100_add_product_catalog_price_unit  # fix/nrs-schema-alignment — ProductCatalog.priceUnit, default "EA"
 20260718100200_add_invoice_payment_status_enum  # fix/nrs-schema-alignment — PaymentStatusType enum; Invoice.paymentStatus String? → PaymentStatusType NOT NULL DEFAULT PENDING, with a backfill step normalising NULL/UNPAID/OVERDUE/unrecognised values to PENDING before the type cast
 20260718100300_add_invoice_nrs_status_tracking  # fix/nrs-schema-alignment — Invoice.lastNrsStatusUpdateAt/lastNrsStatusUpdateSuccess
+20260718195736_add_api_key_scopes  # feat/api-key-scopes-rate-limiting — ApiKey.scopes String[], default ["*"]
 ```
 
-45 migrations applied as of 2026-07-18; database schema confirmed in sync via `npx prisma migrate status`.
+46 migrations applied as of 2026-07-18; database schema confirmed in sync via `npx prisma migrate status`.
 
 Run pending migrations: `npx prisma migrate deploy`
 

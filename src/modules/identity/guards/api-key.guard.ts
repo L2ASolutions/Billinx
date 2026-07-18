@@ -41,7 +41,7 @@ export class ApiKeyGuard implements CanActivate {
       throw new UnauthorizedException('Invalid API key format');
     }
 
-    const { tenantId, keyId, environment } =
+    const { tenantId, keyId, environment, scopes } =
       await this.apiKeyService.verifyApiKey(rawKey, clientIp);
 
     const tenant = await this.prisma.asAdmin(async (tx) => {
@@ -64,6 +64,7 @@ export class ApiKeyGuard implements CanActivate {
       requestId:
         (request.headers['x-request-id'] as string) ?? crypto.randomUUID(),
       isAdmin: false,
+      scopes,
     };
 
     (request as any)._billinxContext = requestContext;
