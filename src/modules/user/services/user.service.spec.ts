@@ -2,6 +2,7 @@
 
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
+import * as jwt from 'jsonwebtoken';
 import {
   ConflictException,
   NotFoundException,
@@ -332,6 +333,21 @@ describe('UserService', () => {
       expect(userRepository.update).toHaveBeenCalledWith(
         USER_ID,
         expect.objectContaining({ lastLoginAt: expect.any(Date) }),
+      );
+
+      const payload = jwt.decode(result.accessToken as string) as Record<
+        string,
+        any
+      >;
+      expect(payload).toEqual(
+        expect.objectContaining({
+          sub: USER_ID,
+          tenantId: TENANT_ID,
+          email: 'user@example.com',
+          name: 'Ada Lovelace',
+          roles: ['VIEWER'],
+          role: 'VIEWER',
+        }),
       );
     });
 

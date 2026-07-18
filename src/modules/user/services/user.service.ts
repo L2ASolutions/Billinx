@@ -669,6 +669,7 @@ export class UserService {
         sub: user.id,
         tenantId,
         email: user.email,
+        name: `${user.firstName} ${user.lastName}`.trim(),
         roles,
         role: primaryRole,
         environment: 'PRODUCTION',

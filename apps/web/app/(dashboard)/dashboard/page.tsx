@@ -518,10 +518,7 @@ export default function DashboardPage() {
   const role = user?.role ?? 'VIEWER';
   const financials = canSeeFinancials(role);
 
-  const displayFullName = profile?.fullName
-    ?? (profile?.firstName && profile?.lastName ? `${profile.firstName} ${profile.lastName}` : undefined)
-    ?? user?.name
-    ?? '';
+  const displayFullName = user?.name ?? '';
 
   function handleLogout() {
     logout();
