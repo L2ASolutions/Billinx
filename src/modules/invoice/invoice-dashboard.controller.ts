@@ -24,6 +24,7 @@ import {
 import { Request, Response } from 'express';
 import { InvoiceService } from './services/invoice.service';
 import { PaymentService } from './services/payment.service';
+import { InvoicePdfService } from './services/invoice-pdf.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';
 import { RolesGuard } from '../../shared/guards/roles.guard';
 import { Roles } from '../../shared/decorators/roles.decorator';
@@ -36,6 +37,7 @@ export class InvoiceDashboardController {
   constructor(
     private readonly invoiceService: InvoiceService,
     private readonly paymentService: PaymentService,
+    private readonly invoicePdfService: InvoicePdfService,
   ) {}
 
   private getCtx(req: Request): any {
@@ -318,6 +320,28 @@ export class InvoiceDashboardController {
   async getDashboardInvoiceXml(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.invoiceService.exportAsXml(id, ctx.tenantId);
+  }
+
+  @Get(':id/pdf')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Download invoice as an NRS-compliant PDF with IRN and QR code (dashboard / JWT auth)',
+  })
+  async getDashboardInvoicePdf(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const ctx = this.getCtx(req);
+    const { buffer, filename } = await this.invoicePdfService.generatePdf(
+      id,
+      ctx.tenantId,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
   }
 
   @Get(':id/status')
