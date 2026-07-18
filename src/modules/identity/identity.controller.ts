@@ -16,6 +16,7 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiHeader,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { Response, Request } from 'express';
 import { ApiKeyService } from './services/api-key.service';
@@ -39,7 +40,7 @@ const COOKIE_OPTIONS = {
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
-@ApiTags('Identity')
+@ApiTags('Auth')
 @Controller('v1')
 export class IdentityController {
   constructor(
@@ -51,6 +52,12 @@ export class IdentityController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthRateLimitGuard)
   @ApiOperation({ summary: 'Rotate refresh token and issue new access token' })
+  @ApiResponse({
+    status: 200,
+    description: 'Rotate refresh token and issue new access token',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async refreshToken(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -76,6 +83,12 @@ export class IdentityController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Revoke refresh tokens for current user' })
+  @ApiResponse({
+    status: 204,
+    description: 'Revoke refresh tokens for current user',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async revokeToken(
     @Body() body: RevokeTokenRequest,
     @Res({ passthrough: true }) res: Response,
@@ -98,6 +111,12 @@ export class IdentityController {
     summary: 'Create a new API key for the authenticated tenant',
   })
   @ApiHeader({ name: 'Idempotency-Key', required: false })
+  @ApiResponse({
+    status: 201,
+    description: 'Create a new API key for the authenticated tenant',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async createApiKey(@Body() body: CreateApiKeyRequest) {
     const ctx = getRequestContext();
     return this.apiKeyService.createApiKey(ctx.tenantId, body);
@@ -109,6 +128,11 @@ export class IdentityController {
   @ApiOperation({
     summary: 'List all active API keys for the authenticated tenant',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'List all active API keys for the authenticated tenant',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
   async listApiKeys() {
     const ctx = getRequestContext();
     return this.apiKeyService.listApiKeys(ctx.tenantId);
@@ -125,6 +149,14 @@ export class IdentityController {
       'Returns the new key value (only shown once). The old key remains valid for 24 hours ' +
       'to allow zero-downtime rotation. An email is sent to the tenant OWNER.',
   })
+  @ApiResponse({
+    status: 201,
+    description:
+      'Rotate an API key — creates new key, old key gets 24h grace period',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async rotateApiKey(@Param('keyId') keyId: string) {
     const ctx = getRequestContext();
     return this.apiKeyService.rotateApiKey(ctx.tenantId, keyId);
@@ -135,6 +167,9 @@ export class IdentityController {
   @UseGuards(ApiKeyGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Revoke an API key' })
+  @ApiResponse({ status: 204, description: 'Revoke an API key' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async revokeApiKey(@Param('keyId') keyId: string) {
     const ctx = getRequestContext();
     await this.apiKeyService.revokeApiKey(ctx.tenantId, keyId);
@@ -153,6 +188,16 @@ export class IdentityController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new API key (dashboard / JWT auth)' })
   @ApiHeader({ name: 'Idempotency-Key', required: false })
+  @ApiResponse({
+    status: 201,
+    description: 'Create a new API key (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async createApiKeyDashboard(@Body() body: CreateApiKeyRequest) {
     const ctx = getRequestContext();
     return this.apiKeyService.createApiKey(ctx.tenantId, body);
@@ -164,6 +209,11 @@ export class IdentityController {
   @ApiOperation({
     summary: 'List API keys for the tenant (dashboard / JWT auth)',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'List API keys for the tenant (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async listApiKeysDashboard() {
     const ctx = getRequestContext();
     return this.apiKeyService.listApiKeys(ctx.tenantId);
@@ -174,6 +224,13 @@ export class IdentityController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Rotate an API key (dashboard / JWT auth)' })
+  @ApiResponse({
+    status: 201,
+    description: 'Rotate an API key (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async rotateApiKeyDashboard(@Param('keyId') keyId: string) {
     const ctx = getRequestContext();
     return this.apiKeyService.rotateApiKey(ctx.tenantId, keyId);
@@ -185,6 +242,16 @@ export class IdentityController {
   @Roles('OWNER')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Revoke an API key (dashboard / JWT auth)' })
+  @ApiResponse({
+    status: 204,
+    description: 'Revoke an API key (dashboard / JWT auth)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async revokeApiKeyDashboard(@Param('keyId') keyId: string) {
     const ctx = getRequestContext();
     await this.apiKeyService.revokeApiKey(ctx.tenantId, keyId);

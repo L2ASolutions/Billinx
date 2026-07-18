@@ -4,12 +4,13 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiQuery,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { Request } from 'express';
 import { AnalyticsService } from './analytics.service';
 import { JwtGuard } from '../identity/guards/jwt.guard';
 
-@ApiTags('Analytics')
+@ApiTags('Reports')
 @Controller('v1/analytics')
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
@@ -27,6 +28,11 @@ export class AnalyticsController {
     required: false,
     enum: ['month', 'quarter', 'year'],
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Top 10 items sold by revenue (outgoing invoices)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async topItemsSold(@Req() req: Request, @Query('period') period?: string) {
     const ctx = this.getCtx(req);
     return this.analyticsService.topItemsSold(ctx.tenantId, period);
@@ -43,6 +49,11 @@ export class AnalyticsController {
     required: false,
     enum: ['month', 'quarter', 'year'],
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Top 10 purchased items by spend (incoming invoices)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async topPurchases(@Req() req: Request, @Query('period') period?: string) {
     const ctx = this.getCtx(req);
     return this.analyticsService.topPurchases(ctx.tenantId, period);
@@ -52,6 +63,11 @@ export class AnalyticsController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Top suppliers by spend (incoming invoices)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Top suppliers by spend (incoming invoices)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async topSuppliers(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.analyticsService.topSuppliers(ctx.tenantId);
@@ -63,6 +79,11 @@ export class AnalyticsController {
   @ApiOperation({
     summary: 'Top clients by revenue (outgoing accepted invoices)',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Top clients by revenue (outgoing accepted invoices)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async topClients(@Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.analyticsService.topClients(ctx.tenantId);
@@ -76,6 +97,11 @@ export class AnalyticsController {
   })
   @ApiQuery({ name: 'itemName', required: true })
   @ApiQuery({ name: 'months', required: false })
+  @ApiResponse({
+    status: 200,
+    description: 'Price trends for an item over time (incoming invoices)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async priceTrends(
     @Req() req: Request,
     @Query('itemName') itemName: string,
@@ -94,6 +120,11 @@ export class AnalyticsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Monthly revenue vs expenses for last N months' })
   @ApiQuery({ name: 'months', required: false })
+  @ApiResponse({
+    status: 200,
+    description: 'Monthly revenue vs expenses for last N months',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async revenueVsExpenses(
     @Req() req: Request,
     @Query('months') months?: string,

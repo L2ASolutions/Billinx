@@ -16,6 +16,7 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiQuery,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { WebhookService } from './services/webhook.service';
 import { FlexAuthGuard } from '../identity/guards/flex-auth.guard';
@@ -41,6 +42,13 @@ export class WebhookController {
   @UseGuards(RolesGuard)
   @Roles('OWNER', 'ADMIN')
   @ApiOperation({ summary: 'Create a webhook subscription' })
+  @ApiResponse({ status: 201, description: 'Create a webhook subscription' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async createSubscription(@Body() body: CreateSubscriptionRequest) {
     const { tenantId } = getRequestContext();
     return this.webhookService.createSubscription(tenantId, body);
@@ -48,6 +56,7 @@ export class WebhookController {
 
   @Get('subscriptions')
   @ApiOperation({ summary: 'List webhook subscriptions' })
+  @ApiResponse({ status: 200, description: 'List webhook subscriptions' })
   async listSubscriptions() {
     const { tenantId } = getRequestContext();
     return this.webhookService.listSubscriptions(tenantId);
@@ -55,6 +64,8 @@ export class WebhookController {
 
   @Get('subscriptions/:id')
   @ApiOperation({ summary: 'Get a webhook subscription' })
+  @ApiResponse({ status: 200, description: 'Get a webhook subscription' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async getSubscription(@Param('id') id: string) {
     const { tenantId } = getRequestContext();
     return this.webhookService.getSubscription(id, tenantId);
@@ -62,6 +73,9 @@ export class WebhookController {
 
   @Patch('subscriptions/:id')
   @ApiOperation({ summary: 'Update a webhook subscription' })
+  @ApiResponse({ status: 200, description: 'Update a webhook subscription' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async updateSubscription(
     @Param('id') id: string,
     @Body() body: UpdateSubscriptionRequest,
@@ -75,6 +89,13 @@ export class WebhookController {
   @UseGuards(RolesGuard)
   @Roles('OWNER', 'ADMIN')
   @ApiOperation({ summary: 'Delete a webhook subscription' })
+  @ApiResponse({ status: 204, description: 'Delete a webhook subscription' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async deleteSubscription(@Param('id') id: string) {
     const { tenantId } = getRequestContext();
     await this.webhookService.deleteSubscription(id, tenantId);
@@ -89,6 +110,7 @@ export class WebhookController {
     required: false,
     enum: ['PENDING', 'DELIVERED', 'FAILED', 'DEAD_LETTERED'],
   })
+  @ApiResponse({ status: 200, description: 'List webhook deliveries' })
   async listDeliveries(@Query('status') status?: string) {
     const { tenantId } = getRequestContext();
     return this.webhookService.listDeliveries(tenantId, status);
@@ -96,6 +118,8 @@ export class WebhookController {
 
   @Get('deliveries/:id')
   @ApiOperation({ summary: 'Get a webhook delivery' })
+  @ApiResponse({ status: 200, description: 'Get a webhook delivery' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async getDelivery(@Param('id') id: string) {
     const { tenantId } = getRequestContext();
     return this.webhookService.getDelivery(id, tenantId);
@@ -103,6 +127,12 @@ export class WebhookController {
 
   @Post('deliveries/:id/retry')
   @ApiOperation({ summary: 'Retry a failed or dead-lettered webhook delivery' })
+  @ApiResponse({
+    status: 201,
+    description: 'Retry a failed or dead-lettered webhook delivery',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async retryDelivery(@Param('id') id: string) {
     const { tenantId } = getRequestContext();
     return this.webhookService.retryDelivery(id, tenantId);
@@ -112,6 +142,10 @@ export class WebhookController {
 
   @Get('event-types')
   @ApiOperation({ summary: 'List available webhook event types' })
+  @ApiResponse({
+    status: 200,
+    description: 'List available webhook event types',
+  })
   async listEventTypes() {
     return { eventTypes: WEBHOOK_EVENT_TYPES };
   }

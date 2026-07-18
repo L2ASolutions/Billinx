@@ -15,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import * as crypto from 'crypto';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { PaymentProviderService } from './payment.service';
 import { PaymentRateLimitGuard } from '../../shared/guards/payment-rate-limit.guard';
 
@@ -32,6 +32,12 @@ export class PaymentController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(PaymentRateLimitGuard)
   @ApiOperation({ summary: 'Initialize a Paystack payment for an invoice' })
+  @ApiResponse({
+    status: 200,
+    description: 'Initialize a Paystack payment for an invoice',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async paystackInitialize(@Body() body: Record<string, any>) {
     return this.paymentService.paystackInitialize(body.invoiceId, body.email);
   }
@@ -39,6 +45,12 @@ export class PaymentController {
   @Get('paystack/verify/:reference')
   @UseGuards(PaymentRateLimitGuard)
   @ApiOperation({ summary: 'Verify a Paystack payment by reference' })
+  @ApiResponse({
+    status: 200,
+    description: 'Verify a Paystack payment by reference',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async paystackVerify(@Param('reference') reference: string) {
     return this.paymentService.paystackVerify(reference);
   }
@@ -46,6 +58,8 @@ export class PaymentController {
   @Post('paystack/webhook')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Paystack webhook receiver' })
+  @ApiResponse({ status: 200, description: 'Paystack webhook receiver' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async paystackWebhook(
     @Headers('x-paystack-signature') signature: string,
     @Req() req: RawBodyRequest<Request>,
@@ -70,6 +84,12 @@ export class PaymentController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(PaymentRateLimitGuard)
   @ApiOperation({ summary: 'Initialize a Flutterwave payment for an invoice' })
+  @ApiResponse({
+    status: 200,
+    description: 'Initialize a Flutterwave payment for an invoice',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async flutterwaveInitialize(@Body() body: Record<string, any>) {
     return this.paymentService.flutterwaveInitialize(
       body.invoiceId,
@@ -80,6 +100,8 @@ export class PaymentController {
   @Post('flutterwave/webhook')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Flutterwave webhook receiver' })
+  @ApiResponse({ status: 200, description: 'Flutterwave webhook receiver' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async flutterwaveWebhook(
     @Headers('verif-hash') signature: string,
     @Req() req: RawBodyRequest<Request>,

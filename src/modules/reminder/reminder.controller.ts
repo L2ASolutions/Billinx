@@ -11,7 +11,12 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { Request } from 'express';
 import {
   ReminderService,
@@ -22,7 +27,7 @@ import { JwtGuard } from '../identity/guards/jwt.guard';
 import { RolesGuard } from '../../shared/guards/roles.guard';
 import { Roles } from '../../shared/decorators/roles.decorator';
 
-@ApiTags('Reminder Rules')
+@ApiTags('Settings')
 @Controller('v1/reminder-rules')
 @UseGuards(JwtGuard)
 @ApiBearerAuth()
@@ -35,6 +40,10 @@ export class ReminderController {
 
   @Get()
   @ApiOperation({ summary: 'List reminder rules for the tenant' })
+  @ApiResponse({
+    status: 200,
+    description: 'List reminder rules for the tenant',
+  })
   async listRules(@Req() req: Request) {
     const { tenantId } = this.getCtx(req);
     return this.reminderService.listRules(tenantId);
@@ -45,6 +54,13 @@ export class ReminderController {
   @UseGuards(RolesGuard)
   @Roles('OWNER', 'ADMIN')
   @ApiOperation({ summary: 'Create a custom reminder rule' })
+  @ApiResponse({ status: 201, description: 'Create a custom reminder rule' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async createRule(@Req() req: Request, @Body() body: CreateReminderRuleDto) {
     const { tenantId } = this.getCtx(req);
     return this.reminderService.createRule(tenantId, body);
@@ -54,6 +70,12 @@ export class ReminderController {
   @ApiOperation({
     summary: 'Update a reminder rule (toggle active, change days, etc.)',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Update a reminder rule (toggle active, change days, etc.)',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async updateRule(
     @Req() req: Request,
     @Param('id') id: string,
@@ -68,6 +90,13 @@ export class ReminderController {
   @UseGuards(RolesGuard)
   @Roles('OWNER', 'ADMIN')
   @ApiOperation({ summary: 'Delete a reminder rule' })
+  @ApiResponse({ status: 204, description: 'Delete a reminder rule' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async deleteRule(@Req() req: Request, @Param('id') id: string) {
     const { tenantId } = this.getCtx(req);
     await this.reminderService.deleteRule(tenantId, id);

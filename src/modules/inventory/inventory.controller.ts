@@ -9,7 +9,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { JwtGuard } from '../identity/guards/jwt.guard';
 import { getRequestContext } from '../../shared/context/request-context';
 import { InventoryService } from './inventory.service';
@@ -24,6 +29,10 @@ export class InventoryController {
 
   @Get()
   @ApiOperation({ summary: 'List all products with current stock levels' })
+  @ApiResponse({
+    status: 200,
+    description: 'List all products with current stock levels',
+  })
   async getStockList(
     @Query('lowStock') lowStock?: string,
     @Query('page') page?: string,
@@ -39,6 +48,10 @@ export class InventoryController {
 
   @Get('alerts')
   @ApiOperation({ summary: 'Get products at or below reorder point' })
+  @ApiResponse({
+    status: 200,
+    description: 'Get products at or below reorder point',
+  })
   async getAlerts() {
     const ctx = getRequestContext();
     return this.inventoryService.getAlerts(ctx.tenantId);
@@ -46,6 +59,11 @@ export class InventoryController {
 
   @Get(':productId/movements')
   @ApiOperation({ summary: 'Get stock movement history for a product' })
+  @ApiResponse({
+    status: 200,
+    description: 'Get stock movement history for a product',
+  })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async getMovements(
     @Param('productId') productId: string,
     @Query('page') page?: string,
@@ -63,6 +81,12 @@ export class InventoryController {
   @Post(':productId/adjust')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Adjust stock quantity for a product' })
+  @ApiResponse({
+    status: 200,
+    description: 'Adjust stock quantity for a product',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async adjustStock(
     @Param('productId') productId: string,
     @Body() dto: AdjustStockDto,
@@ -74,6 +98,12 @@ export class InventoryController {
   @Post(':productId/reorder')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send reorder request email to supplier' })
+  @ApiResponse({
+    status: 200,
+    description: 'Send reorder request email to supplier',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async triggerReorder(@Param('productId') productId: string) {
     const ctx = getRequestContext();
     return this.inventoryService.triggerReorder(ctx.tenantId, productId);

@@ -19,6 +19,7 @@ import {
   ApiHeader,
   ApiQuery,
   ApiParam,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { Request } from 'express';
 import { AdminService } from './services/admin.service';
@@ -51,6 +52,12 @@ export class AdminController {
   @UseGuards(AdminKeyGuard)
   @ApiHeader({ name: 'X-Admin-Key', required: true })
   @ApiOperation({ summary: 'Create an admin user (L2A Solutions staff)' })
+  @ApiResponse({
+    status: 201,
+    description: 'Create an admin user (L2A Solutions staff)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin key' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async createAdminUser(@Body() body: Record<string, any>) {
     return this.adminService.createAdminUser(body as CreateAdminUserRequest);
   }
@@ -59,6 +66,8 @@ export class AdminController {
   @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List all admin users' })
+  @ApiResponse({ status: 200, description: 'List all admin users' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async listAdminUsers() {
     return this.adminService.listAdminUsers();
   }
@@ -66,6 +75,11 @@ export class AdminController {
   @Post('auth/login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Admin login with email and password' })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin login with email and password',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async login(@Body() body: Record<string, any>) {
     return this.adminService.login(body as AdminLoginRequest);
   }
@@ -74,6 +88,11 @@ export class AdminController {
   @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get platform-wide dashboard statistics' })
+  @ApiResponse({
+    status: 200,
+    description: 'Get platform-wide dashboard statistics',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async getDashboard() {
     return this.adminService.getDashboardStats();
   }
@@ -84,6 +103,8 @@ export class AdminController {
   @ApiOperation({ summary: 'List all tenants on the platform' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'List all tenants on the platform' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async listTenants(
     @Query('page') page?: number,
     @Query('limit') limit?: number,
@@ -98,6 +119,12 @@ export class AdminController {
   @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get full detail for a specific tenant' })
+  @ApiResponse({
+    status: 200,
+    description: 'Get full detail for a specific tenant',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async getTenantDetail(@Param('id') id: string) {
     return this.adminService.getTenantDetail(id);
   }
@@ -107,6 +134,8 @@ export class AdminController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List all access requests' })
   @ApiQuery({ name: 'status', required: false })
+  @ApiResponse({ status: 200, description: 'List all access requests' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async listAccessRequests(@Query('status') status?: string) {
     return this.adminService.listAccessRequests(status);
   }
@@ -116,6 +145,13 @@ export class AdminController {
   @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Approve request and auto-provision tenant' })
+  @ApiResponse({
+    status: 200,
+    description: 'Approve request and auto-provision tenant',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async approveAndProvision(
     @Param('id') id: string,
     @Body() body: Record<string, any>,
@@ -134,6 +170,9 @@ export class AdminController {
   @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Unlock a locked user account' })
+  @ApiResponse({ status: 200, description: 'Unlock a locked user account' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async unlockAccount(@Body() body: Record<string, any>) {
     return this.adminService.unlockAccount(body.tenantId, body.email);
   }
@@ -143,6 +182,10 @@ export class AdminController {
   @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Reject an access request' })
+  @ApiResponse({ status: 200, description: 'Reject an access request' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async rejectAccessRequest(
     @Param('id') id: string,
     @Body() body: Record<string, any>,
@@ -172,6 +215,11 @@ export class AdminController {
       'BUSINESS_AUTHORISATION',
     ],
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin: list consent records (NDPA 2023)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async listConsentRecords(
     @Query('tenantId') tenantId?: string,
     @Query('email') email?: string,
@@ -194,6 +242,11 @@ export class AdminController {
     required: false,
     enum: ['PENDING', 'APPROVED', 'REJECTED'],
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin: list right-to-erasure requests',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async listErasureRequests(@Query('status') status?: string) {
     return this.adminService.listErasureRequests(status);
   }
@@ -206,6 +259,14 @@ export class AdminController {
     summary: 'Admin: approve erasure request — anonymises user PII (NDPA 2023)',
   })
   @ApiParam({ name: 'id', description: 'Erasure request ID' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Admin: approve erasure request — anonymises user PII (NDPA 2023)',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async approveErasure(
     @Param('id') id: string,
     @Body() body: Record<string, any>,
@@ -221,6 +282,10 @@ export class AdminController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Admin: reject an erasure request' })
   @ApiParam({ name: 'id', description: 'Erasure request ID' })
+  @ApiResponse({ status: 200, description: 'Admin: reject an erasure request' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async rejectErasure(
     @Param('id') id: string,
     @Body() body: Record<string, any>,
@@ -235,6 +300,11 @@ export class AdminController {
   @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get platform-wide invoice and webhook metrics' })
+  @ApiResponse({
+    status: 200,
+    description: 'Get platform-wide invoice and webhook metrics',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async getMetrics() {
     return this.adminService.getMetrics();
   }
@@ -244,6 +314,8 @@ export class AdminController {
   @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get submission queue job counts' })
+  @ApiResponse({ status: 200, description: 'Get submission queue job counts' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async getQueueStatus() {
     return this.adminService.getQueueStatus();
   }
@@ -253,6 +325,12 @@ export class AdminController {
   @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Re-queue all failed submission jobs' })
+  @ApiResponse({
+    status: 200,
+    description: 'Re-queue all failed submission jobs',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async retryFailedJobs() {
     return this.adminService.retryFailedJobs();
   }
@@ -263,6 +341,11 @@ export class AdminController {
   @ApiOperation({
     summary: 'Get bulk submission queue depth and processing stats',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Get bulk submission queue depth and processing stats',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async getBulkQueueStatus() {
     return this.adminService.getBulkQueueStatus();
   }
@@ -272,6 +355,8 @@ export class AdminController {
   @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get data retention statistics' })
+  @ApiResponse({ status: 200, description: 'Get data retention statistics' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async getRetentionStats() {
     return this.adminService.getRetentionStats();
   }
@@ -281,6 +366,12 @@ export class AdminController {
   @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Manually trigger data retention archiving' })
+  @ApiResponse({
+    status: 200,
+    description: 'Manually trigger data retention archiving',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async runRetention() {
     return this.adminService.runRetention();
   }
@@ -292,6 +383,11 @@ export class AdminController {
   @ApiOperation({ summary: 'Export all invoices across all tenants as CSV' })
   @ApiQuery({ name: 'startDate', required: true })
   @ApiQuery({ name: 'endDate', required: true })
+  @ApiResponse({
+    status: 200,
+    description: 'Export all invoices across all tenants as CSV',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async exportPlatformCSV(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
@@ -309,6 +405,11 @@ export class AdminController {
   @ApiOperation({
     summary: 'Verify the integrity of the hash-chained immutable audit log',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Verify the integrity of the hash-chained immutable audit log',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
   async verifyAuditChain() {
     return this.adminService.verifyAuditChain();
   }
@@ -322,6 +423,13 @@ export class AdminController {
     summary:
       'Manually trigger startup reconciliation — resets stuck SUBMITTING invoices',
   })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Manually trigger startup reconciliation — resets stuck SUBMITTING invoices',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async runRecovery() {
     return this.recoveryService.reconcileStuckInvoices();
   }
@@ -339,6 +447,13 @@ export class AdminController {
     required: false,
     description: 'Scope to a single tenant',
   })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Manually trigger the payment reminder check across all tenants',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid admin token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async runReminders(@Query('tenantId') tenantId?: string) {
     return this.reminderService.runReminderCheck(tenantId);
   }

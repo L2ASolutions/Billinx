@@ -17,6 +17,7 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiQuery,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { Request } from 'express';
 import { ProductCatalogService } from './product-catalog.service';
@@ -37,6 +38,9 @@ export class ProductCatalogController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a product in the catalog' })
+  @ApiResponse({ status: 201, description: 'Create a product in the catalog' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   async createProduct(@Body() body: Record<string, any>, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.productCatalogService.createProduct(ctx.tenantId, body);
@@ -49,6 +53,8 @@ export class ProductCatalogController {
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'category', required: false })
   @ApiQuery({ name: 'isActive', required: false })
+  @ApiResponse({ status: 200, description: 'List products in the catalog' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
   async listProducts(
     @Req() req: Request,
     @Query('search') search?: string,
@@ -67,6 +73,12 @@ export class ProductCatalogController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get product formatted as an invoice line item' })
+  @ApiResponse({
+    status: 200,
+    description: 'Get product formatted as an invoice line item',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async getProductAsLineItem(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.productCatalogService.getProductAsLineItem(id, ctx.tenantId);
@@ -76,6 +88,9 @@ export class ProductCatalogController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a product by ID' })
+  @ApiResponse({ status: 200, description: 'Get a product by ID' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async getProduct(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.productCatalogService.getProduct(id, ctx.tenantId);
@@ -85,6 +100,10 @@ export class ProductCatalogController {
   @UseGuards(JwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a product' })
+  @ApiResponse({ status: 200, description: 'Update a product' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async updateProduct(
     @Param('id') id: string,
     @Body() body: Record<string, any>,
@@ -100,6 +119,16 @@ export class ProductCatalogController {
   @Roles('OWNER', 'ADMIN')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a product from the catalog' })
+  @ApiResponse({
+    status: 200,
+    description: 'Delete a product from the catalog',
+  })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
   async deleteProduct(@Param('id') id: string, @Req() req: Request) {
     const ctx = this.getCtx(req);
     return this.productCatalogService.deleteProduct(id, ctx.tenantId);
