@@ -966,6 +966,167 @@ describe('InterswitchAdapter', () => {
     });
   });
 
+  describe('previewPayload', () => {
+    function mockPrismaFor(
+      tenantRow: any,
+      invoiceRow: any,
+      originalInvoiceRow?: any,
+    ) {
+      prisma.asAdmin.mockImplementation((fn: any) =>
+        fn({
+          tenant: {
+            findUniqueOrThrow: jest.fn().mockResolvedValue(tenantRow),
+          },
+          invoice: {
+            findUnique: jest.fn().mockResolvedValue(invoiceRow),
+            findFirst: jest.fn().mockResolvedValue(originalInvoiceRow ?? null),
+          },
+        }),
+      );
+    }
+
+    it('never calls the network', async () => {
+      mockPrismaFor(makeTenantRow(), makeInvoice({ tenantId: TENANT_ID }));
+      global.fetch = jest.fn();
+
+      await adapter.previewPayload(TENANT_ID, 'invoice-0001-abcd');
+
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('returns MISSING_BUSINESS_ID without a DB invoice lookup when business_id is unset', async () => {
+      mockPrismaFor(
+        makeTenantRow({ interswitchBusinessId: null }),
+        makeInvoice({ tenantId: TENANT_ID }),
+      );
+
+      await expect(
+        adapter.previewPayload(TENANT_ID, 'invoice-0001-abcd'),
+      ).rejects.toMatchObject({
+        name: 'NrsValidationError',
+        errorCode: 'MISSING_BUSINESS_ID',
+      });
+    });
+
+    it('returns MISSING_CREDENTIALS when OAuth credentials are unset', async () => {
+      mockPrismaFor(
+        makeTenantRow({ interswitchClientId: null }),
+        makeInvoice({ tenantId: TENANT_ID }),
+      );
+
+      await expect(
+        adapter.previewPayload(TENANT_ID, 'invoice-0001-abcd'),
+      ).rejects.toMatchObject({
+        name: 'NrsValidationError',
+        errorCode: 'MISSING_CREDENTIALS',
+      });
+    });
+
+    it('returns INVOICE_NOT_FOUND when the invoice does not exist', async () => {
+      mockPrismaFor(makeTenantRow(), null);
+
+      await expect(
+        adapter.previewPayload(TENANT_ID, 'missing-invoice'),
+      ).rejects.toMatchObject({
+        name: 'NrsValidationError',
+        errorCode: 'INVOICE_NOT_FOUND',
+      });
+    });
+
+    it('returns INVOICE_NOT_FOUND when the invoice belongs to another tenant', async () => {
+      mockPrismaFor(
+        makeTenantRow(),
+        makeInvoice({ tenantId: 'some-other-tenant' }),
+      );
+
+      await expect(
+        adapter.previewPayload(TENANT_ID, 'invoice-0001-abcd'),
+      ).rejects.toMatchObject({
+        name: 'NrsValidationError',
+        errorCode: 'INVOICE_NOT_FOUND',
+      });
+    });
+
+    it('uses firsConfirmedIrn for the returned irn when present, falling back to platformIrn', async () => {
+      mockPrismaFor(
+        makeTenantRow(),
+        makeInvoice({
+          tenantId: TENANT_ID,
+          platformIrn: 'PLATFORM-IRN-1',
+          firsConfirmedIrn: 'FIRS-IRN-1',
+        }),
+      );
+      const withFirs = await adapter.previewPayload(
+        TENANT_ID,
+        'invoice-0001-abcd',
+      );
+      expect(withFirs.irn).toBe('FIRS-IRN-1');
+
+      mockPrismaFor(
+        makeTenantRow(),
+        makeInvoice({
+          tenantId: TENANT_ID,
+          platformIrn: 'PLATFORM-IRN-1',
+          firsConfirmedIrn: null,
+        }),
+      );
+      const withoutFirs = await adapter.previewPayload(
+        TENANT_ID,
+        'invoice-0001-abcd',
+      );
+      expect(withoutFirs.irn).toBe('PLATFORM-IRN-1');
+    });
+
+    it('includes the preview_note field verbatim', async () => {
+      mockPrismaFor(makeTenantRow(), makeInvoice({ tenantId: TENANT_ID }));
+
+      const { payload } = await adapter.previewPayload(
+        TENANT_ID,
+        'invoice-0001-abcd',
+      );
+
+      expect(payload.preview_note).toBe(
+        'IRN and issue_time are generated at preview time and will differ from the final submission IRN',
+      );
+    });
+
+    it('produces a payload identical to the one submit() actually sends to NRS', async () => {
+      const invoice = makeInvoice({ tenantId: TENANT_ID });
+
+      // Capture what submit() really sends.
+      const fetchMock = makeFetchMock({ postInvoice: successResponse() });
+      global.fetch = fetchMock;
+      await adapter.submit(makeRequest({ payload: { invoice } }));
+      const [, submitInit] = fetchMock.mock.calls.find(([url]) =>
+        url.includes('/Api/SwitchTax/postInvoice'),
+      );
+      const submittedPayload = JSON.parse(submitInit.body);
+
+      // Now preview the same invoice.
+      mockPrismaFor(makeTenantRow(), invoice);
+      global.fetch = jest.fn();
+      const { payload: previewedPayload } = await adapter.previewPayload(
+        TENANT_ID,
+        'invoice-0001-abcd',
+      );
+
+      // irn/issue_time are regenerated from Date.now() on every buildPayload()
+      // call, so they legitimately differ between the two calls above — strip
+      // them (plus the preview-only note) before comparing everything else.
+      const { irn: _irn1, issue_time: _t1, ...submittedRest } =
+        submittedPayload;
+      const {
+        irn: _irn2,
+        issue_time: _t2,
+        preview_note,
+        ...previewedRest
+      } = previewedPayload as Record<string, any>;
+
+      expect(previewedRest).toEqual(submittedRest);
+      expect(preview_note).toBeDefined();
+    });
+  });
+
   describe('checkStatus', () => {
     it('returns MISSING_TENANT_ID when tenantId is absent from tenantCredential', async () => {
       const result = await adapter.checkStatus('IRN-1', {});

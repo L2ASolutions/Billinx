@@ -14,6 +14,10 @@ jest.mock('exceljs', () => {
 import { InvoiceDashboardController } from './invoice-dashboard.controller';
 import { PaymentService } from './services/payment.service';
 import { InvoicePdfService } from './services/invoice-pdf.service';
+import {
+  InterswitchAdapter,
+  NrsValidationError,
+} from '../submission/adapters/interswitch/interswitch.adapter';
 
 function makeReq(ctx: Record<string, any> = {}): any {
   return {
@@ -43,6 +47,7 @@ describe('InvoiceDashboardController', () => {
     Pick<PaymentService, 'recordPayment' | 'listPayments'>
   >;
   let invoicePdfService: jest.Mocked<Pick<InvoicePdfService, 'generatePdf'>>;
+  let interswitchAdapter: jest.Mocked<Pick<InterswitchAdapter, 'previewPayload'>>;
 
   beforeEach(() => {
     invoiceService = {
@@ -81,10 +86,17 @@ describe('InvoiceDashboardController', () => {
         filename: 'invoice-inv-1.pdf',
       }),
     };
+    interswitchAdapter = {
+      previewPayload: jest.fn().mockResolvedValue({
+        payload: { business_id: 'biz-1', irn: 'PREVIEW-IRN' },
+        irn: 'NGA-MBS-VERIFY-1',
+      }),
+    };
     controller = new InvoiceDashboardController(
       invoiceService,
       paymentService as unknown as PaymentService,
       invoicePdfService as unknown as InvoicePdfService,
+      interswitchAdapter as unknown as InterswitchAdapter,
     );
   });
 
@@ -261,6 +273,51 @@ describe('InvoiceDashboardController', () => {
       'attachment; filename="invoice-inv-1.pdf"',
     );
     expect(res.send).toHaveBeenCalledWith(Buffer.from('%PDF-fake'));
+  });
+
+  it('getDashboardInvoiceNrsPayload delegates to InterswitchAdapter.previewPayload and streams the JSON', async () => {
+    const res = makeRes();
+    await controller.getDashboardInvoiceNrsPayload('inv-1', makeReq(), res);
+
+    expect(interswitchAdapter.previewPayload).toHaveBeenCalledWith(
+      'tenant-1',
+      'inv-1',
+    );
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Type',
+      'application/json',
+    );
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Disposition',
+      'attachment; filename="nrs-payload-NGA-MBS-VERIFY-1.json"',
+    );
+    expect(res.send).toHaveBeenCalledWith(
+      JSON.stringify({ business_id: 'biz-1', irn: 'PREVIEW-IRN' }, null, 2),
+    );
+  });
+
+  it('getDashboardInvoiceNrsPayload maps INVOICE_NOT_FOUND to NotFoundException', async () => {
+    interswitchAdapter.previewPayload.mockRejectedValue(
+      new NrsValidationError('INVOICE_NOT_FOUND', 'Invoice missing not found'),
+    );
+    await expect(
+      controller.getDashboardInvoiceNrsPayload('missing', makeReq(), makeRes()),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('getDashboardInvoiceNrsPayload maps other NrsValidationErrors to BadRequestException with errorCode', async () => {
+    interswitchAdapter.previewPayload.mockRejectedValue(
+      new NrsValidationError('MISSING_BUSINESS_ID', 'business_id not configured'),
+    );
+    await expect(
+      controller.getDashboardInvoiceNrsPayload('inv-1', makeReq(), makeRes()),
+    ).rejects.toMatchObject({
+      status: 400,
+      response: {
+        errorCode: 'MISSING_BUSINESS_ID',
+        message: 'business_id not configured',
+      },
+    });
   });
 
   it('getDashboardInvoiceStatus delegates to the service', async () => {
