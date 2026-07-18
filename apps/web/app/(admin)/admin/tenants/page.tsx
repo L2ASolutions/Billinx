@@ -33,6 +33,8 @@ export default function TenantsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [unlockingId, setUnlockingId] = useState<string | null>(null);
+  const [unlockResult, setUnlockResult] = useState<{ id: string; message: string } | null>(null);
 
   useEffect(() => {
     adminApi.tenants()
@@ -45,6 +47,21 @@ export default function TenantsPage() {
     t.name?.toLowerCase().includes(search.toLowerCase()) ||
     t.tin?.toLowerCase().includes(search.toLowerCase())
   );
+
+  async function handleUnlock(tenant: Tenant) {
+    const email = window.prompt(`Unlock which user's account for ${tenant.name}? Enter their email:`);
+    if (!email) return;
+    setUnlockingId(tenant.id);
+    setUnlockResult(null);
+    try {
+      const res = await adminApi.unlockAccount(tenant.id, email) as { message?: string };
+      setUnlockResult({ id: tenant.id, message: res?.message ?? `Account for ${email} unlocked.` });
+    } catch (err: unknown) {
+      setUnlockResult({ id: tenant.id, message: err instanceof Error ? err.message : "Unlock failed" });
+    } finally {
+      setUnlockingId(null);
+    }
+  }
 
   return (
     <div className="space-y-4 max-w-6xl">
@@ -80,6 +97,7 @@ export default function TenantsPage() {
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Invoices</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Status</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Created</th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-muted uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -108,6 +126,18 @@ export default function TenantsPage() {
                     </div>
                   </td>
                   <td className="px-6 py-3 text-sm text-muted">{formatDate(t.createdAt)}</td>
+                  <td className="px-6 py-3">
+                    <button
+                      disabled={unlockingId === t.id}
+                      onClick={() => handleUnlock(t)}
+                      className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted hover:text-dark hover:bg-surface transition-colors disabled:opacity-50"
+                    >
+                      {unlockingId === t.id ? "Unlocking…" : "Unlock account"}
+                    </button>
+                    {unlockResult?.id === t.id && (
+                      <p className="text-xs text-muted italic mt-1">{unlockResult.message}</p>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

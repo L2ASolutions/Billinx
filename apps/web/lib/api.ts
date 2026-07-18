@@ -216,7 +216,6 @@ export const invoiceApi = {
   paymentStats: () => api.get<unknown>('/v1/invoices/dashboard/payment-stats'),
   paymentCharts: () =>
     api.get<unknown>('/v1/invoices/dashboard/payment-charts'),
-  getXml: (id: string) => requestBlob(`/v1/invoices/dashboard/${id}/xml`),
   getPdf: (id: string) => requestBlob(`/v1/invoices/dashboard/${id}/pdf`),
   getNrsPayload: (id: string) =>
     requestBlob(`/v1/invoices/dashboard/${id}/nrs-payload`),
