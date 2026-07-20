@@ -104,6 +104,8 @@ export class InvoiceService {
       tenant.interswitchServiceId ?? 'SVC00001',
     );
 
+    const normalisedLineItems = this.normaliseLineItems(request.lineItems);
+
     this.validationService.validateInvoiceFields(
       {
         invoiceTypeCode: request.invoiceTypeCode,
@@ -112,7 +114,7 @@ export class InvoiceService {
         buyer: request.buyer,
         issueDate: request.issueDate,
         originalIrn: request.originalIrn,
-        lineItems: request.lineItems,
+        lineItems: normalisedLineItems,
         totalAmount: request.legalMonetaryTotal?.payableAmount,
         legalMonetaryTotal: request.legalMonetaryTotal,
         taxTotal: request.taxTotal,
@@ -157,7 +159,7 @@ export class InvoiceService {
         0,
       ),
       totalAmount: request.legalMonetaryTotal?.payableAmount ?? 0,
-      lineItems: JSON.parse(JSON.stringify(request.lineItems ?? [])),
+      lineItems: JSON.parse(JSON.stringify(normalisedLineItems ?? [])),
       taxTotal: JSON.parse(JSON.stringify(request.taxTotal ?? [])),
       legalMonetaryTotal: JSON.parse(
         JSON.stringify(request.legalMonetaryTotal ?? {}),
@@ -316,8 +318,9 @@ export class InvoiceService {
     const effectiveIssueDate = request.issueDate ?? invoice.issueDate;
     const effectiveKind = request.invoiceKind ?? (invoice as any).invoiceKind;
     const effectiveBuyerTin = request.buyer?.tin ?? (invoice as any).buyerTin;
-    const effectiveLineItems: any[] =
-      request.lineItems ?? (invoice.lineItems as any[]) ?? [];
+    const effectiveLineItems: any[] = this.normaliseLineItems(
+      request.lineItems ?? (invoice.lineItems as any[]) ?? [],
+    );
     const effectiveTotal =
       request.legalMonetaryTotal?.payableAmount ?? Number(invoice.totalAmount);
     const effectiveLegalMonetaryTotal =
@@ -378,9 +381,7 @@ export class InvoiceService {
             : invoice.vatAmount,
           totalAmount:
             request.legalMonetaryTotal?.payableAmount ?? invoice.totalAmount,
-          lineItems: request.lineItems
-            ? JSON.parse(JSON.stringify(request.lineItems))
-            : invoice.lineItems,
+          lineItems: JSON.parse(JSON.stringify(effectiveLineItems)),
           taxTotal: request.taxTotal
             ? JSON.parse(JSON.stringify(request.taxTotal))
             : invoice.taxTotal,
@@ -1148,6 +1149,60 @@ export class InvoiceService {
     return new Date().toTimeString().split(' ')[0]; // HH:mm:ss
   }
 
+  // Converts the New Invoice dashboard form's flat line-item shape
+  // ({ quantity, unitPrice, priceUnit, hsnCode, ... }) into the canonical
+  // nested shape InterswitchAdapter.mapLineItems() and InvoiceValidationService
+  // actually read ({ invoicedQuantity, price: { priceAmount, ... }, hsnCode, ... }).
+  // Already-canonical items (invoicedQuantity + price.priceAmount present) pass
+  // through unchanged, since the API/bulk-import paths already send canonical
+  // shape and must not be double-transformed.
+  private normaliseLineItems(lineItems: any[] | undefined | null): any[] {
+    if (!Array.isArray(lineItems)) {
+      return lineItems as any;
+    }
+
+    return lineItems.map((item) => {
+      if (
+        item &&
+        typeof item === 'object' &&
+        item.invoicedQuantity !== undefined &&
+        item.price?.priceAmount !== undefined
+      ) {
+        return item;
+      }
+
+      const itemType = (item.itemType ?? 'PRODUCT').toString().toUpperCase();
+      const isService = itemType === 'SERVICE';
+
+      const {
+        quantity,
+        unitPrice,
+        priceUnit,
+        description,
+        hsnCode,
+        isicCode,
+        serviceCategory,
+        productCategory,
+        ...rest
+      } = item;
+
+      return {
+        ...rest,
+        invoicedQuantity: quantity,
+        price: {
+          priceAmount: unitPrice,
+          baseQuantity: 1,
+          priceUnit: priceUnit ?? 'EA',
+        },
+        description,
+        itemType,
+        ...(isService
+          ? { isicCode, serviceCategory }
+          : { hsnCode, productCategory }),
+      };
+    });
+  }
+
   private mapToResponse(invoice: any): InvoiceResponse {
     const typeNameMap: Record<string, string> = {
       STANDARD: 'STANDARD',
@@ -1336,7 +1391,9 @@ export class InvoiceService {
         0,
       ),
       totalAmount: request.legalMonetaryTotal?.payableAmount ?? 0,
-      lineItems: JSON.parse(JSON.stringify(request.lineItems ?? [])),
+      lineItems: JSON.parse(
+        JSON.stringify(this.normaliseLineItems(request.lineItems) ?? []),
+      ),
       taxTotal: JSON.parse(JSON.stringify(request.taxTotal ?? [])),
       legalMonetaryTotal: JSON.parse(
         JSON.stringify(request.legalMonetaryTotal ?? {}),
@@ -1421,7 +1478,9 @@ export class InvoiceService {
           totalAmount:
             body.legalMonetaryTotal?.payableAmount ?? invoice.totalAmount,
           lineItems: body.lineItems
-            ? JSON.parse(JSON.stringify(body.lineItems))
+            ? JSON.parse(
+                JSON.stringify(this.normaliseLineItems(body.lineItems)),
+              )
             : invoice.lineItems,
           taxTotal: body.taxTotal
             ? JSON.parse(JSON.stringify(body.taxTotal))
@@ -1620,7 +1679,11 @@ export class InvoiceService {
       totalAmount: Number(original.totalAmount),
       amountPaid: 0,
       paymentStatus: 'PENDING',
-      lineItems: JSON.parse(JSON.stringify(original.lineItems ?? [])),
+      lineItems: JSON.parse(
+        JSON.stringify(
+          this.normaliseLineItems(original.lineItems as any[]) ?? [],
+        ),
+      ),
       taxTotal: JSON.parse(JSON.stringify(original.taxTotal ?? [])),
       legalMonetaryTotal: JSON.parse(
         JSON.stringify(original.legalMonetaryTotal ?? {}),
