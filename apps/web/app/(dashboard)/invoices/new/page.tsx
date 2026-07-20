@@ -23,6 +23,8 @@ interface LineItem {
   itemType: "product" | "service";
   hsnCode?: string;
   isicCode?: string;
+  productCategory?: string;
+  serviceCategory?: string;
   productId?: string;
 }
 
@@ -70,6 +72,8 @@ interface DraftLineItem {
   vatRate?: number;
   isicCode?: string;
   hsnCode?: string;
+  productCategory?: string;
+  serviceCategory?: string;
 }
 
 interface DraftAllowanceCharge {
@@ -118,6 +122,7 @@ interface Product {
   currency: string;
   hsnCode?: string;
   isicCode?: string;
+  productCategory?: string;
   taxCategoryId?: string;
 }
 
@@ -751,6 +756,8 @@ function NewInvoiceForm() {
           itemType: li.isicCode ? "service" : "product",
           hsnCode: li.hsnCode ?? "",
           isicCode: li.isicCode ?? "",
+          productCategory: li.productCategory ?? "",
+          serviceCategory: li.serviceCategory ?? "",
         })));
       }
       if (Array.isArray(data.allowanceCharges)) {
@@ -827,6 +834,8 @@ function NewInvoiceForm() {
               itemType: hasIsic ? "service" : "product",
               hsnCode: product.hsnCode ?? (hasIsic ? undefined : item.hsnCode),
               isicCode: product.isicCode ?? (hasIsic ? item.isicCode : undefined),
+              productCategory: hasIsic ? item.productCategory : (product.productCategory ?? item.productCategory),
+              serviceCategory: hasIsic ? (product.productCategory ?? item.serviceCategory) : item.serviceCategory,
               productId: product.id,
             }
           : item
@@ -917,8 +926,11 @@ function NewInvoiceForm() {
           priceUnit: item.priceUnit || "EA",
           taxCode: item.taxCategory,
           vatRate: item.vatRate,
+          itemType: item.itemType === "service" ? "SERVICE" : "PRODUCT",
           hsnCode: item.itemType === "product" ? (item.hsnCode || undefined) : undefined,
           isicCode: item.itemType === "service" ? (item.isicCode || undefined) : undefined,
+          productCategory: item.itemType === "product" ? (item.productCategory || undefined) : undefined,
+          serviceCategory: item.itemType === "service" ? (item.serviceCategory || undefined) : undefined,
           totalPrice: item.quantity * item.unitPrice * (1 + item.vatRate / 100),
           vatAmount: item.quantity * item.unitPrice * (item.vatRate / 100),
         })),
@@ -1514,6 +1526,29 @@ function NewInvoiceForm() {
                       </select>
                     </div>
                   </div>
+
+                  {/* Row 3: NRS classification category (product or service, mutually exclusive) */}
+                  {item.itemType === "product" ? (
+                    <div className="w-64">
+                      <input
+                        className={inp()}
+                        placeholder="e.g. Electronics, Food, Services"
+                        value={item.productCategory ?? ""}
+                        onChange={(e) => updateLine(i, "productCategory", e.target.value)}
+                      />
+                      <p className="text-xs text-muted mt-1">Product category</p>
+                    </div>
+                  ) : (
+                    <div className="w-64">
+                      <input
+                        className={inp()}
+                        placeholder="e.g. Consulting, IT Services, Legal"
+                        value={item.serviceCategory ?? ""}
+                        onChange={(e) => updateLine(i, "serviceCategory", e.target.value)}
+                      />
+                      <p className="text-xs text-muted mt-1">Service category</p>
+                    </div>
+                  )}
                 </div>
               ))}
 
