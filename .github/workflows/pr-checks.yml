@@ -151,8 +151,6 @@ jobs:
       # jobs above.
       NODE_ENV: test
       PORT: "3000"
-      JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
-      JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -162,6 +160,34 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
+
+      - name: Generate ephemeral JWT signing key
+        # This job is the only CI job that actually boots the compiled app
+        # (`node dist/src/main`), so it's the only one that hits
+        # validateEnvironment()'s development-mode JWT_PRIVATE_KEY check.
+        # Previously this read secrets.JWT_PRIVATE_KEY/JWT_PUBLIC_KEY, which
+        # aren't configured in this repo — the app boot failed with "Missing
+        # required environment variables: JWT_PRIVATE_KEY" and the servers
+        # never came up before the wait-on timeout. A fresh RSA-2048 keypair
+        # generated per-run is sufficient here: these tokens only need to be
+        # internally self-consistent for the lifetime of this one job (the
+        # E2E suite logs in through the real login form and verifies the
+        # token it gets back, it doesn't check against a fixed key), so
+        # there's no need to depend on a persisted repo secret at all.
+        run: |
+          openssl genrsa -out /tmp/e2e_jwt_private.pem 2048
+          openssl rsa -in /tmp/e2e_jwt_private.pem -pubout -out /tmp/e2e_jwt_public.pem
+          {
+            echo "JWT_PRIVATE_KEY<<JWT_KEY_EOF"
+            cat /tmp/e2e_jwt_private.pem
+            echo "JWT_KEY_EOF"
+          } >> "$GITHUB_ENV"
+          {
+            echo "JWT_PUBLIC_KEY<<JWT_KEY_EOF"
+            cat /tmp/e2e_jwt_public.pem
+            echo "JWT_KEY_EOF"
+          } >> "$GITHUB_ENV"
+          rm -f /tmp/e2e_jwt_private.pem /tmp/e2e_jwt_public.pem
 
       - name: Install root dependencies
         run: npm ci
