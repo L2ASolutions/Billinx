@@ -28,13 +28,20 @@ interface PublicInvoice {
   };
   buyer: { partyName: string; tin: string | null; email: string | null };
   lineItems: Array<{
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    totalPrice: number;
-    vatRate: number;
-    vatAmount: number;
+    // Canonical shape (post PR #224 normaliseLineItems())
+    item?: { name?: string; description?: string };
+    invoicedQuantity?: number;
+    price?: { priceAmount?: number };
+    lineExtensionAmount?: number;
+    // Legacy flat shape — fallback for invoices stored before normalisation
+    description?: string;
+    itemName?: string;
+    quantity?: number;
+    unitPrice?: number;
+    totalPrice?: number;
+    vatAmount?: number;
   }>;
+  taxTotal?: Array<{ taxAmount?: number }>;
   legalMonetaryTotal: { payableAmount: number };
   amountPaid: number;
   amountOutstanding: number;
@@ -317,24 +324,39 @@ export default function PublicPayPage() {
               <span>Amount</span>
             </div>
             <div className="divide-y divide-gray-100">
-              {(invoice.lineItems as PublicInvoice["lineItems"]).map((item, i) => (
-                <div key={i} className="px-5 py-3 flex justify-between items-start gap-4 text-sm">
-                  <div className="flex-1">
-                    <p className="text-gray-800">{item.description}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {item.quantity} × {fmt(item.unitPrice, invoice.currency)}
-                    </p>
+              {(invoice.lineItems as PublicInvoice["lineItems"]).map((item, i) => {
+                const description =
+                  item.item?.description ?? item.description ?? item.itemName ?? "";
+                const quantity = item.invoicedQuantity ?? item.quantity ?? 0;
+                const unitPrice = item.price?.priceAmount ?? item.unitPrice ?? 0;
+                const totalPrice =
+                  item.lineExtensionAmount ?? item.totalPrice ?? 0;
+                return (
+                  <div key={i} className="px-5 py-3 flex justify-between items-start gap-4 text-sm">
+                    <div className="flex-1">
+                      <p className="text-gray-800">{description}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {quantity} × {fmt(unitPrice, invoice.currency)}
+                      </p>
+                    </div>
+                    <span className="font-medium text-gray-900 shrink-0">
+                      {fmt(totalPrice, invoice.currency)}
+                    </span>
                   </div>
-                  <span className="font-medium text-gray-900 shrink-0">
-                    {fmt(item.totalPrice, invoice.currency)}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="border-t border-gray-200 px-5 py-3 space-y-1.5 bg-gray-50">
               <div className="flex justify-between text-sm text-gray-600">
                 <span>VAT</span>
-                <span>{fmt(invoice.lineItems.reduce((s, i) => s + (i.vatAmount ?? 0), 0), invoice.currency)}</span>
+                <span>
+                  {fmt(
+                    invoice.taxTotal && invoice.taxTotal.length > 0
+                      ? invoice.taxTotal.reduce((s, t) => s + (t.taxAmount ?? 0), 0)
+                      : invoice.lineItems.reduce((s, i) => s + (i.vatAmount ?? 0), 0),
+                    invoice.currency,
+                  )}
+                </span>
               </div>
               {invoice.whtApplicable && invoice.whtAmount && (
                 <div className="flex justify-between text-sm text-amber-700">
