@@ -6,10 +6,10 @@ const APP_LOGIN_URL =
   process.env.NEXT_PUBLIC_APP_LOGIN_URL || "http://localhost:3001/login";
 
 const trustItems = [
-  "FIRS Approved",
   "NRS Compliant",
+  "FIRS Approved",
   "Nigerian Data Residency",
-  "Built for SMEs",
+  "Built for Nigeria",
 ];
 
 function DashboardMockup() {
@@ -76,12 +76,11 @@ export function Hero() {
       <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center gap-12 px-6 py-16 lg:grid-cols-2 lg:gap-8 lg:py-24">
         <FadeIn>
           <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
-            <span className="block">Invoice right. Submit to NRS.</span>
-            <span className="block">Handle VAT. All in one place.</span>
+            <span className="whitespace-nowrap">NRS e-invoicing</span> built for Nigerian businesses
           </h1>
           <p className="mt-6 max-w-xl text-lg text-white/70 sm:text-xl">
-            Create NRS-compliant invoices, submit directly to FIRS, and
-            generate your VAT return automatically — all from one platform.
+            Create NRS-compliant invoices, submit to NRS in one click, and
+            generate your VAT return — all from one platform.
           </p>
 
           <div className="mt-8 flex flex-col gap-4 sm:flex-row">
