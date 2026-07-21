@@ -285,6 +285,24 @@ export const invoiceApi = {
     ),
 };
 
+// Recurring Invoices
+export const recurringInvoiceApi = {
+  // Not cachedGet: this list changes on every pause/resume/cancel action the
+  // user takes on the same page, and a 30s-stale cache would show the wrong
+  // status right after acting on it.
+  list: () => api.get<unknown[]>('/v1/invoices/recurring'),
+  get: (id: string) => api.get<unknown>(`/v1/invoices/recurring/${id}`),
+  create: (data: unknown) =>
+    api.post<unknown>('/v1/invoices/recurring', data),
+  update: (id: string, data: unknown) =>
+    api.patch<unknown>(`/v1/invoices/recurring/${id}`, data),
+  pause: (id: string) =>
+    api.post<unknown>(`/v1/invoices/recurring/${id}/pause`),
+  resume: (id: string) =>
+    api.post<unknown>(`/v1/invoices/recurring/${id}/resume`),
+  cancel: (id: string) => api.delete<unknown>(`/v1/invoices/recurring/${id}`),
+};
+
 // VAT Return
 export const vatReturnApi = {
   summary: (startDate: string, endDate: string) =>

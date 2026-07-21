@@ -59,6 +59,7 @@ model Tenant {
   vatPeriodSummaries   VatPeriodSummary[]
   clients              Client[]
   stockMovements       StockMovement[]
+  recurringInvoices    RecurringInvoice[]
 
   @@map("tenants")
 }
@@ -197,6 +198,7 @@ model Invoice {
   expectedCash               Decimal?
   lastNrsStatusUpdateAt      DateTime?
   lastNrsStatusUpdateSuccess Boolean?
+  recurringInvoiceId         String?
   createdAt                  DateTime          @default(now())
   updatedAt                  DateTime          @updatedAt
 
@@ -206,6 +208,7 @@ model Invoice {
   paymentRecords     PaymentRecord[]
   reminderLogs       ReminderLog[]
   creditNotes        CreditNote[]
+  recurringSource    RecurringInvoice?     @relation("RecurringInvoiceSource", fields: [recurringInvoiceId], references: [id])
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
@@ -219,7 +222,33 @@ model Invoice {
   @@index([tenantId, issueDate])
   @@index([userId])
   @@index([paymentDueDate])
+  @@index([recurringInvoiceId])
   @@map("invoices")
+}
+
+model RecurringInvoice {
+  id           String             @id @default(cuid())
+  tenantId     String
+  name         String
+  frequency    RecurringFrequency
+  startDate    DateTime
+  endDate      DateTime?
+  nextRunDate  DateTime
+  status       RecurringStatus    @default(ACTIVE)
+  autoSubmit   Boolean            @default(false)
+  autoSend     Boolean            @default(false)
+  templateData Json
+  lastRunAt    DateTime?
+  invoiceCount Int                @default(0)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  invoices Invoice[] @relation("RecurringInvoiceSource")
+
+  @@index([tenantId, status])
+  @@index([status, nextRunDate])
+  @@map("recurring_invoices")
 }
 
 model InvoiceStateHistory {
@@ -356,6 +385,20 @@ enum PaymentStatusType {
   PENDING
   PAID
   PARTIAL
+}
+
+enum RecurringFrequency {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+}
+
+enum RecurringStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  COMPLETED
 }
 
 enum InvoiceStatus {

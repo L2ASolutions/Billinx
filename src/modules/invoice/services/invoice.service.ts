@@ -1156,7 +1156,10 @@ export class InvoiceService {
   // Already-canonical items (invoicedQuantity + price.priceAmount present) pass
   // through unchanged, since the API/bulk-import paths already send canonical
   // shape and must not be double-transformed.
-  private normaliseLineItems(lineItems: any[] | undefined | null): any[] {
+  // Public: also reused by RecurringInvoiceService to pre-validate a
+  // schedule's templateData.lineItems before saving (see recurring-invoice
+  // module) without duplicating this classification logic.
+  normaliseLineItems(lineItems: any[] | undefined | null): any[] {
     if (!Array.isArray(lineItems)) {
       return lineItems as any;
     }
