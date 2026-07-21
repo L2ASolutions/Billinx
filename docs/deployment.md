@@ -531,3 +531,139 @@ The `SecretsService` fetches these at startup and caches them for 5 minutes. The
 5. Delete local key files
 
 No redeployment needed — the `SecretsService` cache expires every 5 minutes and picks up the new keys automatically.
+
+---
+
+## CLAUDE.md reference content (moved 2026-07-21)
+
+The sections below were moved out of `CLAUDE.md` verbatim (content unchanged)
+to keep the main file within a manageable size: environment variable
+reference, the Terraform module table, the ops-scripts table, and the GitHub
+Actions CI/CD pipeline description.
+
+## Environment Variables
+
+```bash
+# App
+NODE_ENV=development|production
+PORT=3000
+
+# Database
+DATABASE_URL=postgresql://...          # app role (billinx_app in production; billinx in dev)
+MIGRATION_DATABASE_URL=postgresql://...# owner role (billinx) — used by prisma migrate and asAdmin(); required in production
+# For production: append ?connection_limit=10&pool_timeout=20
+DB_POOL_SIZE=10
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_URL=                        # takes precedence over HOST/PORT
+
+# JWT — RSA key pair (dev: env vars; prod: AWS Secrets Manager via secret IDs below)
+JWT_PRIVATE_KEY=            # dev only — PEM-encoded RSA-2048 private key
+JWT_PUBLIC_KEY=             # dev only — matching public key
+ADMIN_JWT_SECRET=           # admin portal JWT; separate from user auth
+# Token lifetimes — units: s, m, h, d (defaults: 15m / 7d)
+JWT_ACCESS_TOKEN_EXPIRY=15m
+JWT_REFRESH_TOKEN_EXPIRY=7d
+
+# AWS
+AWS_REGION=af-south-1
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_SES_REGION=us-east-1
+
+# AWS Secrets Manager secret IDs (prod)
+JWT_PRIVATE_KEY_SECRET_ID=
+JWT_PUBLIC_KEY_SECRET_ID=
+MASTER_KEY_SECRET_ID=
+ADMIN_KEY_SECRET_ID=
+
+# CORS — required in production; app refuses to start without it
+ALLOWED_ORIGINS=https://app.billinx.ng  # comma-separated list of allowed browser origins
+
+# Admin IP allowlist — required in production; guard returns 403 on all /v1/admin/* without it
+ADMIN_ALLOWED_IPS=10.0.0.0/8,203.0.113.5  # comma-separated CIDRs or exact IPs
+
+# Email
+EMAIL_FROM=Billinx <noreply@billinx.ng>
+APP_BASE_URL=https://app.billinx.ng
+
+# MFA
+MFA_ISSUER=Billinx
+
+# BullMQ worker concurrency
+WORKER_CONCURRENCY=10        # individual submission worker
+BULK_WORKER_CONCURRENCY=5    # bulk submission worker (lower priority)
+
+# External APIs
+INTERSWITCH_SANDBOX_URL=
+INTERSWITCH_PROD_URL=
+NRS_API_BASE_URL=
+CAC_API_BASE_URL=
+CAC_API_KEY=
+```
+
+---
+
+
+## Infrastructure (Terraform)
+
+`infra/` contains full AWS infrastructure:
+
+| Module | Resource |
+|---|---|
+| `vpc` | VPC, subnets (public/private), NAT gateway, route tables |
+| `security-groups` | ALB, ECS task, RDS, ElastiCache SGs |
+| `ecr` | ECR repository for Docker images |
+| `ecs` | Fargate cluster + task definition + service |
+| `rds` | PostgreSQL RDS in private subnet |
+| `elasticache` | Redis cluster in private subnet |
+| `alb` | Application Load Balancer + HTTPS listener + target group |
+| `secrets` | Secrets Manager secrets for JWT keys, master key, admin key |
+| `cloudwatch` | Log groups + metric alarms |
+
+Copy `infra/terraform.tfvars.example` → `infra/terraform.tfvars` and fill in values before running.
+
+```bash
+cd infra
+terraform init
+terraform plan
+terraform apply
+```
+
+---
+
+
+## Scripts
+
+| Script | Purpose |
+|---|---|
+| `scripts/setup-aws.sh` | Bootstrap AWS resources (ECR, Secrets Manager) |
+| `scripts/update-secrets.sh` | Rotate secrets in Secrets Manager |
+| `scripts/run-migrations.sh` | Run `prisma migrate deploy` in ECS task |
+| `scripts/health-check.sh` | Curl `/health` and report status |
+
+---
+
+
+## GitHub Actions
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `deploy.yml` | **Manual (`workflow_dispatch`)** — not automatic on push to `main` | Test → build Docker image → Trivy scan (CRITICAL/HIGH, blocking) → push ECR → Prisma migrate → ECS deploy → health check → auto-rollback on failure |
+| `pr-checks.yml` | Pull request | Type-check + lint + unit tests + frontend unit tests + **E2E tests (Playwright)** + `npm audit --audit-level=high` + RLS isolation test + Docker build check (no push) + **gitleaks secret scan** + **TruffleHog secret scan** |
+| `codeql.yml` | Push to `main` + Pull request | CodeQL static analysis (TypeScript, `security-extended` query suite) |
+
+Deployment pipeline: test → build-and-push (incl. Trivy image scan) → migrate → deploy (needs both build-and-push AND migrate). Auto-rollback: if `/health` fails after 10 retries × 15s, previous ECS task definition is restored.
+
+**Required checks before any PR can merge:** type-check, lint, unit tests, frontend unit tests, E2E tests, dependency audit, RLS isolation test, Docker build, gitleaks secret scan, TruffleHog secret scan, and CodeQL analysis. All must be green; none can be skipped. **`e2e-tests` still needs to be added to the branch protection ruleset's required-checks list by someone with repo admin access** (same standing gap already noted for `frontend-tests` — this tool doesn't have API access to branch protection, confirmed via a 403 on read).
+
+Secret scanning notes:
+- `gitleaks/gitleaks-action@v2` scans commits introduced by the PR; `.gitleaks.toml` allowlists two commits containing a known-inert RSA placeholder pending a git-history scrub.
+- `trufflesecurity/trufflehog@main` scans the full git history (`base: ""`) with `--only-verified`; the inert placeholder is suppressed automatically because it cannot verify against any real service. See `.trufflehog.yml` for the full rationale.
+- CodeQL runs on both PRs and every push to `main`; results appear in the GitHub Security tab.
+
+---
+
