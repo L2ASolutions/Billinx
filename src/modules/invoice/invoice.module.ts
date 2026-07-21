@@ -7,13 +7,16 @@ import { InvoicePublicController } from './invoice-public.controller';
 import { BulkInvoiceController } from './bulk/bulk-invoice.controller';
 import { CreditNoteController } from './credit-note.controller';
 import { VatReturnController } from './vat-return.controller';
+import { RecurringInvoiceController } from './recurring-invoice.controller';
 import { VatReminderProcessor } from './vat-reminder.processor';
 import { VatReminderScheduler } from './vat-reminder.scheduler';
+import { RecurringInvoiceScheduler } from './recurring-invoice.scheduler';
 import { BulkInvoiceService } from './bulk/bulk-invoice.service';
 import { CreditNoteService } from './credit-note.service';
 import { VatReturnService } from './vat-return.service';
 import { InvoiceService } from './services/invoice.service';
 import { InvoiceValidationService } from './services/invoice-validation.service';
+import { RecurringInvoiceService } from './services/recurring-invoice.service';
 import { PaymentService } from './services/payment.service';
 import { InvoiceRepository } from './repositories/invoice.repository';
 import { IrnService } from './services/irn.service';
@@ -45,6 +48,13 @@ import { NotificationModule } from '../notification/notification.module';
     NotificationModule,
   ],
   controllers: [
+    // RecurringInvoiceController MUST be registered before InvoiceApiController:
+    // InvoiceApiController's ApiKeyGuard-protected GET(':id') is a single-segment
+    // catch-all on the same v1/invoices prefix, and Nest/Express resolves
+    // overlapping route patterns across controllers in registration order, not
+    // by pattern specificity. Registered later, GET v1/invoices/recurring would
+    // be shadowed by that :id route and 401 for every JWT-authenticated caller.
+    RecurringInvoiceController,
     CreditNoteController,
     VatReturnController,
     InvoiceApiController,
@@ -56,6 +66,7 @@ import { NotificationModule } from '../notification/notification.module';
   providers: [
     InvoiceService,
     InvoiceValidationService,
+    RecurringInvoiceService,
     CreditNoteService,
     VatReturnService,
     PaymentService,
@@ -78,6 +89,7 @@ import { NotificationModule } from '../notification/notification.module';
     RedisService,
     VatReminderProcessor,
     VatReminderScheduler,
+    RecurringInvoiceScheduler,
   ],
   exports: [InvoiceService, InvoiceRepository, PaymentService],
 })
