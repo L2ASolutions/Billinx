@@ -3,12 +3,21 @@ import { formatDate, formatCurrency } from "@/lib/utils";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface LineItem {
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  vatRate: number;
-  vatAmount: number;
+  // Canonical shape (post PR #224 normaliseLineItems()) — nested item/price,
+  // top-level invoicedQuantity/lineExtensionAmount.
+  item?: { name?: string; description?: string };
+  invoicedQuantity?: number;
+  price?: { priceAmount?: number };
+  lineExtensionAmount?: number;
+  taxCategory?: { percent?: number };
+  // Legacy flat shape — kept as a fallback for invoices stored before the
+  // PR #224 normalisation ran (older records were never backfilled).
+  description?: string;
+  itemName?: string;
+  quantity?: number;
+  unitPrice?: number;
+  totalPrice?: number;
+  vatRate?: number;
   hsnCode?: string;
 }
 
@@ -81,7 +90,13 @@ export function InvoiceDocument({
   })();
 
   const subtotal = totalAmount - taxAmount;
-  const vatRates = [...new Set(lineItems.map((i) => i.vatRate))];
+  const vatRates = [
+    ...new Set(
+      lineItems
+        .map((i) => i.taxCategory?.percent ?? i.vatRate)
+        .filter((r): r is number => r != null),
+    ),
+  ];
   const vatLabel = vatRates.length === 1 ? `VAT (${vatRates[0]}%)` : "VAT";
 
   function hi(value: string, fieldKey: string) {
@@ -185,32 +200,40 @@ export function InvoiceDocument({
             </tr>
           </thead>
           <tbody>
-            {lineItems.map((item, i) => (
-              <tr
-                key={i}
-                className={`border-b border-[#E2E8E5] last:border-0 ${i % 2 === 1 ? "bg-[#F4F6F5]" : "bg-white"}`}
-              >
-                <td className="py-3 pr-4">
-                  <p className="text-sm text-[#1a1a2e]">{item.description}</p>
-                  {item.hsnCode ? (
-                    <p className={`text-xs mt-0.5 ${invalidFields.includes("hsnCode") ? "text-red-500 font-medium" : "text-[#6B7B74]"}`}>
-                      HSN: {item.hsnCode}
-                    </p>
-                  ) : invalidFields.includes("hsnCode") ? (
-                    <p className="text-xs text-red-500 mt-0.5 font-medium">HSN code missing</p>
-                  ) : null}
-                </td>
-                <td className="py-3 px-2 text-sm text-[#1a1a2e] text-right tabular-nums">
-                  {item.quantity}
-                </td>
-                <td className="py-3 px-2 text-sm text-[#1a1a2e] text-right tabular-nums">
-                  {formatCurrency(item.unitPrice, currency)}
-                </td>
-                <td className="py-3 pl-2 text-sm font-medium text-[#1a1a2e] text-right tabular-nums">
-                  {formatCurrency(item.totalPrice, currency)}
-                </td>
-              </tr>
-            ))}
+            {lineItems.map((item, i) => {
+              const description =
+                item.item?.description ?? item.description ?? item.itemName ?? "";
+              const quantity = item.invoicedQuantity ?? item.quantity ?? 0;
+              const unitPrice = item.price?.priceAmount ?? item.unitPrice ?? 0;
+              const totalPrice =
+                item.lineExtensionAmount ?? item.totalPrice ?? 0;
+              return (
+                <tr
+                  key={i}
+                  className={`border-b border-[#E2E8E5] last:border-0 ${i % 2 === 1 ? "bg-[#F4F6F5]" : "bg-white"}`}
+                >
+                  <td className="py-3 pr-4">
+                    <p className="text-sm text-[#1a1a2e]">{description}</p>
+                    {item.hsnCode ? (
+                      <p className={`text-xs mt-0.5 ${invalidFields.includes("hsnCode") ? "text-red-500 font-medium" : "text-[#6B7B74]"}`}>
+                        HSN: {item.hsnCode}
+                      </p>
+                    ) : invalidFields.includes("hsnCode") ? (
+                      <p className="text-xs text-red-500 mt-0.5 font-medium">HSN code missing</p>
+                    ) : null}
+                  </td>
+                  <td className="py-3 px-2 text-sm text-[#1a1a2e] text-right tabular-nums">
+                    {quantity}
+                  </td>
+                  <td className="py-3 px-2 text-sm text-[#1a1a2e] text-right tabular-nums">
+                    {formatCurrency(unitPrice, currency)}
+                  </td>
+                  <td className="py-3 pl-2 text-sm font-medium text-[#1a1a2e] text-right tabular-nums">
+                    {formatCurrency(totalPrice, currency)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

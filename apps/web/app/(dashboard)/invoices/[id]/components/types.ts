@@ -58,12 +58,19 @@ export interface InvoiceDetail {
   hasCreditNote?: boolean;
   netAmount?: number;
   lineItems: Array<{
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    totalPrice: number;
-    vatRate: number;
-    vatAmount: number;
+    // Canonical shape (post PR #224 normaliseLineItems())
+    item?: { name?: string; description?: string };
+    invoicedQuantity?: number;
+    price?: { priceAmount?: number };
+    lineExtensionAmount?: number;
+    taxCategory?: { percent?: number };
+    // Legacy flat shape — fallback for invoices stored before normalisation
+    description?: string;
+    itemName?: string;
+    quantity?: number;
+    unitPrice?: number;
+    totalPrice?: number;
+    vatRate?: number;
     hsnCode?: string;
   }>;
   stateHistory: Array<{
