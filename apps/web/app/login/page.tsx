@@ -72,7 +72,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <Image src="/billinx-wordmark.svg" alt="Billinx Solutions" width={320} height={60} unoptimized className="h-12 w-auto mx-auto mb-3" />
-          <p className="text-sm text-muted">E-invoicing compliance for Nigerian businesses</p>
+          <p className="text-sm text-muted">E-Invoicing built for Nigerian Businesses</p>
         </div>
 
         {/* Card */}
