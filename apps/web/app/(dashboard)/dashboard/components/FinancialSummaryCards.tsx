@@ -39,7 +39,7 @@ export function FinancialSummaryCards({
             </>
           ) : (
             <>
-              <p className="text-2xl font-bold text-[#1D9E75]">{formatCurrency(outstandingAmount, 'NGN')}</p>
+              <p className="text-2xl font-bold text-[#1D9E75]" data-testid="outstanding-receivables">{formatCurrency(outstandingAmount, 'NGN')}</p>
               <p className="text-xs text-green-600 mt-1.5">
                 {outstandingCount} invoice{outstandingCount !== 1 ? 's' : ''} unpaid
               </p>
@@ -64,7 +64,7 @@ export function FinancialSummaryCards({
             </>
           ) : (
             <>
-              <p className={`text-2xl font-bold ${outstandingPayables > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+              <p className={`text-2xl font-bold ${outstandingPayables > 0 ? 'text-red-600' : 'text-gray-400'}`} data-testid="outstanding-payables">
                 {formatCurrency(outstandingPayables, 'NGN')}
               </p>
               <p className="text-xs text-muted mt-1.5">
@@ -95,7 +95,7 @@ export function FinancialSummaryCards({
           <>
             <p className={`text-2xl font-bold ${
               netCash > 0 ? 'text-[#1D9E75]' : netCash < 0 ? 'text-red-600' : 'text-gray-400'
-            }`}>
+            }`} data-testid="net-cash-position">
               {formatCurrency(Math.abs(netCash), 'NGN')}
             </p>
             <p className="text-xs text-muted mt-1.5">

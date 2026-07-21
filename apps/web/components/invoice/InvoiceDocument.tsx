@@ -222,13 +222,16 @@ export function InvoiceDocument({
                       <p className="text-xs text-red-500 mt-0.5 font-medium">HSN code missing</p>
                     ) : null}
                   </td>
-                  <td className="py-3 px-2 text-sm text-[#1a1a2e] text-right tabular-nums">
+                  <td className="py-3 px-2 text-sm text-[#1a1a2e] text-right tabular-nums" data-testid="line-item-quantity-display">
                     {quantity}
                   </td>
                   <td className="py-3 px-2 text-sm text-[#1a1a2e] text-right tabular-nums">
                     {formatCurrency(unitPrice, currency)}
                   </td>
-                  <td className="py-3 pl-2 text-sm font-medium text-[#1a1a2e] text-right tabular-nums">
+                  <td
+                    className="py-3 pl-2 text-sm font-medium text-[#1a1a2e] text-right tabular-nums"
+                    data-testid="line-item-amount"
+                  >
                     {formatCurrency(totalPrice, currency)}
                   </td>
                 </tr>
@@ -252,11 +255,11 @@ export function InvoiceDocument({
               {vatLabel}
               {invalidFields.includes("vat") && <span className="ml-1 text-xs">(mismatch)</span>}
             </span>
-            <span className="tabular-nums">{formatCurrency(taxAmount, currency)}</span>
+            <span className="tabular-nums" data-testid="vat-amount">{formatCurrency(taxAmount, currency)}</span>
           </div>
           <div className="pt-2.5 border-t border-[#E2E8E5] flex justify-between items-baseline">
             <span className="font-semibold text-[#1a1a2e]">Total payable</span>
-            <span className="font-bold text-[#1a1a2e] text-xl tabular-nums">
+            <span className="font-bold text-[#1a1a2e] text-xl tabular-nums" data-testid="total-payable">
               {formatCurrency(totalAmount, currency)}
             </span>
           </div>

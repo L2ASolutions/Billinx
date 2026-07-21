@@ -12,19 +12,19 @@ export function AcceptedBanner({ invoice }: { invoice: InvoiceDetail }) {
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
               <polyline points="22 4 12 14.01 9 11.01" />
             </svg>
-            <span className="text-sm font-semibold text-green-700">FIRS Accepted</span>
+            <span className="text-sm font-semibold text-green-700" data-testid="invoice-status-badge">FIRS Accepted</span>
             {invoice.acceptedAt && (
               <span className="text-xs text-green-600">{formatDateTime(invoice.acceptedAt)}</span>
             )}
           </div>
           <div>
             <p className="text-xs text-green-600 mb-0.5 font-medium uppercase tracking-wide">Invoice Reference Number (IRN)</p>
-            <p className="font-mono text-sm text-green-800 font-semibold break-all">{invoice.platformIrn}</p>
+            <p className="font-mono text-sm text-green-800 font-semibold break-all" data-testid="invoice-irn">{invoice.platformIrn}</p>
           </div>
           {invoice.firsConfirmedIrn && (
             <div>
               <p className="text-xs text-green-600 mb-0.5 font-medium uppercase tracking-wide">FIRS Reference</p>
-              <p className="font-mono text-sm text-green-800 break-all">{invoice.firsConfirmedIrn}</p>
+              <p className="font-mono text-sm text-green-800 break-all" data-testid="firs-reference">{invoice.firsConfirmedIrn}</p>
             </div>
           )}
           {invoice.csid && (

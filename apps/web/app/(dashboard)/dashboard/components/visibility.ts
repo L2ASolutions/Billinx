@@ -21,6 +21,11 @@ export function canCustomize(role: string): boolean {
   return ['OWNER', 'ADMIN', 'ACCOUNTANT'].includes(role);
 }
 
+// Matches the backend's invoice-creation RolesGuard (OWNER/ADMIN/ACCOUNTANT).
+export function canCreateInvoice(role: string): boolean {
+  return ['OWNER', 'ADMIN', 'ACCOUNTANT'].includes(role);
+}
+
 export function isSectionVisible(
   sectionKey: string,
   role: string,
