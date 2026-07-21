@@ -75,12 +75,13 @@ export function Hero() {
     >
       <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center gap-12 px-6 py-16 lg:grid-cols-2 lg:gap-8 lg:py-24">
         <FadeIn>
-          <h1 className="text-balance text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
-            Nigeria&apos;s Smart <span className="whitespace-nowrap">E-Invoicing</span> Platform
+          <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
+            <span className="block">Invoice right. Submit to NRS.</span>
+            <span className="block">Handle VAT. All in one place.</span>
           </h1>
           <p className="mt-6 max-w-xl text-lg text-white/70 sm:text-xl">
-            FIRS-compliant invoicing built for Nigerian businesses. Submit to
-            NRS, track VAT, get paid faster.
+            Create NRS-compliant invoices, submit directly to FIRS, and
+            generate your VAT return automatically — all from one platform.
           </p>
 
           <div className="mt-8 flex flex-col gap-4 sm:flex-row">
