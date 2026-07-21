@@ -35,6 +35,7 @@ function fmtDate(iso?: string | null): string {
 function StatusBadge({ status }: { status: string }) {
   return (
     <span
+      data-testid="recurring-invoice-status"
       className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[status] ?? "bg-gray-100 text-gray-500"}`}
     >
       {status.charAt(0) + status.slice(1).toLowerCase()}

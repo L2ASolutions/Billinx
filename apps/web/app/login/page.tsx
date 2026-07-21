@@ -89,6 +89,7 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoFocus
+              data-testid="login-email"
             />
             <Input
               label="Password"
@@ -97,6 +98,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              data-testid="login-password"
             />
 
             {error && (

@@ -213,6 +213,7 @@ function CodeSearch({ type, value, onSelect }: {
         onChange={(e) => handleInput(e.target.value)}
         onFocus={() => results.length > 0 && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
+        data-testid="code-search-input"
       />
       {open && results.length > 0 && (
         <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-border rounded-lg shadow-xl max-h-44 overflow-y-auto text-sm">
@@ -227,6 +228,7 @@ function CodeSearch({ type, value, onSelect }: {
                 setQuery(`${r.code} — ${r.description}`);
                 setOpen(false);
               }}
+              data-testid="code-search-result"
             >
               <span className="font-mono font-medium">{r.code}</span>
               <span className="text-muted ml-1">— {r.description}</span>
@@ -1108,7 +1110,7 @@ function NewInvoiceForm() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-dark mb-1">Kind</label>
-                <select className={sel()} value={form.invoiceKind} onChange={uf("invoiceKind")}>
+                <select className={sel()} value={form.invoiceKind} onChange={uf("invoiceKind")} data-testid="invoice-kind-select">
                   <option value="B2B">B2B</option>
                   <option value="B2C">B2C</option>
                   <option value="B2G">B2G</option>
@@ -1133,7 +1135,7 @@ function NewInvoiceForm() {
                   )}
                 </select>
               </div>
-              <Input label="Issue date" type="date" value={form.issueDate} onChange={uf("issueDate")} required />
+              <Input label="Issue date" type="date" value={form.issueDate} onChange={uf("issueDate")} required data-testid="issue-date-input" />
             </div>
             <div className="grid grid-cols-2 gap-4 mt-4">
               <Input
@@ -1144,6 +1146,7 @@ function NewInvoiceForm() {
                 value={form.paymentDueDate}
                 onChange={uf("paymentDueDate")}
                 error={errMsg("paymentDueDate")}
+                data-testid="due-date-input"
               />
               <Input label="Buyer PO / Reference (optional)" placeholder="e.g. PO-2026-00123" value={form.buyerReference} onChange={uf("buyerReference")} />
             </div>
@@ -1320,6 +1323,7 @@ function NewInvoiceForm() {
                   onChange={uf("buyerName")}
                   required
                   error={errMsg("buyerName")}
+                  data-testid="buyer-name-input"
                 />
                 <div>
                   <Input
@@ -1330,6 +1334,7 @@ function NewInvoiceForm() {
                     value={form.buyerTin}
                     onChange={uf("buyerTin")}
                     error={errMsg("buyerTin")}
+                    data-testid="buyer-tin-input"
                   />
                   <p className="mt-1 text-[11px] text-muted leading-snug">
                     No TIN? Use RC-XXXXXXX format (e.g. RC-847789). For foreign buyers, use their country tax ID.
@@ -1342,6 +1347,7 @@ function NewInvoiceForm() {
                   value={form.buyerEmail}
                   onChange={uf("buyerEmail")}
                   error={errMsg("buyerEmail")}
+                  data-testid="buyer-email-input"
                 />
                 <Input
                   label={<>Street address<Req submitAttempted={submitAttempted} /></>}
@@ -1350,11 +1356,12 @@ function NewInvoiceForm() {
                   onChange={uf("buyerAddress")}
                   required
                   error={errMsg("buyerAddress")}
+                  data-testid="buyer-address-input"
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-dark mb-1">State<Req submitAttempted={submitAttempted} /></label>
-                    <select className={errSel("buyerState")} value={form.buyerState} onChange={uf("buyerState")}>
+                    <select className={errSel("buyerState")} value={form.buyerState} onChange={uf("buyerState")} data-testid="buyer-state-select">
                       <option value="">Select state…</option>
                       {states.map((s) => (
                         <option key={s.code} value={s.code}>{s.name}</option>
@@ -1427,6 +1434,7 @@ function NewInvoiceForm() {
                           value={item.description}
                           onChange={(e) => updateLine(i, "description", e.target.value)}
                           required
+                          data-testid="line-item-description"
                         />
                         <button
                           type="button"
@@ -1445,7 +1453,8 @@ function NewInvoiceForm() {
                       <input type="number" min="1"
                         className={inp(errMsg(`line_${i}_qty`) ? "border-red-400 focus:ring-red-200 focus:border-red-400" : "")}
                         value={item.quantity}
-                        onChange={(e) => updateLine(i, "quantity", Number(e.target.value))} required />
+                        onChange={(e) => updateLine(i, "quantity", Number(e.target.value))} required
+                        data-testid="line-item-quantity" />
                       {errMsg(`line_${i}_qty`) && <p className="text-xs text-red-500">{errMsg(`line_${i}_qty`)}</p>}
                     </div>
                     <div className="col-span-2">
@@ -1455,7 +1464,8 @@ function NewInvoiceForm() {
                       <input type="number" min="0" step="0.01"
                         className={inp(errMsg(`line_${i}_price`) ? "border-red-400 focus:ring-red-200 focus:border-red-400" : "")}
                         placeholder="Unit price" value={item.unitPrice}
-                        onChange={(e) => updateLine(i, "unitPrice", Number(e.target.value))} required />
+                        onChange={(e) => updateLine(i, "unitPrice", Number(e.target.value))} required
+                        data-testid="line-item-unit-price" />
                       {errMsg(`line_${i}_price`) && <p className="text-xs text-red-500">{errMsg(`line_${i}_price`)}</p>}
                     </div>
                     <div className="col-span-2 text-right text-sm font-medium text-dark">
@@ -1481,6 +1491,7 @@ function NewInvoiceForm() {
                         type="button"
                         className={`px-3 py-1.5 transition-colors ${item.itemType === "product" ? "bg-green text-white" : "bg-white text-muted hover:bg-surface"}`}
                         onClick={() => updateLine(i, "itemType", "product")}
+                        data-testid="line-item-type-product"
                       >
                         Product
                       </button>
@@ -1488,6 +1499,7 @@ function NewInvoiceForm() {
                         type="button"
                         className={`px-3 py-1.5 border-l border-border transition-colors ${item.itemType === "service" ? "bg-green text-white" : "bg-white text-muted hover:bg-surface"}`}
                         onClick={() => updateLine(i, "itemType", "service")}
+                        data-testid="line-item-type-service"
                       >
                         Service
                       </button>
@@ -1535,6 +1547,7 @@ function NewInvoiceForm() {
                         placeholder="e.g. Electronics, Food, Services"
                         value={item.productCategory ?? ""}
                         onChange={(e) => updateLine(i, "productCategory", e.target.value)}
+                        data-testid="line-item-category"
                       />
                       <p className="text-xs text-muted mt-1">Product category</p>
                     </div>
@@ -1545,6 +1558,7 @@ function NewInvoiceForm() {
                         placeholder="e.g. Consulting, IT Services, Legal"
                         value={item.serviceCategory ?? ""}
                         onChange={(e) => updateLine(i, "serviceCategory", e.target.value)}
+                        data-testid="line-item-category"
                       />
                       <p className="text-xs text-muted mt-1">Service category</p>
                     </div>

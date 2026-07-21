@@ -245,12 +245,13 @@ export function RecurringInvoiceFormModal({ schedule, onClose, onSave }: Props) 
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Monthly retainer - Acme Ltd"
             required
+            data-testid="recurring-name-input"
           />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-dark mb-1">Frequency</label>
-              <select className={sel} value={frequency} onChange={(e) => setFrequency(e.target.value)}>
+              <select className={sel} value={frequency} onChange={(e) => setFrequency(e.target.value)} data-testid="recurring-frequency-select">
                 {FREQUENCIES.map((f) => (
                   <option key={f.value} value={f.value}>{f.label}</option>
                 ))}
@@ -273,6 +274,7 @@ export function RecurringInvoiceFormModal({ schedule, onClose, onSave }: Props) 
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               required
+              data-testid="recurring-start-date-input"
             />
             <Input
               label="End date (optional)"
@@ -305,6 +307,7 @@ export function RecurringInvoiceFormModal({ schedule, onClose, onSave }: Props) 
                 onChange={(e) => setBuyerName(e.target.value)}
                 placeholder="Acme Ltd"
                 required
+                data-testid="recurring-buyer-name-input"
               />
               <div className="grid grid-cols-2 gap-3">
                 <Input
@@ -312,6 +315,7 @@ export function RecurringInvoiceFormModal({ schedule, onClose, onSave }: Props) 
                   value={buyerTin}
                   onChange={(e) => setBuyerTin(e.target.value)}
                   placeholder="87654321-0001"
+                  data-testid="recurring-buyer-tin-input"
                 />
                 <Input
                   label="Buyer email (optional)"
@@ -348,6 +352,7 @@ export function RecurringInvoiceFormModal({ schedule, onClose, onSave }: Props) 
                         value={item.description}
                         onChange={(e) => updateLineItem(index, { description: e.target.value })}
                         placeholder="Monthly retainer fee"
+                        data-testid="recurring-line-item-description"
                       />
                     </div>
                     {lineItems.length > 1 && (
@@ -368,6 +373,7 @@ export function RecurringInvoiceFormModal({ schedule, onClose, onSave }: Props) 
                       min="0"
                       value={item.quantity}
                       onChange={(e) => updateLineItem(index, { quantity: e.target.value })}
+                      data-testid="recurring-line-item-quantity"
                     />
                     <Input
                       label="Unit price (NGN)"
@@ -375,6 +381,7 @@ export function RecurringInvoiceFormModal({ schedule, onClose, onSave }: Props) 
                       min="0"
                       value={item.unitPrice}
                       onChange={(e) => updateLineItem(index, { unitPrice: e.target.value })}
+                      data-testid="recurring-line-item-unit-price"
                     />
                     <div>
                       <label className="block text-sm font-medium text-dark mb-1">Tax category</label>
@@ -399,6 +406,7 @@ export function RecurringInvoiceFormModal({ schedule, onClose, onSave }: Props) 
                         onChange={(e) =>
                           updateLineItem(index, { itemType: e.target.value as "product" | "service" })
                         }
+                        data-testid="recurring-line-item-type-select"
                       >
                         <option value="product">Product</option>
                         <option value="service">Service</option>

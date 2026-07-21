@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { NotificationBell } from '@/components/dashboard/NotificationBell';
 import { Sk } from './Sk';
 import { UserAvatarMenu } from './UserAvatarMenu';
-import { canCustomize } from './visibility';
+import { canCustomize, canCreateInvoice } from './visibility';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -74,15 +74,17 @@ export function DashboardHeader({
             Customize
           </Button>
         )}
-        <Link href="/invoices/new">
-          <Button size="sm">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2.5" className="mr-1.5">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Create invoice
-          </Button>
-        </Link>
+        {canCreateInvoice(role) && (
+          <Link href="/invoices/new" data-testid="create-invoice-btn">
+            <Button size="sm">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="2.5" className="mr-1.5">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Create invoice
+            </Button>
+          </Link>
+        )}
         <UserAvatarMenu fullName={displayFullName} role={formatRole(role)} onLogout={onLogout} />
       </div>
     </header>

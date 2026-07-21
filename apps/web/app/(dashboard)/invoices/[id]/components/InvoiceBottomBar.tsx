@@ -43,7 +43,7 @@ export function InvoiceBottomBar({
           <Button variant="secondary" size="sm" loading={duplicating} onClick={onDuplicate}>
             Duplicate
           </Button>
-          <Button variant="secondary" size="sm" loading={pdfDownloading} onClick={onDownloadPdf}>
+          <Button variant="secondary" size="sm" loading={pdfDownloading} onClick={onDownloadPdf} data-testid="download-pdf-btn">
             Download PDF
           </Button>
           {canRecordPayment && (

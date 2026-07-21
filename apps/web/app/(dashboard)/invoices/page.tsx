@@ -10,6 +10,15 @@ import { invoiceApi } from "@/lib/api";
 import { formatCurrency, formatDate, formatInvoiceNumber } from "@/lib/utils";
 import { getInvoiceStatusPill, PillVariant } from "@/lib/invoice-status";
 import { SampleInvoiceModal } from "@/components/invoice/SampleInvoiceModal";
+import { useAuth } from "@/lib/auth";
+
+// Matches the backend's invoice-creation RolesGuard (OWNER/ADMIN/ACCOUNTANT) —
+// same role list as the dashboard's canCustomize() check, kept inline here
+// rather than a shared import since neither module currently centralizes
+// this kind of role-list check across route boundaries.
+function canCreateInvoice(role: string): boolean {
+  return ["OWNER", "ADMIN", "ACCOUNTANT"].includes(role);
+}
 
 // ── Status pill rendering ─────────────────────────────────────────────────────
 
@@ -641,6 +650,7 @@ export default function InvoicesPage() {
   const searchParams = useSearchParams();
   const filterParam = searchParams.get("filter");
   const initialSentTab: SentTab = filterParam ? (FILTER_PARAM_TO_TAB[filterParam] ?? "ALL") : "ALL";
+  const { user } = useAuth();
 
   return (
     <>
@@ -649,18 +659,20 @@ export default function InvoicesPage() {
           <h1 className="text-xl font-bold text-dark">Sales Invoices</h1>
           <p className="text-sm text-muted mt-0.5">Invoices you issue to customers</p>
         </div>
-        <div className="flex gap-2 mt-1">
-          <Button size="sm" variant="secondary" onClick={() => document.dispatchEvent(new CustomEvent("open-bulk"))}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 inline">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            Import CSV
-          </Button>
-          <Link href="/invoices/new">
-            <Button size="sm">+ Create invoice</Button>
-          </Link>
-        </div>
+        {user && canCreateInvoice(user.role) && (
+          <div className="flex gap-2 mt-1">
+            <Button size="sm" variant="secondary" onClick={() => document.dispatchEvent(new CustomEvent("open-bulk"))}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 inline">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              Import CSV
+            </Button>
+            <Link href="/invoices/new" data-testid="create-invoice-btn">
+              <Button size="sm">+ Create invoice</Button>
+            </Link>
+          </div>
+        )}
       </div>
 
       <SentPanel initialTab={initialSentTab} />

@@ -11,7 +11,7 @@ interface VatSummaryStripProps {
 
 export function VatSummaryStrip({ outputVat, inputVat, netVat }: VatSummaryStripProps) {
   return (
-    <div className="flex items-center gap-1 text-xs text-muted">
+    <div className="flex items-center gap-1 text-xs text-muted" data-testid="vat-summary">
       <span>Output VAT: <span className="text-dark font-medium">{formatCurrency(outputVat, 'NGN')}</span></span>
       <span className="mx-1">·</span>
       <span>Input VAT: <span className="text-dark font-medium">{formatCurrency(inputVat, 'NGN')}</span></span>

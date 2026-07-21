@@ -390,12 +390,14 @@ export default function PublicPayPage() {
               <button
                 onClick={() => setShowPayModal(true)}
                 className="w-full py-3.5 rounded-xl font-semibold text-white text-sm bg-[#0BA4DB] hover:bg-[#0993c5] transition-colors"
+                data-testid="pay-paystack-btn"
               >
                 Pay with Paystack
               </button>
               <button
                 onClick={() => setShowPayModal(true)}
                 className="w-full py-3.5 rounded-xl font-semibold text-white text-sm bg-[#F5A623] hover:bg-[#e09510] transition-colors"
+                data-testid="pay-flutterwave-btn"
               >
                 Pay with Flutterwave
               </button>

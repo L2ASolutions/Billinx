@@ -220,6 +220,7 @@ function MfaForm() {
               value={d}
               onChange={(e) => handleChange(i, e.target.value)}
               onKeyDown={(e) => handleKeyDown(i, e)}
+              data-testid="mfa-digit"
               className="w-12 h-14 text-center text-xl font-bold rounded-lg border border-border bg-white text-dark focus:outline-none focus:ring-2 focus:ring-green/30 focus:border-green transition-colors"
             />
           ))}
