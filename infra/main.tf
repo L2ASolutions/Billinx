@@ -94,6 +94,17 @@ module "secrets" {
   environment = var.environment
 }
 
+# ── Support ticket (error report) screenshots ────────────────────────────────
+# Private bucket — see infra/modules/s3-support-tickets. bucket_name maps to
+# the SUPPORT_TICKETS_S3_BUCKET env var.
+
+module "s3_support_tickets" {
+  source = "./modules/s3-support-tickets"
+
+  app_name    = var.app_name
+  environment = var.environment
+}
+
 # ── Load Balancer ─────────────────────────────────────────────────────────────
 
 module "alb" {

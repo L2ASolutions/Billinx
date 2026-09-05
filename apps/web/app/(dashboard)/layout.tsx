@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/dashboard/Sidebar";
 import { useAuth } from "@/lib/auth";
 import { userApi, invoiceApi, incomingInvoiceApi, api } from "@/lib/api";
 import { UserProfileProvider, type UserProfile } from "@/lib/userProfile";
+import { ReportIssueButton } from "@/components/ErrorReporting/ReportIssueButton";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -79,6 +80,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <main className="flex-1 md:ml-64 min-h-screen">
           {children}
         </main>
+        <ReportIssueButton />
       </div>
     </UserProfileProvider>
   );
