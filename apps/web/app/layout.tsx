@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
+import { ErrorBoundary } from "@/components/ErrorReporting/ErrorBoundary";
+import { GlobalErrorListeners } from "@/components/ErrorReporting/GlobalErrorListeners";
 
 export const metadata: Metadata = {
   title: "Billinx Solutions — E-Invoicing Platform",
@@ -14,7 +16,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="antialiased">
-        <AuthProvider>{children}</AuthProvider>
+        <GlobalErrorListeners />
+        <ErrorBoundary>
+          <AuthProvider>{children}</AuthProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

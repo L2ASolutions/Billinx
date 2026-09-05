@@ -746,6 +746,37 @@ export const adminApi = {
   // Unlock user
   unlockAccount: (tenantId: string, email: string) =>
     aApi.post('/v1/admin/users/unlock', { tenantId, email }),
+  // Support tickets (error reports)
+  supportTickets: (params?: { status?: string; tenantId?: string }) => {
+    const qs = params
+      ? '?' +
+        new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(params).filter(([, v]) => v),
+          ) as Record<string, string>,
+        ).toString()
+      : '';
+    return aApi.get<{
+      data: unknown[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(`/v1/admin/support-tickets${qs}`);
+  },
+  getSupportTicket: (id: string) =>
+    aApi.get<unknown>(`/v1/admin/support-tickets/${id}`),
+  updateSupportTicketStatus: (id: string, status: string) =>
+    aApi.patch(`/v1/admin/support-tickets/${id}`, { status }),
+};
+
+// ── Error reporting (support tickets) ─────────────────────────────────────────
+// Works with or without an accessToken — requestMultipart only attaches
+// Authorization when one is present in localStorage, matching the backend's
+// OptionalJwtGuard on this endpoint.
+
+export const supportTicketApi = {
+  report: (formData: FormData) =>
+    requestMultipart<{ id: string }>('/v1/support-tickets', formData),
 };
 
 // ── Public payment API (no auth) ──────────────────────────────────────────────

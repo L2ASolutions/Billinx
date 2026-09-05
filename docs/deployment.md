@@ -441,6 +441,8 @@ Every variable the application needs, where it comes from, and the Secrets Manag
 | `EMAIL_FROM` | ECS task env | — | `Billinx <noreply@billinx.ng>` |
 | `INTERSWITCH_PROD_URL` | ECS task env | — | Interswitch production URL |
 | `CAC_API_BASE_URL` | ECS task env | — | CAC API base URL |
+| `SUPPORT_TICKETS_S3_BUCKET` | ECS task env | — | `billinx-support-tickets-production` (see `infra/modules/s3-support-tickets`) |
+| `SUPPORT_TICKETS_NOTIFY_EMAIL` | ECS task env | — | Internal distribution address notified on each new support ticket |
 
 ### How Secrets Manager layering works
 

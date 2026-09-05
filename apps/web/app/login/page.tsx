@@ -37,7 +37,7 @@ export default function LoginPage() {
     try {
       const res = await authApi.login(email, password);
 
-      if (res.mfaSetupRequired) {
+      if (res.mfaSetupRequired && process.env.NEXT_PUBLIC_ENFORCE_MFA_SETUP !== "false") {
         localStorage.setItem("accessToken", res.accessToken ?? "");
         router.push("/mfa/setup");
         return;

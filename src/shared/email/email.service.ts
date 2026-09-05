@@ -953,4 +953,63 @@ export class EmailService {
     );
     this.send(opts.to, `Restock Request — ${opts.productName}`, html);
   }
+
+  // ─── Support ticket (error report) notification ────────────────────────────
+  // errorMessage/pageUrl originate from the browser (a crash or a manual
+  // report), not a trusted server value — escape before interpolating into
+  // this HTML email, unlike the other templates in this file which only ever
+  // carry server-generated strings.
+
+  sendSupportTicketNotification(opts: {
+    ticketId: string;
+    tenantId: string | null;
+    errorMessage: string;
+    pageUrl: string;
+    screenshotUrl: string | null;
+  }): void {
+    const to = process.env.SUPPORT_TICKETS_NOTIFY_EMAIL ?? 'eng@billinx.ng';
+    const escape = (s: string) =>
+      s.replace(
+        /[&<>"']/g,
+        (c) =>
+          (
+            ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#39;',
+            }) as Record<string, string>
+          )[c],
+      );
+    const html = baseLayout(
+      'New Support Ticket',
+      h1('New error report') +
+        p(
+          `A ${opts.tenantId ? 'tenant user' : 'visitor'} triggered an error report.`,
+        ) +
+        `<table style="width:100%;border-collapse:collapse;margin:20px 0;">
+          <tr><td style="padding:8px;color:#666;width:140px;">Ticket ID</td><td style="padding:8px;font-family:monospace;color:#2c3e50;">${opts.ticketId}</td></tr>
+          ${opts.tenantId ? `<tr><td style="padding:8px;color:#666;">Tenant ID</td><td style="padding:8px;font-family:monospace;color:#2c3e50;">${escape(opts.tenantId)}</td></tr>` : ''}
+          <tr><td style="padding:8px;color:#666;">Page</td><td style="padding:8px;color:#2c3e50;word-break:break-all;">${escape(opts.pageUrl)}</td></tr>
+          <tr><td style="padding:8px;color:#666;vertical-align:top;">Error</td><td style="padding:8px;color:#e74c3c;">${escape(opts.errorMessage)}</td></tr>
+        </table>` +
+        (opts.screenshotUrl
+          ? ctaButton(
+              opts.screenshotUrl,
+              'View Screenshot (link expires shortly)',
+            )
+          : p(
+              'No screenshot is available for this environment yet — see the admin ticket detail page.',
+            )) +
+        p(
+          `Full detail, including any stack trace and user-supplied notes: <a href="${APP_BASE_URL}/admin/support-tickets/${opts.ticketId}" style="color:${BRAND_GREEN};">open in the admin dashboard</a>.`,
+        ),
+    );
+    this.send(
+      to,
+      `New support ticket — ${opts.errorMessage.slice(0, 80)}`,
+      html,
+    );
+  }
 }

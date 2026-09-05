@@ -1249,3 +1249,32 @@ model Notification {
   @@index([userId, read])
   @@map("notifications")
 }
+
+// ── ERROR REPORTING / SUPPORT TICKETS ─────────────────────────────────────────
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+model SupportTicket {
+  id              String              @id @default(uuid())
+  // Nullable: an unhandled crash can occur before a user has authenticated
+  // (e.g. on the login or marketing page), when no tenant/user context exists.
+  tenantId        String?
+  userId          String?
+  screenshotKey   String
+  errorMessage    String
+  stackTrace      String?
+  pageUrl         String
+  browserInfo     String
+  userDescription String?
+  status          SupportTicketStatus @default(OPEN)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([tenantId])
+  @@index([status, createdAt])
+  @@map("support_tickets")
+}

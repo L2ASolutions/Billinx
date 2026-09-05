@@ -13,6 +13,7 @@ const adminNav = [
   { label: "Activity", href: "/admin/activity" },
   { label: "Consent", href: "/admin/consent" },
   { label: "Erasure", href: "/admin/erasure" },
+  { label: "Support Tickets", href: "/admin/support-tickets" },
   { label: "System", href: "/admin/system" },
 ];
 

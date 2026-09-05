@@ -30,6 +30,7 @@ import { ClientModule } from './modules/client/client.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { SupportTicketsModule } from './modules/support-tickets/support-tickets.module';
 import { DatabaseModule } from './infrastructure/database/database.module';
 import { SecretsService } from './infrastructure/secrets/secrets.service';
 import { IdempotencyInterceptor } from './shared/interceptors/idempotency.interceptor';
@@ -67,6 +68,7 @@ import { GlobalExceptionFilter } from './shared/filters/global-exception.filter'
     AnalyticsModule,
     InventoryModule,
     NotificationModule,
+    SupportTicketsModule,
   ],
   providers: [
     SecretsService,
