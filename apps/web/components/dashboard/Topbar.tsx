@@ -3,6 +3,7 @@
 import { ReactNode, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { notificationApi, AppNotification } from "@/lib/api";
+import { UserMenu } from "./UserMenu";
 
 interface TopbarProps {
   title: string;
@@ -130,6 +131,7 @@ export function Topbar({ title, actions }: TopbarProps) {
       <div className="flex items-center gap-2">
         {actions && <div className="flex items-center gap-3">{actions}</div>}
         <NotificationBell />
+        <UserMenu />
       </div>
     </header>
   );

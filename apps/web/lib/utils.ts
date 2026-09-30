@@ -55,6 +55,17 @@ export function formatPaymentMethod(method: string): string {
   );
 }
 
+export function formatRole(role: string): string {
+  return role.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
+export function initialsFor(fullName: string): string {
+  const nameParts = fullName.trim().split(/\s+/).filter(Boolean);
+  return nameParts.length >= 2
+    ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+    : (nameParts[0]?.[0]?.toUpperCase() ?? 'U');
+}
+
 export function formatInvoiceNumber(inv: {
   invoiceNumber?: string;
   platformIrn?: string;

@@ -1,13 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-
-function initialsFor(fullName: string): string {
-  const nameParts = fullName.trim().split(/\s+/).filter(Boolean);
-  return nameParts.length >= 2
-    ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
-    : (nameParts[0]?.[0]?.toUpperCase() ?? 'U');
-}
+import { initialsFor } from '@/lib/utils';
 
 const LogoutIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
