@@ -1,6 +1,7 @@
 'use client';
 
 import { useRequireAuth } from '@/lib/auth';
+import { UserMenu } from '@/components/dashboard/UserMenu';
 
 const FAQ = [
   {
@@ -29,9 +30,12 @@ export default function SupportPage() {
   return (
     <div className="min-h-screen bg-surface">
       {/* Header */}
-      <header className="bg-white border-b border-border px-6 py-5 sticky top-0 z-10">
-        <h1 className="text-xl font-bold text-dark">Support</h1>
-        <p className="text-sm text-muted mt-0.5">Get help with Billinx</p>
+      <header className="bg-white border-b border-border px-6 py-5 flex items-start justify-between sticky top-0 z-10">
+        <div>
+          <h1 className="text-xl font-bold text-dark">Support</h1>
+          <p className="text-sm text-muted mt-0.5">Get help with Billinx</p>
+        </div>
+        <UserMenu />
       </header>
 
       <div className="p-6 max-w-4xl space-y-6">

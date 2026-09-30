@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { vatReturnApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { UserMenu } from "@/components/dashboard/UserMenu";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -257,9 +258,12 @@ export default function VatReturnPage() {
 
   return (
     <>
-      <header className="bg-white border-b border-border px-6 py-5 sticky top-0 z-10">
-        <h1 className="text-xl font-bold text-dark">VAT Return</h1>
-        <p className="text-sm text-muted mt-0.5">Generate and download your VAT 002 return for NRS filing</p>
+      <header className="bg-white border-b border-border px-6 py-5 flex items-start justify-between sticky top-0 z-10">
+        <div>
+          <h1 className="text-xl font-bold text-dark">VAT Return</h1>
+          <p className="text-sm text-muted mt-0.5">Generate and download your VAT 002 return for NRS filing</p>
+        </div>
+        <UserMenu />
       </header>
 
       <div className="p-6 space-y-6 pb-24 max-w-5xl">

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
 import { invoiceApi, incomingInvoiceApi, userApi } from '@/lib/api';
 import { useUserProfile } from '@/lib/userProfile';
@@ -22,19 +21,11 @@ import type { RecentPayment, RecentRejection, Stats, IncomingStats, ChartData, R
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { user, isLoading: authLoading, logout } = useRequireAuth();
+  const { user, isLoading: authLoading } = useRequireAuth();
   const profile = useUserProfile();
-  const router = useRouter();
 
   const role = user?.role ?? 'VIEWER';
   const financials = canSeeFinancials(role);
-
-  const displayFullName = user?.name ?? '';
-
-  function handleLogout() {
-    logout();
-    router.push('/login');
-  }
 
   // ── Data state ───────────────────────────────────────────────────────────────
 
@@ -207,9 +198,7 @@ export default function DashboardPage() {
         firstName={firstName}
         tenantName={tenantName}
         role={role}
-        displayFullName={displayFullName}
         onOpenPanel={openPanel}
-        onLogout={handleLogout}
       />
 
       <div className="p-6 space-y-5">

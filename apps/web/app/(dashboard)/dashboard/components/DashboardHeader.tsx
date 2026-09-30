@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { NotificationBell } from '@/components/dashboard/NotificationBell';
+import { UserMenu } from '@/components/dashboard/UserMenu';
 import { Sk } from './Sk';
-import { UserAvatarMenu } from './UserAvatarMenu';
 import { canCustomize, canCreateInvoice } from './visibility';
 
 function greeting(): string {
@@ -20,18 +20,12 @@ function todayLabel(): string {
   });
 }
 
-function formatRole(role: string): string {
-  return role.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-}
-
 interface DashboardHeaderProps {
   authLoading: boolean;
   firstName: string;
   tenantName: string;
   role: string;
-  displayFullName: string;
   onOpenPanel: () => void;
-  onLogout: () => void;
 }
 
 export function DashboardHeader({
@@ -39,9 +33,7 @@ export function DashboardHeader({
   firstName,
   tenantName,
   role,
-  displayFullName,
   onOpenPanel,
-  onLogout,
 }: DashboardHeaderProps) {
   return (
     <header className="bg-white border-b border-border px-6 py-5 flex items-start justify-between sticky top-0 z-10">
@@ -85,7 +77,7 @@ export function DashboardHeader({
             </Button>
           </Link>
         )}
-        <UserAvatarMenu fullName={displayFullName} role={formatRole(role)} onLogout={onLogout} />
+        <UserMenu />
       </div>
     </header>
   );

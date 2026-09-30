@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { invoiceApi, submissionApi } from "@/lib/api";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
+import { UserMenu } from "@/components/dashboard/UserMenu";
 import { formatDateTime } from "@/lib/utils";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -156,6 +157,7 @@ export default function SubmissionsPage() {
             )}
             Export
           </button>
+          <UserMenu />
         </div>
       </header>
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { productApi, referenceApi, api } from "@/lib/api";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
+import { UserMenu } from "@/components/dashboard/UserMenu";
 import { formatCurrency } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -296,12 +297,15 @@ export default function ProductsPage() {
             {loading ? "Loading…" : `${total} product${total !== 1 ? "s" : ""} in catalog`}
           </p>
         </div>
-        <Button size="sm" onClick={openCreate}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mr-1.5">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Add product
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button size="sm" onClick={openCreate}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mr-1.5">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Add product
+          </Button>
+          <UserMenu />
+        </div>
       </header>
 
       <div className="p-6">
