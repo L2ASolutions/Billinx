@@ -28,6 +28,10 @@ const credentialService = new CredentialService();
 const E2E_OWNER_TOTP_SECRET = 'E2ETESTOWNERSECRETXYZABCDEFGH23';
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('seed-dev-users.ts writes known dev credentials and must not run in production');
+  }
+
   // 1. Admin user
   const adminEmail = 'admin@l2asolutions.com';
   const adminPassword = 'L2AAdmin2026!';
@@ -47,6 +51,26 @@ async function main() {
     });
     console.log(`Created admin user: ${adminEmail} / ${adminPassword}`);
   }
+
+  // 1b. Guaranteed-working dev admin. Unlike the admin above (which is skipped
+  // if it already exists, so a password changed after seeding stays changed),
+  // this one is re-synced on every run: re-running this script always restores
+  // a known-good admin login.
+  const devAdminEmail = 'admin@testcompany.ng';
+  const devAdminPassword = 'Admin2026!';
+  const devAdminHash = await bcrypt.hash(devAdminPassword, 12);
+  await (prisma as any).adminUser.upsert({
+    where: { email: devAdminEmail },
+    update: { passwordHash: devAdminHash, role: 'SUPER_ADMIN', isActive: true },
+    create: {
+      email: devAdminEmail,
+      passwordHash: devAdminHash,
+      firstName: 'Test',
+      lastName: 'Admin',
+      role: 'SUPER_ADMIN',
+    },
+  });
+  console.log(`Synced dev admin user: ${devAdminEmail} / ${devAdminPassword}`);
 
   // 2. Test tenant
   // Deliberately has NO interswitchClientId: InvoiceService.createInvoice()/
@@ -198,6 +222,7 @@ async function main() {
   }
 
   console.log('\nDone. Login at http://localhost:3001/login');
+  console.log(`  Admin:  ${devAdminEmail} / ${devAdminPassword}  (http://localhost:3001/admin/login)`);
   console.log(`  Owner:  ${userEmail} / ${userPassword}`);
   console.log(`  Viewer: ${viewerEmail} / ${viewerPassword}`);
 }
