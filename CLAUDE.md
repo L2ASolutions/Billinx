@@ -26,6 +26,20 @@ Health check: `GET /health`
 
 ---
 
+## Dev Environment Setup
+
+After any fresh database (new Codespace, container rebuild, or a fresh DB), run:
+
+```bash
+npx tsx scripts/seed-reference-data.ts
+```
+
+**before testing anything that depends on reference data** — states, LGAs, invoice types, payment means, tax categories, currencies, HS/service codes. Without this, dropdowns like State/LGA on tenant forms (e.g. Settings → Company) will appear broken (empty, "Select state..." with no options) even though the frontend and backend code are both correct — the tables are just empty. This happened once already (2026-09-05) and cost time debugging what turned out to be a non-bug: `GET /v1/reference/states` returned `[]` from a correctly-wired endpoint simply because `nigerianState`/`lga`/etc. had 0 rows.
+
+If the backend was already running when you seed, **restart it** (`pm2 restart billinx-api`) to clear `ReferenceDataService`'s in-process 5-minute cache — otherwise the empty result it already cached will keep being served until that cache naturally expires, even though the DB now has data.
+
+---
+
 ## Architecture
 
 ```
