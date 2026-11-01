@@ -205,12 +205,12 @@ function slug(name: string): string {
 }
 
 function randomTin(): string {
-  const digits = Math.floor(10000000 + Math.random() * 89999999);
+  const digits = crypto.randomInt(10000000, 99999999);
   return `${digits}-0001`;
 }
 
 function randomPhone(): string {
-  const n = Math.floor(700000000 + Math.random() * 99999999);
+  const n = crypto.randomInt(700000000, 799999999);
   return `+234${n}`;
 }
 
@@ -227,7 +227,7 @@ function buildParty(name: string, kind: 'B2B' | 'B2C', idx: number) {
       cityName: loc.city,
       state: loc.state,
       country: 'NG',
-    },
+    } as { streetName: string; cityName: string; state: string; lga?: string; country: string },
   };
 }
 
