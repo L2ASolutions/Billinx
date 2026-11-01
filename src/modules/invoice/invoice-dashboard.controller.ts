@@ -384,6 +384,63 @@ export class InvoiceDashboardController {
     res.end();
   }
 
+  @Get('original-reference')
+  @UseGuards(JwtGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'ACCOUNTANT')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Look up an original invoice for a credit/debit note',
+    description:
+      "Returns the original invoice's stored issue date and buyer snapshot when the IRN " +
+      "(platformIrn or firsConfirmedIrn) belongs to the caller's tenant. These values are " +
+      'enforced server-side when a credit/debit note referencing this IRN is saved or submitted. ' +
+      "An IRN from another tenant returns the same 404 as one that doesn't exist.",
+  })
+  @ApiQuery({ name: 'irn', required: true, type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Original invoice found in this tenant',
+    schema: {
+      example: {
+        originalIrn: 'INV20260001-SVC00001-20261029',
+        issueDate: '2026-10-29',
+        buyer: {
+          partyName: 'Zenith Merchants Trading Co Ltd',
+          tin: '12345678-0001',
+          email: 'accounts@zenith.ng',
+          postalAddress: { streetName: '10 Marina', state: 'NG-LA' },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'irn query parameter missing' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid access token' })
+  @ApiResponse({
+    status: 403,
+    description: 'Caller role is not permitted to perform this action',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No invoice with this IRN in the caller tenant',
+  })
+  async getOriginalInvoiceReference(
+    @Query('irn') irn: string,
+    @Req() req: Request,
+  ) {
+    if (typeof irn !== 'string' || !irn.trim()) {
+      throw new BadRequestException('irn query parameter is required');
+    }
+    const ctx = this.getCtx(req);
+    const ref = await this.invoiceService.findOriginalInvoiceReference(
+      ctx.tenantId,
+      irn.trim(),
+    );
+    if (!ref) {
+      throw new NotFoundException('Original invoice not found');
+    }
+    return ref;
+  }
+
   // ---------------------------------------------------------------------------
   // Single-invoice dashboard routes (JWT auth)
   // These mirror the ApiKeyGuard :id routes on InvoiceApiController so the

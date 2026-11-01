@@ -11,6 +11,7 @@ jest.mock('exceljs', () => {
   return { Workbook: jest.fn().mockImplementation(() => workbook) };
 });
 
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { InvoiceDashboardController } from './invoice-dashboard.controller';
 import { PaymentService } from './services/payment.service';
 import { InvoicePdfService } from './services/invoice-pdf.service';
@@ -64,6 +65,7 @@ describe('InvoiceDashboardController', () => {
       getPaymentStats: jest.fn().mockResolvedValue({ collected: 0 }),
       getPaymentCharts: jest.fn().mockResolvedValue({ chart: [] }),
       getInvoice: jest.fn().mockResolvedValue({ id: 'inv-1' }),
+      findOriginalInvoiceReference: jest.fn().mockResolvedValue(null),
       exportAsXml: jest.fn().mockResolvedValue('<Invoice/>'),
       getInvoiceStatus: jest.fn().mockResolvedValue({ status: 'ACCEPTED' }),
       cancelInvoice: jest
@@ -405,5 +407,49 @@ describe('InvoiceDashboardController', () => {
       'inv-1',
       'tenant-1',
     );
+  });
+
+  describe('getOriginalInvoiceReference', () => {
+    it('looks up the IRN in the caller tenant from the JWT context', async () => {
+      const ref = {
+        originalIrn: 'INV-1',
+        issueDate: '2026-10-01',
+        buyer: { partyName: 'Original Buyer Ltd' },
+      };
+      invoiceService.findOriginalInvoiceReference.mockResolvedValue(ref);
+      const result = await controller.getOriginalInvoiceReference(
+        '  INV-1  ',
+        makeReq(),
+      );
+      expect(result).toBe(ref);
+      expect(invoiceService.findOriginalInvoiceReference).toHaveBeenCalledWith(
+        'tenant-1',
+        'INV-1',
+      );
+    });
+
+    it('returns the same 404 for a cross-tenant IRN as for a missing one', async () => {
+      invoiceService.findOriginalInvoiceReference.mockResolvedValue(null);
+      const crossTenant = await controller
+        .getOriginalInvoiceReference('OTHER-TENANT-IRN', makeReq())
+        .catch((e: any) => e);
+      const missing = await controller
+        .getOriginalInvoiceReference('NO-SUCH-IRN', makeReq())
+        .catch((e: any) => e);
+      expect(crossTenant).toBeInstanceOf(NotFoundException);
+      expect(crossTenant.getResponse()).toEqual(missing.getResponse());
+    });
+
+    it('rejects a missing irn query parameter with 400', async () => {
+      await expect(
+        controller.getOriginalInvoiceReference(undefined as any, makeReq()),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        controller.getOriginalInvoiceReference('   ', makeReq()),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(
+        invoiceService.findOriginalInvoiceReference,
+      ).not.toHaveBeenCalled();
+    });
   });
 });

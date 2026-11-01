@@ -1,3 +1,5 @@
+import type { OriginalInvoiceReference } from "./original-invoice-reference";
+
 // Server-side: call backend directly.
 // Client-side: use /api prefix so requests go through the Next.js proxy API
 // route (app/api/[...path]/route.ts) which explicitly forwards all headers —
@@ -221,6 +223,12 @@ export const invoiceApi = {
     requestBlob(`/v1/invoices/dashboard/${id}/nrs-payload`),
   getStatus: (id: string) =>
     api.get<unknown>(`/v1/invoices/dashboard/${id}/status`),
+  // Credit/debit notes: resolves an original IRN within the caller's tenant.
+  // 404 for unknown IRNs and other tenants' IRNs alike.
+  originalReference: (irn: string) =>
+    api.get<OriginalInvoiceReference>(
+      `/v1/invoices/dashboard/original-reference?irn=${encodeURIComponent(irn)}`,
+    ),
   // Submit an existing DRAFT invoice without creating a duplicate.
   // Updates the draft's fields then queues it for FIRS submission.
   submitDraft: (id: string, data: unknown) =>

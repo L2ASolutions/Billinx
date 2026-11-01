@@ -27,6 +27,14 @@ import { SubmissionService } from '../../submission/services/submission.service'
 import { EmailService } from '../../../shared/email/email.service';
 import { InventoryService } from '../../inventory/inventory.service';
 import { InvoiceValidationService } from './invoice-validation.service';
+import {
+  CREDIT_OR_DEBIT_NOTE_TYPES,
+  OriginalInvoiceReference,
+  applyOriginalInvoiceReference,
+  describeOriginalInvoiceMismatch,
+  findOriginalInvoiceMismatches,
+  toOriginalInvoiceReference,
+} from './original-invoice-reference';
 
 export interface CreateInvoiceResult {
   invoice: InvoiceResponse;
@@ -58,6 +66,13 @@ export class InvoiceService {
     actor: string,
     request: any,
   ): Promise<CreateInvoiceResult> {
+    request = await this.withOriginalInvoiceReference(
+      tenantId,
+      request,
+      request.invoiceTypeCode,
+      request.originalIrn,
+    );
+
     // ── Source-reference duplicate check ──────────────────────────────────────
     if (request.sourceReference) {
       const existing = await this.invoiceRepository.findBySourceReference(
@@ -310,6 +325,13 @@ export class InvoiceService {
       );
     }
 
+    request = await this.withOriginalInvoiceReference(
+      tenantId,
+      request,
+      invoice.invoiceTypeCode,
+      request.originalIrn ?? (invoice as any).originalIrn,
+    );
+
     // Validate FIRS mandatory fields using the effective (post-merge) values
     // so a draft with incomplete data cannot be queued for submission.
     const effectiveSellerTin = request.seller?.tin ?? invoice.sellerTin;
@@ -389,6 +411,9 @@ export class InvoiceService {
             ? JSON.parse(JSON.stringify(request.legalMonetaryTotal))
             : invoice.legalMonetaryTotal,
           originalIrn: request.originalIrn ?? (invoice as any).originalIrn,
+          billingReference: request.billingReference
+            ? JSON.parse(JSON.stringify(request.billingReference))
+            : ((invoice as any).billingReference ?? undefined),
           sourceReference:
             request.sourceReference ?? (invoice as any).sourceReference,
           metadata: JSON.parse(
@@ -1125,6 +1150,60 @@ export class InvoiceService {
     };
   }
 
+  // Tenant-scoped by an explicit tenantId filter (asAdmin bypasses RLS), the
+  // same lookup InterswitchAdapter uses for billing_reference. An IRN that
+  // belongs to another tenant is indistinguishable from one that doesn't exist.
+  async findOriginalInvoiceReference(
+    tenantId: string,
+    originalIrn: string,
+  ): Promise<OriginalInvoiceReference | null> {
+    if (typeof originalIrn !== 'string' || !originalIrn) return null;
+    const original = await this.prisma.asAdmin((tx) =>
+      tx.invoice.findFirst({
+        where: {
+          tenantId,
+          OR: [{ platformIrn: originalIrn }, { firsConfirmedIrn: originalIrn }],
+        },
+        select: {
+          issueDate: true,
+          buyerName: true,
+          buyerTin: true,
+          buyerEmail: true,
+          metadata: true,
+        },
+      }),
+    );
+    return original ? toOriginalInvoiceReference(originalIrn, original) : null;
+  }
+
+  private async withOriginalInvoiceReference<T extends Record<string, any>>(
+    tenantId: string,
+    request: T,
+    invoiceTypeCode: string | null | undefined,
+    originalIrn: string | null | undefined,
+  ): Promise<T> {
+    if (
+      !CREDIT_OR_DEBIT_NOTE_TYPES.has(
+        this.mapInvoiceTypeCode(invoiceTypeCode ?? ''),
+      ) ||
+      typeof originalIrn !== 'string' ||
+      !originalIrn
+    ) {
+      return request;
+    }
+    const ref = await this.findOriginalInvoiceReference(tenantId, originalIrn);
+    if (!ref) return request;
+
+    const mismatches = findOriginalInvoiceMismatches(request, ref);
+    if (mismatches.length > 0) {
+      throw new BadRequestException({
+        error: 'ORIGINAL_INVOICE_MISMATCH',
+        message: describeOriginalInvoiceMismatch(originalIrn, mismatches),
+      });
+    }
+    return applyOriginalInvoiceReference(request, ref);
+  }
+
   private mapInvoiceTypeCode(code: string): string {
     const map: Record<string, string> = {
       // Corrected FIRS codes (from reference data seed)
@@ -1356,6 +1435,13 @@ export class InvoiceService {
     actor: string,
     request: Record<string, any>,
   ): Promise<InvoiceResponse> {
+    request = await this.withOriginalInvoiceReference(
+      tenantId,
+      request,
+      request.invoiceTypeCode ?? '381',
+      request.originalIrn,
+    );
+
     const tenant = await this.prisma.asAdmin((tx) =>
       tx.tenant.findUnique({
         where: { id: tenantId },
@@ -1404,6 +1490,9 @@ export class InvoiceService {
       invoiceKind: request.invoiceKind ?? null,
       paymentStatus: 'PENDING',
       originalIrn: request.originalIrn ?? null,
+      billingReference: request.billingReference
+        ? JSON.parse(JSON.stringify(request.billingReference))
+        : null,
       note: request.note ?? null,
       metadata: JSON.parse(
         JSON.stringify({
@@ -1453,6 +1542,13 @@ export class InvoiceService {
       throw new BadRequestException('Only DRAFT invoices can be updated');
     }
 
+    body = await this.withOriginalInvoiceReference(
+      tenantId,
+      body,
+      invoice.invoiceTypeCode,
+      body.originalIrn !== undefined ? body.originalIrn : invoice.originalIrn,
+    );
+
     const updated = await this.prisma.asAdmin((tx) =>
       tx.invoice.update({
         where: { id },
@@ -1499,13 +1595,25 @@ export class InvoiceService {
             body.originalIrn !== undefined
               ? body.originalIrn
               : invoice.originalIrn,
+          billingReference:
+            body.billingReference !== undefined
+              ? JSON.parse(JSON.stringify(body.billingReference))
+              : (invoice.billingReference ?? undefined),
+          // Fall back to the stored party, not null: the original-invoice
+          // override can inject a buyer into a body that sent no seller.
           metadata:
             body.seller || body.buyer
               ? JSON.parse(
                   JSON.stringify({
                     ...((invoice.metadata as any) ?? {}),
-                    sellerParty: body.seller ?? null,
-                    buyerParty: body.buyer ?? null,
+                    sellerParty:
+                      body.seller ??
+                      (invoice.metadata as any)?.sellerParty ??
+                      null,
+                    buyerParty:
+                      body.buyer ??
+                      (invoice.metadata as any)?.buyerParty ??
+                      null,
                   }),
                 )
               : invoice.metadata,
