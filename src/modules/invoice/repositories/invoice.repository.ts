@@ -27,15 +27,6 @@ export class InvoiceRepository {
     });
   }
 
-  async findByIrn(platformIrn: string) {
-    return this.prisma.asAdmin(async (tx) => {
-      return tx.invoice.findUnique({
-        where: { platformIrn },
-        include: { stateHistory: { orderBy: { createdAt: 'asc' } } },
-      });
-    });
-  }
-
   async findBySourceReference(tenantId: string, sourceReference: string) {
     return this.prisma.asAdmin(async (tx) => {
       return tx.invoice.findFirst({
