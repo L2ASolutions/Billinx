@@ -109,7 +109,7 @@
     "testEnvironment": "node"
   },
   "overrides": {
-    "multer": "2.4.0",
+    "multer": "2.5.0",
     "uuid": "^14.0.1",
     "@istanbuljs/load-nyc-config": {
       "js-yaml": "^3.15.0"
