@@ -1,6 +1,8 @@
 // Credit/debit notes reference an original invoice by IRN. When that original
 // lives in the same tenant, its stored issue date and buyer snapshot are the
-// source of truth for the note — client-supplied values are overridden.
+// source of truth: a note must name the same buyer as the original (a buyer or
+// TIN change means crediting the original in full and issuing a new invoice),
+// so a client-supplied value that differs is rejected, never replaced.
 
 export const CREDIT_OR_DEBIT_NOTE_TYPES = new Set([
   'CREDIT_NOTE',
@@ -54,39 +56,69 @@ export function toOriginalInvoiceReference(
   };
 }
 
+const MISMATCH_LABELS: Record<string, string> = {
+  'buyer.partyName': 'buyer name',
+  'buyer.tin': 'buyer TIN',
+  'buyer.email': 'buyer email',
+  'billingReference.issueDate': 'original invoice date',
+};
+
+function normalise(value: unknown, caseInsensitive: boolean): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return caseInsensitive ? text.toLowerCase() : text;
+}
+
+// Compares only the fields the client actually supplied — an omitted field is
+// not a difference and is filled from the original. Buyer identity is name,
+// TIN and email; the rest of the party (address, phone) always comes from the
+// original snapshot.
+export function findOriginalInvoiceMismatches(
+  request: Record<string, any>,
+  ref: OriginalInvoiceReference,
+): string[] {
+  const mismatches: string[] = [];
+  const clientBuyer = request.buyer ?? {};
+  const checks: Array<[string, boolean]> = [
+    ['partyName', true],
+    ['tin', false],
+    ['email', true],
+  ];
+  for (const [field, caseInsensitive] of checks) {
+    const supplied = normalise(clientBuyer[field], caseInsensitive);
+    if (supplied && supplied !== normalise(ref.buyer[field], caseInsensitive)) {
+      mismatches.push(`buyer.${field}`);
+    }
+  }
+
+  const clientDate = normalise(request.billingReference?.[0]?.issueDate, false);
+  if (clientDate && clientDate.slice(0, 10) !== ref.issueDate) {
+    mismatches.push('billingReference.issueDate');
+  }
+  return mismatches;
+}
+
+export function describeOriginalInvoiceMismatch(
+  originalIrn: string,
+  mismatches: string[],
+): string {
+  const fields = mismatches.map((m) => MISMATCH_LABELS[m] ?? m).join(', ');
+  return (
+    `A credit/debit note must match original invoice ${originalIrn}. ` +
+    `Mismatched: ${fields}. To change the buyer or TIN, credit the original ` +
+    'invoice in full and issue a new invoice to the correct buyer.'
+  );
+}
+
 export function applyOriginalInvoiceReference<T extends Record<string, any>>(
   request: T,
   ref: OriginalInvoiceReference,
-): {
-  request: T & {
-    buyer: Record<string, unknown>;
-    billingReference: Array<{ irn: string; issueDate: string }>;
-  };
-  overriddenFields: string[];
+): T & {
+  buyer: Record<string, unknown>;
+  billingReference: Array<{ irn: string; issueDate: string }>;
 } {
-  const overriddenFields: string[] = [];
-
-  const clientBuyer = request.buyer;
-  if (
-    clientBuyer &&
-    ((clientBuyer.partyName ?? '') !== (ref.buyer.partyName ?? '') ||
-      (clientBuyer.tin ?? '') !== (ref.buyer.tin ?? '') ||
-      (clientBuyer.email ?? '') !== (ref.buyer.email ?? ''))
-  ) {
-    overriddenFields.push('buyer');
-  }
-
-  const clientDate = request.billingReference?.[0]?.issueDate;
-  if (clientDate && String(clientDate).slice(0, 10) !== ref.issueDate) {
-    overriddenFields.push('billingReference.issueDate');
-  }
-
   return {
-    request: {
-      ...request,
-      buyer: ref.buyer,
-      billingReference: [{ irn: ref.originalIrn, issueDate: ref.issueDate }],
-    },
-    overriddenFields,
+    ...request,
+    buyer: ref.buyer,
+    billingReference: [{ irn: ref.originalIrn, issueDate: ref.issueDate }],
   };
 }

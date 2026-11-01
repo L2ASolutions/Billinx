@@ -11,6 +11,7 @@
  * no-op for already-canonical input (the API/bulk-import paths).
  */
 
+import { BadRequestException } from '@nestjs/common';
 import { InvoiceService } from './invoice.service';
 
 function makeFlatLineItem(overrides: Record<string, any> = {}) {
@@ -606,14 +607,50 @@ describe('InvoiceService — credit/debit note original invoice reference', () =
   });
 
   describe('createInvoice()', () => {
-    it('overrides a mismatched client buyer and date with the original invoice values', async () => {
+    it('rejects a mismatched buyer and date with ORIGINAL_INVOICE_MISMATCH, naming both fields', async () => {
+      const { svc, createMock } = makeCreateHarness();
+
+      const err = await svc
+        .createInvoice('tenant-1', 'SANDBOX', 'user:test', creditNoteRequest())
+        .catch((e: any) => e);
+
+      expect(err).toBeInstanceOf(BadRequestException);
+      expect(err.getResponse().error).toBe('ORIGINAL_INVOICE_MISMATCH');
+      expect(err.getResponse().message).toContain('INV-T1-0001');
+      expect(err.getResponse().message).toContain(
+        'buyer name, buyer TIN, original invoice date',
+      );
+      expect(createMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects when only the buyer TIN differs', async () => {
+      const { svc, createMock } = makeCreateHarness();
+      const err = await svc
+        .createInvoice(
+          'tenant-1',
+          'SANDBOX',
+          'user:test',
+          creditNoteRequest({
+            buyer: { partyName: 'Original Buyer Ltd', tin: '99999999-0001' },
+            billingReference: undefined,
+          }),
+        )
+        .catch((e: any) => e);
+      expect(err.getResponse().message).toContain('Mismatched: buyer TIN.');
+      expect(createMock).not.toHaveBeenCalled();
+    });
+
+    it('stores the full original buyer snapshot and date when the client values match', async () => {
       const { svc, createMock, validateInvoiceFields } = makeCreateHarness();
 
       await svc.createInvoice(
         'tenant-1',
         'SANDBOX',
         'user:test',
-        creditNoteRequest(),
+        creditNoteRequest({
+          buyer: { partyName: 'Original Buyer Ltd', tin: '11111111-0001' },
+          billingReference: [{ irn: 'INV-T1-0001', issueDate: '2026-10-01' }],
+        }),
       );
 
       const stored = createMock.mock.calls[0][0];
@@ -629,15 +666,30 @@ describe('InvoiceService — credit/debit note original invoice reference', () =
       );
     });
 
-    it('applies to debit notes too', async () => {
+    it('fills buyer and date from the original when the client omits them', async () => {
       const { svc, createMock } = makeCreateHarness();
       await svc.createInvoice(
         'tenant-1',
         'SANDBOX',
         'user:test',
-        creditNoteRequest({ invoiceTypeCode: '384' }),
+        creditNoteRequest({ buyer: undefined, billingReference: undefined }),
       );
-      expect(createMock.mock.calls[0][0].buyerName).toBe('Original Buyer Ltd');
+      const stored = createMock.mock.calls[0][0];
+      expect(stored.buyerName).toBe('Original Buyer Ltd');
+      expect(stored.billingReference[0].issueDate).toBe('2026-10-01');
+    });
+
+    it('applies to debit notes too', async () => {
+      const { svc, createMock } = makeCreateHarness();
+      await expect(
+        svc.createInvoice(
+          'tenant-1',
+          'SANDBOX',
+          'user:test',
+          creditNoteRequest({ invoiceTypeCode: '384' }),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(createMock).not.toHaveBeenCalled();
     });
 
     it("keeps the client's manual values when the original is not in Billinx", async () => {
@@ -688,13 +740,29 @@ describe('InvoiceService — credit/debit note original invoice reference', () =
   });
 
   describe('saveDraftInvoice()', () => {
+    it('rejects a credit-note draft whose buyer differs from the original', async () => {
+      const { svc, createMock } = makeCreateHarness();
+      await expect(
+        svc.saveDraftInvoice(
+          'tenant-1',
+          'SANDBOX',
+          'user:test',
+          creditNoteRequest(),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(createMock).not.toHaveBeenCalled();
+    });
+
     it('stores the derived billingReference and buyer on a new credit-note draft', async () => {
       const { svc, createMock } = makeCreateHarness();
       await svc.saveDraftInvoice(
         'tenant-1',
         'SANDBOX',
         'user:test',
-        creditNoteRequest(),
+        creditNoteRequest({
+          buyer: { partyName: 'Original Buyer Ltd', tin: '11111111-0001' },
+          billingReference: [{ irn: 'INV-T1-0001', issueDate: '2026-10-01' }],
+        }),
       );
       const stored = createMock.mock.calls[0][0];
       expect(stored.buyerName).toBe('Original Buyer Ltd');
@@ -762,18 +830,29 @@ describe('InvoiceService — credit/debit note original invoice reference', () =
   }
 
   describe('updateDraftFields()', () => {
-    it("uses the draft's stored type and IRN, and overrides a mismatched buyer", async () => {
+    it("uses the draft's stored type and IRN, and rejects a mismatched buyer before writing", async () => {
       const { svc, getUpdate } = makeDraftHarness();
-      await svc.updateDraftFields('inv-1', 'tenant-1', 'user:test', {
-        buyer: { partyName: 'Tampered Buyer Ltd' },
-        billingReference: [{ irn: 'INV-T1-0001', issueDate: '2020-01-01' }],
-      });
-      const data = getUpdate();
-      expect(data.buyerName).toBe('Original Buyer Ltd');
-      expect(data.buyerTin).toBe('11111111-0001');
-      expect(data.billingReference).toEqual([
-        { irn: 'INV-T1-0001', issueDate: '2026-10-01' },
-      ]);
+      const err = await svc
+        .updateDraftFields('inv-1', 'tenant-1', 'user:test', {
+          buyer: { partyName: 'Tampered Buyer Ltd' },
+        })
+        .catch((e: any) => e);
+      expect(err).toBeInstanceOf(BadRequestException);
+      expect(err.getResponse().message).toContain('Mismatched: buyer name.');
+      expect(getUpdate()).toBeUndefined();
+    });
+
+    it('rejects a mismatched original invoice date before writing', async () => {
+      const { svc, getUpdate } = makeDraftHarness();
+      const err = await svc
+        .updateDraftFields('inv-1', 'tenant-1', 'user:test', {
+          billingReference: [{ irn: 'INV-T1-0001', issueDate: '2020-01-01' }],
+        })
+        .catch((e: any) => e);
+      expect(err.getResponse().message).toContain(
+        'Mismatched: original invoice date.',
+      );
+      expect(getUpdate()).toBeUndefined();
     });
 
     it('keeps the stored seller party when the body omits seller', async () => {
@@ -788,11 +867,24 @@ describe('InvoiceService — credit/debit note original invoice reference', () =
   });
 
   describe('submitDraft()', () => {
-    it('validates and writes the original buyer and date, not the client values', async () => {
+    it('rejects a mismatched buyer before validating, writing or queueing', async () => {
+      const { svc, getUpdate, validateInvoiceFields } = makeDraftHarness();
+      const err = await svc
+        .submitDraft('inv-1', 'tenant-1', 'user:test', {
+          buyer: { partyName: 'Original Buyer Ltd', tin: '99999999-0001' },
+        })
+        .catch((e: any) => e);
+      expect(err).toBeInstanceOf(BadRequestException);
+      expect(err.getResponse().error).toBe('ORIGINAL_INVOICE_MISMATCH');
+      expect(validateInvoiceFields).not.toHaveBeenCalled();
+      expect(getUpdate()).toBeUndefined();
+    });
+
+    it('validates and writes the original buyer snapshot and date', async () => {
       const { svc, getUpdate, validateInvoiceFields } = makeDraftHarness();
       await svc.submitDraft('inv-1', 'tenant-1', 'user:test', {
-        buyer: { partyName: 'Tampered Buyer Ltd', tin: '99999999-0001' },
-        billingReference: [{ irn: 'INV-T1-0001', issueDate: '2020-01-01' }],
+        buyer: { partyName: 'Original Buyer Ltd', tin: '11111111-0001' },
+        billingReference: [{ irn: 'INV-T1-0001', issueDate: '2026-10-01' }],
       });
       expect(validateInvoiceFields.mock.calls[0][0].buyer).toEqual({
         tin: '11111111-0001',

@@ -2,6 +2,8 @@
 
 import {
   applyOriginalInvoiceReference,
+  describeOriginalInvoiceMismatch,
+  findOriginalInvoiceMismatches,
   toOriginalInvoiceReference,
 } from './original-invoice-reference';
 
@@ -83,48 +85,108 @@ describe('toOriginalInvoiceReference', () => {
   });
 });
 
+describe('findOriginalInvoiceMismatches', () => {
+  const ref = toOriginalInvoiceReference('IRN-1', makeSnapshot());
+
+  it('reports a different buyer TIN', () => {
+    expect(
+      findOriginalInvoiceMismatches(
+        { buyer: { partyName: 'Zenith Merchants Ltd', tin: '00000000-0000' } },
+        ref,
+      ),
+    ).toEqual(['buyer.tin']);
+  });
+
+  it('reports a different buyer name, email and original invoice date together', () => {
+    expect(
+      findOriginalInvoiceMismatches(
+        {
+          buyer: { partyName: 'Someone Else Ltd', email: 'other@else.ng' },
+          billingReference: [{ irn: 'IRN-1', issueDate: '2020-01-01' }],
+        },
+        ref,
+      ),
+    ).toEqual(['buyer.partyName', 'buyer.email', 'billingReference.issueDate']);
+  });
+
+  it('reports a TIN on a note whose original buyer had none', () => {
+    const b2cRef = toOriginalInvoiceReference(
+      'IRN-2',
+      makeSnapshot({ buyerTin: null }),
+    );
+    expect(
+      findOriginalInvoiceMismatches(
+        { buyer: { tin: '12345678-0001' } },
+        b2cRef,
+      ),
+    ).toEqual(['buyer.tin']);
+  });
+
+  it('accepts exactly matching values (case and whitespace-insensitive for name/email)', () => {
+    expect(
+      findOriginalInvoiceMismatches(
+        {
+          buyer: {
+            partyName: '  zenith merchants LTD ',
+            tin: '12345678-0001',
+            email: 'ACCOUNTS@zenith.ng',
+          },
+          billingReference: [
+            { irn: 'IRN-1', issueDate: '2026-10-29T00:00:00.000Z' },
+          ],
+        },
+        ref,
+      ),
+    ).toEqual([]);
+  });
+
+  it('treats omitted fields as no difference', () => {
+    expect(findOriginalInvoiceMismatches({}, ref)).toEqual([]);
+    expect(
+      findOriginalInvoiceMismatches({ buyer: { partyName: '' } }, ref),
+    ).toEqual([]);
+  });
+
+  it('ignores non-identity buyer fields such as address and phone', () => {
+    expect(
+      findOriginalInvoiceMismatches(
+        {
+          buyer: {
+            tin: '12345678-0001',
+            telephone: '+2349999999999',
+            postalAddress: { streetName: 'Elsewhere' },
+          },
+        },
+        ref,
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('describeOriginalInvoiceMismatch', () => {
+  it('names the original IRN, each mismatched field, and the correction route', () => {
+    const message = describeOriginalInvoiceMismatch('IRN-1', [
+      'buyer.tin',
+      'billingReference.issueDate',
+    ]);
+    expect(message).toContain('IRN-1');
+    expect(message).toContain('buyer TIN, original invoice date');
+    expect(message).toContain('credit the original invoice in full');
+  });
+});
+
 describe('applyOriginalInvoiceReference', () => {
   const ref = toOriginalInvoiceReference('IRN-1', makeSnapshot());
 
-  it('overrides a mismatched client buyer and date with the stored values', () => {
-    const { request, overriddenFields } = applyOriginalInvoiceReference(
-      {
-        invoiceTypeCode: '380',
-        originalIrn: 'IRN-1',
-        buyer: { partyName: 'Someone Else Ltd', tin: '00000000-0000' },
-        billingReference: [{ irn: 'IRN-1', issueDate: '2020-01-01' }],
-      },
+  it("fills the original's full buyer snapshot and date", () => {
+    const request = applyOriginalInvoiceReference(
+      { originalIrn: 'IRN-1', buyer: { tin: '12345678-0001' } },
       ref,
     );
     expect(request.buyer).toEqual(ref.buyer);
     expect(request.billingReference).toEqual([
       { irn: 'IRN-1', issueDate: '2026-10-29' },
     ]);
-    expect(overriddenFields).toEqual(['buyer', 'billingReference.issueDate']);
-  });
-
-  it('reports nothing overridden when the client already sent matching values', () => {
-    const { request, overriddenFields } = applyOriginalInvoiceReference(
-      {
-        buyer: { ...ref.buyer },
-        billingReference: [{ irn: 'IRN-1', issueDate: '2026-10-29' }],
-      },
-      ref,
-    );
-    expect(overriddenFields).toEqual([]);
-    expect(request.billingReference).toEqual([
-      { irn: 'IRN-1', issueDate: '2026-10-29' },
-    ]);
-  });
-
-  it('fills buyer and date when the client sent neither', () => {
-    const { request, overriddenFields } = applyOriginalInvoiceReference(
-      { originalIrn: 'IRN-1' },
-      ref,
-    );
-    expect(request.buyer).toEqual(ref.buyer);
-    expect(request.billingReference[0].issueDate).toBe('2026-10-29');
-    expect(overriddenFields).toEqual([]);
   });
 
   it('does not mutate the caller request', () => {

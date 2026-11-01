@@ -31,6 +31,8 @@ import {
   CREDIT_OR_DEBIT_NOTE_TYPES,
   OriginalInvoiceReference,
   applyOriginalInvoiceReference,
+  describeOriginalInvoiceMismatch,
+  findOriginalInvoiceMismatches,
   toOriginalInvoiceReference,
 } from './original-invoice-reference';
 
@@ -1192,14 +1194,14 @@ export class InvoiceService {
     const ref = await this.findOriginalInvoiceReference(tenantId, originalIrn);
     if (!ref) return request;
 
-    const { request: applied, overriddenFields } =
-      applyOriginalInvoiceReference(request, ref);
-    if (overriddenFields.length > 0) {
-      this.logger.warn(
-        `Overrode client-supplied ${overriddenFields.join(', ')} with stored values from original invoice ${originalIrn} (tenant ${tenantId})`,
-      );
+    const mismatches = findOriginalInvoiceMismatches(request, ref);
+    if (mismatches.length > 0) {
+      throw new BadRequestException({
+        error: 'ORIGINAL_INVOICE_MISMATCH',
+        message: describeOriginalInvoiceMismatch(originalIrn, mismatches),
+      });
     }
-    return applied;
+    return applyOriginalInvoiceReference(request, ref);
   }
 
   private mapInvoiceTypeCode(code: string): string {
