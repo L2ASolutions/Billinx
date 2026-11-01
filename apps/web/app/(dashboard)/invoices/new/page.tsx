@@ -7,6 +7,11 @@ import { Topbar } from "@/components/dashboard/Topbar";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { api, invoiceApi, productApi, referenceApi, clientApi, ClientRecord } from "@/lib/api";
+import {
+  originalReferenceToFormFields,
+  statusForLookupError,
+  type OriginalRefStatus,
+} from "@/lib/original-invoice-reference";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { SampleInvoiceModal } from "@/components/invoice/SampleInvoiceModal";
@@ -593,6 +598,7 @@ function NewInvoiceForm() {
   const [clientPickerLoading, setClientPickerLoading] = useState(false);
   const [manualBuyer, setManualBuyer] = useState(false);
   const [selectedClient, setSelectedClient] = useState<ClientRecord | null>(null);
+  const [originalRefStatus, setOriginalRefStatus] = useState<OriginalRefStatus>("idle");
   const clientSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Reference data ──────────────────────────────────────────────────────────
@@ -867,6 +873,35 @@ function NewInvoiceForm() {
   };
 
   const needsOriginalIrn = ["380", "384"].includes(form.invoiceType);
+  const originalRefLocked = needsOriginalIrn && originalRefStatus === "found";
+
+  // Resolve the original IRN in this tenant. Found → copy its stored date and
+  // buyer snapshot (never the live client record) and lock them; the backend
+  // enforces the same values on save/submit. Not found → manual entry.
+  useEffect(() => {
+    const irn = form.originalIrn.trim();
+    if (!needsOriginalIrn || !irn) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOriginalRefStatus("idle");
+      return;
+    }
+    let cancelled = false;
+    setOriginalRefStatus("loading");
+    const timer = setTimeout(() => {
+      invoiceApi.originalReference(irn)
+        .then((ref) => {
+          if (cancelled) return;
+          setForm((f) => ({ ...f, ...originalReferenceToFormFields(ref) }));
+          setSelectedClient(null);
+          setClientSearch("");
+          setOriginalRefStatus("found");
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) setOriginalRefStatus(statusForLookupError(err));
+        });
+    }, 400);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [needsOriginalIrn, form.originalIrn]);
 
   function buildPayload(forSubmit: boolean) {
     const activeAllowanceCharges = allowanceCharges.filter((ac) => ac.amount > 0);
@@ -1158,9 +1193,23 @@ function NewInvoiceForm() {
                 <p className="text-sm font-medium text-amber-900">Original invoice reference</p>
                 <div className="grid grid-cols-2 gap-3">
                   <Input label="Original IRN *" placeholder="INV20260001-SVC00001-20260602" value={form.originalIrn} onChange={uf("originalIrn")} required />
-                  <Input label="Original invoice date" type="date" value={form.billingReferenceDate} onChange={uf("billingReferenceDate")} />
+                  <Input
+                    label={originalRefStatus === "manual" ? "Original invoice date (manual entry)" : "Original invoice date"}
+                    type="date"
+                    value={form.billingReferenceDate}
+                    onChange={uf("billingReferenceDate")}
+                    readOnly={originalRefLocked}
+                    className={originalRefLocked ? "bg-gray-50 text-muted cursor-not-allowed" : undefined}
+                    data-testid="original-invoice-date-input"
+                  />
                 </div>
-                <p className="text-xs text-amber-700">IRN of the invoice this credit/debit note relates to.</p>
+                <p className="text-xs text-amber-700" data-testid="original-ref-status">
+                  {originalRefStatus === "loading" && "Looking up the original invoice in Billinx…"}
+                  {originalRefStatus === "found" && "Found in Billinx. The original invoice date and buyer details come from the original invoice and can't be edited here."}
+                  {originalRefStatus === "manual" && "Original invoice not found in Billinx. Enter the original invoice date and buyer details manually."}
+                  {originalRefStatus === "error" && "Couldn't look up the original invoice. You can enter the date and buyer details manually."}
+                  {originalRefStatus === "idle" && "IRN of the invoice this credit/debit note relates to."}
+                </p>
               </div>
             )}
             {/* Advanced options */}
@@ -1230,8 +1279,13 @@ function NewInvoiceForm() {
             </SectionCard>
             <SectionCard title="Buyer">
               <div className="space-y-3">
+                {originalRefLocked && (
+                  <p className="text-xs text-muted bg-surface border border-border rounded-lg px-3 py-2" data-testid="buyer-locked-note">
+                    From original invoice <span className="font-mono">{form.originalIrn}</span>. Buyer details can&apos;t be changed on a credit/debit note.
+                  </p>
+                )}
                 {/* ── Client picker ── */}
-                {!manualBuyer && (
+                {!manualBuyer && !originalRefLocked && (
                   <div className="relative">
                     <label className="block text-sm font-medium text-dark mb-1">Select existing client</label>
                     <input
@@ -1310,7 +1364,7 @@ function NewInvoiceForm() {
                     </div>
                   </div>
                 )}
-                {manualBuyer && (
+                {manualBuyer && !originalRefLocked && (
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-muted">Entering buyer manually</p>
                     <button type="button" className="text-xs text-green hover:underline" onClick={() => { setManualBuyer(false); setSelectedClient(null); setClientSearch(""); }}>Use client picker</button>
@@ -1323,6 +1377,8 @@ function NewInvoiceForm() {
                   onChange={uf("buyerName")}
                   required
                   error={errMsg("buyerName")}
+                  readOnly={originalRefLocked}
+                  className={originalRefLocked ? "bg-gray-50 text-muted cursor-not-allowed" : undefined}
                   data-testid="buyer-name-input"
                 />
                 <div>
@@ -1334,6 +1390,8 @@ function NewInvoiceForm() {
                     value={form.buyerTin}
                     onChange={uf("buyerTin")}
                     error={errMsg("buyerTin")}
+                    readOnly={originalRefLocked}
+                    className={originalRefLocked ? "bg-gray-50 text-muted cursor-not-allowed" : undefined}
                     data-testid="buyer-tin-input"
                   />
                   <p className="mt-1 text-[11px] text-muted leading-snug">
@@ -1347,6 +1405,8 @@ function NewInvoiceForm() {
                   value={form.buyerEmail}
                   onChange={uf("buyerEmail")}
                   error={errMsg("buyerEmail")}
+                  readOnly={originalRefLocked}
+                  className={originalRefLocked ? "bg-gray-50 text-muted cursor-not-allowed" : undefined}
                   data-testid="buyer-email-input"
                 />
                 <Input
@@ -1356,12 +1416,14 @@ function NewInvoiceForm() {
                   onChange={uf("buyerAddress")}
                   required
                   error={errMsg("buyerAddress")}
+                  readOnly={originalRefLocked}
+                  className={originalRefLocked ? "bg-gray-50 text-muted cursor-not-allowed" : undefined}
                   data-testid="buyer-address-input"
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-dark mb-1">State<Req submitAttempted={submitAttempted} /></label>
-                    <select className={errSel("buyerState")} value={form.buyerState} onChange={uf("buyerState")} data-testid="buyer-state-select">
+                    <select className={errSel("buyerState")} value={form.buyerState} onChange={uf("buyerState")} disabled={originalRefLocked} data-testid="buyer-state-select">
                       <option value="">Select state…</option>
                       {states.map((s) => (
                         <option key={s.code} value={s.code}>{s.name}</option>
@@ -1373,7 +1435,7 @@ function NewInvoiceForm() {
                     <label className="block text-sm font-medium text-dark mb-1">LGA (optional)</label>
                     <select className={sel()} value={form.buyerLga}
                       onChange={(e) => setForm((f) => ({ ...f, buyerLga: e.target.value }))}
-                      disabled={!form.buyerState}>
+                      disabled={!form.buyerState || originalRefLocked}>
                       <option value="">{form.buyerState ? "Select LGA…" : "Select state first"}</option>
                       {buyerLgas.map((l) => (
                         <option key={l.code} value={l.code}>{l.name}</option>
@@ -1381,9 +1443,11 @@ function NewInvoiceForm() {
                     </select>
                   </div>
                 </div>
-                <Input label="Telephone (optional)" type="tel" placeholder="+2348098765432" value={form.buyerTelephone} onChange={uf("buyerTelephone")} />
-                <Input label="Business description (optional)" placeholder="e.g. Manufacturing company" value={form.buyerBusinessDescription} onChange={uf("buyerBusinessDescription")} />
-                {manualBuyer && form.buyerName && !selectedClient && (
+                <Input label="Telephone (optional)" type="tel" placeholder="+2348098765432" value={form.buyerTelephone} onChange={uf("buyerTelephone")}
+                  readOnly={originalRefLocked} className={originalRefLocked ? "bg-gray-50 text-muted cursor-not-allowed" : undefined} />
+                <Input label="Business description (optional)" placeholder="e.g. Manufacturing company" value={form.buyerBusinessDescription} onChange={uf("buyerBusinessDescription")}
+                  readOnly={originalRefLocked} className={originalRefLocked ? "bg-gray-50 text-muted cursor-not-allowed" : undefined} />
+                {manualBuyer && form.buyerName && !selectedClient && !originalRefLocked && (
                   <button
                     type="button"
                     className="text-xs text-green hover:underline font-medium"
